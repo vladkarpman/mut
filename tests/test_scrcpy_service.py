@@ -1,6 +1,10 @@
 """Tests for ScrcpyService."""
 
+import io
+import time
+
 import pytest
+from PIL import Image
 from unittest.mock import MagicMock, patch
 from mut.core.scrcpy_service import ScrcpyService
 from mut.core.device_controller import DeviceController
@@ -74,3 +78,56 @@ class TestScrcpyServiceUnit:
         assert service._running is False
         assert len(service._frame_buffer) == 0
         assert service._session is None
+
+
+class TestScrcpyServiceScreenshot:
+    """Test screenshot functionality."""
+
+    def test_screenshot_returns_png_bytes(self, device_id):
+        """Should return valid PNG image bytes."""
+        service = ScrcpyService(device_id)
+        service.connect()
+
+        try:
+            # Wait for frames to accumulate
+            time.sleep(0.5)
+
+            screenshot = service.screenshot()
+
+            # Check it's bytes
+            assert isinstance(screenshot, bytes)
+
+            # Check PNG magic bytes
+            assert screenshot[:8] == b'\x89PNG\r\n\x1a\n'
+
+            # Check it's a valid image
+            img = Image.open(io.BytesIO(screenshot))
+            assert img.width > 0
+            assert img.height > 0
+
+        finally:
+            service.disconnect()
+
+    def test_screenshot_raises_when_not_connected(self, device_id):
+        """Should raise RuntimeError when not connected."""
+        service = ScrcpyService(device_id)
+
+        with pytest.raises(RuntimeError, match="Not connected"):
+            service.screenshot()
+
+    def test_screenshot_is_fast(self, device_id):
+        """Screenshot should complete in under 100ms."""
+        service = ScrcpyService(device_id)
+        service.connect()
+
+        try:
+            time.sleep(0.5)  # Wait for buffer
+
+            start = time.perf_counter()
+            service.screenshot()
+            elapsed_ms = (time.perf_counter() - start) * 1000
+
+            assert elapsed_ms < 100, f"Screenshot took {elapsed_ms:.1f}ms, expected <100ms"
+
+        finally:
+            service.disconnect()
