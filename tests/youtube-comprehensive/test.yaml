@@ -1,0 +1,82 @@
+# youtube-comprehensive-flow
+# Tests search, playback, and content discovery
+# Created: 2026-01-14
+
+config:
+  app: com.google.android.youtube
+
+setup:
+  - terminate_app
+  - launch_app
+  - wait: 3s
+
+teardown:
+  - terminate_app
+
+tests:
+  - name: YouTube Search, Playback & Discovery
+    description: Complete user journey through YouTube - search for content, play video, explore Home and Shorts
+    timeout: 120s
+    steps:
+      # === PART 1: Search & Playback ===
+
+      # Wait for app to load
+      - wait_for: "Home"
+
+      # Handle potential popup/dialog
+      - if_exists: "Dismiss"
+        then:
+          - tap: "Dismiss"
+
+      # Handle sign-in prompt if shown
+      - if_exists: "Sign in"
+        then:
+          - tap: "Not now"
+
+      # Open search
+      - tap: "Search"
+      - wait: 2s
+
+      # Search for evergreen content
+      - type: "lofi hip hop"
+      - tap: "Search"
+      - wait: 3s
+      - verify_screen: "Search results showing lofi music videos"
+
+      # Play first video result
+      - tap: [540, 600]
+      - wait: 5s
+
+      # Handle potential ad
+      - if_exists: "Skip Ad"
+        then:
+          - wait: 5s
+          - tap: "Skip Ad"
+
+      - verify_screen: "Video player with lofi content playing"
+
+      # Return to search results
+      - press: BACK
+      - wait: 2s
+
+      # === PART 2: Content Discovery ===
+
+      # Navigate to Home feed
+      - tap: "Home"
+      - wait: 2s
+      - verify_screen: "Home feed with recommended videos"
+
+      # Scroll to explore more content
+      - swipe: up
+      - wait: 1s
+      - verify_screen: "More video recommendations visible"
+
+      # Check Shorts tab
+      - tap: "Shorts"
+      - wait: 3s
+      - verify_screen: "Short-form vertical video playing"
+
+      # Exit Shorts and verify main UI
+      - press: BACK
+      - wait: 1s
+      - verify_screen: "YouTube main interface with navigation tabs"

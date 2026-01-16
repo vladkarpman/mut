@@ -1,0 +1,3020 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Approve Test - recording_test</title>
+    <style>
+        :root {
+            --pass-color: #10b981;
+            --fail-color: #ef4444;
+            --skip-color: #6b7280;
+            --bg-primary: #111827;
+            --bg-secondary: #1f2937;
+            --bg-tertiary: #374151;
+            --text-primary: #f9fafb;
+            --text-secondary: #9ca3af;
+            --border-color: #4b5563;
+            --accent-color: #3b82f6;
+            --action-tap: #f59e0b;
+            --action-verify: #8b5cf6;
+            --action-type: #06b6d4;
+            --action-wait: #6b7280;
+            --action-swipe: #ec4899;
+            --warning-color: #f59e0b;
+        }
+
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            background: var(--bg-primary);
+            color: var(--text-primary);
+            line-height: 1.6;
+            height: 100vh;
+            overflow: hidden;
+        }
+
+        /* Header */
+        .header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 12px 24px;
+            background: var(--bg-secondary);
+            border-bottom: 1px solid var(--border-color);
+        }
+
+        .header-left {
+            display: flex;
+            align-items: center;
+            gap: 24px;
+        }
+
+        .header-title {
+            display: flex;
+            flex-direction: column;
+        }
+
+        .header h1 {
+            font-size: 1.1rem;
+            font-weight: 600;
+            margin-bottom: 2px;
+        }
+
+        .header-app {
+            font-size: 0.75rem;
+            color: var(--text-secondary);
+            font-family: 'SF Mono', Monaco, monospace;
+        }
+
+        .header-device {
+            font-size: 0.7rem;
+            color: var(--text-secondary);
+            display: flex;
+            align-items: center;
+            gap: 6px;
+        }
+
+        .header-device .device-icon {
+            font-size: 0.9rem;
+        }
+
+        .header-device .device-name {
+            color: var(--text-primary);
+            font-weight: 500;
+        }
+
+        .header-device .device-resolution {
+            color: var(--text-secondary);
+            opacity: 0.7;
+        }
+
+        .header-stats {
+            display: flex;
+            gap: 16px;
+        }
+
+        .stat-item {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            padding: 6px 12px;
+            background: var(--bg-tertiary);
+            border-radius: 6px;
+            min-width: 60px;
+        }
+
+        .stat-value {
+            font-size: 1.1rem;
+            font-weight: 700;
+            color: var(--text-primary);
+        }
+
+        .stat-label {
+            font-size: 0.65rem;
+            color: var(--text-secondary);
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+        }
+
+        .stat-item.taps .stat-value { color: var(--action-tap); }
+        .stat-item.swipes .stat-value { color: var(--action-swipe); }
+        .stat-item.verifies .stat-value { color: var(--action-verify); }
+
+        .header-actions {
+            display: flex;
+            gap: 12px;
+        }
+
+        .btn {
+            padding: 8px 16px;
+            border-radius: 6px;
+            font-size: 0.875rem;
+            font-weight: 500;
+            cursor: pointer;
+            transition: all 0.15s;
+            border: none;
+        }
+
+        .btn-primary {
+            background: var(--accent-color);
+            color: white;
+        }
+
+        .btn-primary:hover {
+            background: #2563eb;
+        }
+
+        .btn-secondary {
+            background: var(--bg-tertiary);
+            color: var(--text-primary);
+            border: 1px solid var(--border-color);
+        }
+
+        .btn-secondary:hover {
+            background: var(--border-color);
+        }
+
+        .btn-danger {
+            background: var(--fail-color);
+            color: white;
+        }
+
+        /* Main Layout - Two Panels */
+        .main {
+            display: flex;
+            height: calc(100vh - 65px);
+        }
+
+        .video-panel {
+            width: 30%;
+            min-width: 280px;
+            max-width: 400px;
+            padding: 16px;
+            border-right: 1px solid var(--border-color);
+            display: flex;
+            flex-direction: column;
+        }
+
+        .steps-panel {
+            width: 70%;
+            overflow-y: auto;
+            padding: 24px;
+        }
+
+        /* Video Player */
+        .video-container {
+            flex: 1;
+            display: flex;
+            flex-direction: column;
+        }
+
+        .video-wrapper {
+            flex: 1;
+            min-height: 300px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            background: var(--bg-secondary);
+            border-radius: 8px;
+            margin-bottom: 16px;
+        }
+
+        .video-wrapper video {
+            width: 100%;
+            height: 100%;
+            object-fit: contain;
+            border-radius: 8px;
+        }
+
+        .video-controls {
+            display: flex;
+            flex-direction: column;
+            gap: 12px;
+        }
+
+        .video-timeline {
+            position: relative;
+            height: 40px;
+            background: var(--bg-secondary);
+            border-radius: 4px;
+            cursor: pointer;
+        }
+
+        .video-progress {
+            position: absolute;
+            top: 0;
+            left: 0;
+            height: 100%;
+            background: var(--accent-color);
+            opacity: 0.3;
+            border-radius: 4px;
+        }
+
+        .video-marker {
+            position: absolute;
+            top: 0;
+            width: 3px;
+            height: 100%;
+            background: var(--action-tap);
+            cursor: pointer;
+        }
+
+        .video-marker:hover {
+            background: var(--warning-color);
+        }
+
+        .video-time {
+            display: flex;
+            justify-content: space-between;
+            font-size: 0.75rem;
+            color: var(--text-secondary);
+        }
+
+        .add-step-buttons {
+            display: flex;
+            gap: 8px;
+            margin-top: 12px;
+        }
+
+        .add-step-buttons .btn {
+            flex: 1;
+            font-size: 0.75rem;
+            padding: 6px 12px;
+        }
+
+        /* Step Cards */
+        .step-card {
+            background: var(--bg-secondary);
+            border-radius: 12px;
+            padding: 24px;
+            margin-bottom: 20px;
+            border: 2px solid var(--border-color);
+            transition: all 0.2s;
+        }
+
+        .step-card:hover {
+            border-color: var(--text-secondary);
+            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
+        }
+
+        .step-card.active {
+            border-color: var(--accent-color);
+            box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.2);
+        }
+
+        .step-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 16px;
+            padding-bottom: 12px;
+            border-bottom: 1px solid var(--border-color);
+        }
+
+        .step-title {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            flex: 1;
+            min-width: 0;
+        }
+
+        .step-number {
+            width: 32px;
+            height: 32px;
+            background: var(--accent-color);
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 0.9rem;
+            font-weight: 700;
+            color: white;
+            flex-shrink: 0;
+        }
+
+        .step-action {
+            font-weight: 600;
+            font-size: 1.1rem;
+        }
+
+        .step-action.tap { color: var(--action-tap); }
+        .step-action.verify { color: var(--action-verify); }
+        .step-action.wait { color: var(--action-wait); }
+        .step-action.type { color: var(--action-type); }
+        .step-action.swipe { color: var(--action-swipe); }
+
+        .step-action-title {
+            font-size: 0.95rem;
+            font-weight: 500;
+            color: var(--text-primary);
+            flex: 1;
+            min-width: 0;
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
+            cursor: text;
+            padding: 4px 8px;
+            border-radius: 4px;
+            transition: background 0.2s, border-color 0.2s;
+            border: 1px solid transparent;
+        }
+
+        .step-action-title:hover {
+            background: var(--bg-tertiary);
+            border-color: var(--border-color);
+        }
+
+        /* Horizontal split layout (top: info, bottom: frames) */
+        .step-content {
+            display: flex;
+            flex-direction: column;
+            gap: 16px;
+        }
+
+        .step-info {
+            display: flex;
+            flex-direction: column;
+            gap: 12px;
+        }
+
+        .step-frames-row {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 12px;
+            padding: 16px;
+            background: var(--bg-primary);
+            border-radius: 8px;
+        }
+
+        .no-frames {
+            padding: 40px;
+            background: var(--bg-tertiary);
+            border-radius: 8px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            color: var(--text-secondary);
+            font-size: 0.8rem;
+        }
+
+        .section-header {
+            font-size: 0.7rem;
+            text-transform: uppercase;
+            color: var(--text-secondary);
+            letter-spacing: 0.5px;
+            margin-bottom: 8px;
+            font-weight: 600;
+        }
+
+        .gesture-badge {
+            display: inline-flex;
+            align-items: center;
+            gap: 4px;
+            padding: 2px 8px;
+            border-radius: 4px;
+            font-size: 0.7rem;
+            font-weight: 600;
+            text-transform: uppercase;
+            background: var(--bg-tertiary);
+            margin-right: 8px;
+            white-space: nowrap;
+        }
+
+        .gesture-badge.tap { background: rgba(245, 158, 11, 0.2); color: var(--action-tap); }
+        .gesture-badge.swipe { background: rgba(236, 72, 153, 0.2); color: var(--action-swipe); }
+        .gesture-badge.verify, .gesture-badge.verifyscreen { background: rgba(139, 92, 246, 0.2); color: var(--action-verify); }
+        .gesture-badge.wait, .gesture-badge.waitfor { background: rgba(107, 114, 128, 0.2); color: var(--action-wait); }
+        .gesture-badge.type { background: rgba(6, 182, 212, 0.2); color: var(--action-type); }
+        .gesture-badge.longpress { background: rgba(245, 158, 11, 0.3); color: var(--action-tap); }
+        .gesture-badge.doubletap { background: rgba(245, 158, 11, 0.3); color: var(--action-tap); }
+
+        .step-controls {
+            display: flex;
+            gap: 8px;
+        }
+
+        .step-controls button {
+            width: 36px;
+            height: 36px;
+            border: none;
+            background: var(--bg-tertiary);
+            color: var(--text-secondary);
+            border-radius: 8px;
+            cursor: pointer;
+            font-size: 1.1rem;
+            transition: all 0.15s;
+        }
+
+        .step-controls button:hover {
+            background: var(--border-color);
+            color: var(--text-primary);
+            transform: scale(1.1);
+        }
+
+        .step-controls button.delete:hover {
+            background: var(--fail-color);
+            color: white;
+        }
+
+        /* Frame Display - 3 Column Story Layout */
+        .step-frames {
+            display: flex;
+            gap: 16px;
+            padding: 16px;
+            background: var(--bg-primary);
+            border-radius: 8px;
+        }
+
+        .frame-column {
+            flex: 1;
+            display: flex;
+            flex-direction: column;
+            background: var(--bg-secondary);
+            border-radius: 8px;
+            overflow: hidden;
+            border: 1px solid var(--border-color);
+        }
+
+        .frame-column.before { border-color: var(--action-wait); }
+        .frame-column.action { border-color: var(--action-tap); }
+        .frame-column.after { border-color: var(--pass-color); }
+
+        .frame-column-header {
+            padding: 8px 12px;
+            text-align: center;
+            font-size: 0.7rem;
+            font-weight: 600;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+        }
+
+        .frame-column.before .frame-column-header { background: rgba(107, 114, 128, 0.2); color: var(--action-wait); }
+        .frame-column.action .frame-column-header { background: rgba(245, 158, 11, 0.2); color: var(--action-tap); }
+        .frame-column.after .frame-column-header { background: rgba(16, 185, 129, 0.2); color: var(--pass-color); }
+
+        .frame-image-container {
+            position: relative;
+            width: 100%;
+            aspect-ratio: 9/19.5;
+            background: var(--bg-primary);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            cursor: pointer;
+        }
+
+        .frame-image-container img {
+            width: 100%;
+            height: 100%;
+            object-fit: contain;
+        }
+
+        .frame-description {
+            padding: 12px;
+            font-size: 0.8rem;
+            color: var(--text-secondary);
+            line-height: 1.5;
+            min-height: 60px;
+            cursor: pointer;
+            transition: background 0.2s;
+        }
+
+        .frame-description:hover {
+            background: var(--bg-tertiary);
+        }
+
+        .frame-description em {
+            opacity: 0.5;
+        }
+
+        .frame-gesture-info {
+            padding: 12px;
+            border-top: 1px solid var(--border-color);
+            background: var(--bg-tertiary);
+            font-size: 0.75rem;
+        }
+
+        .frame-gesture-info .gesture-row {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 6px;
+        }
+
+        .frame-gesture-info .gesture-row:last-child {
+            margin-bottom: 0;
+        }
+
+        .frame-gesture-info .gesture-label {
+            color: var(--text-secondary);
+        }
+
+        .frame-gesture-info .gesture-value {
+            color: var(--accent-color);
+            font-weight: 500;
+            font-family: 'SF Mono', Monaco, monospace;
+        }
+
+        .frame-gesture-info select,
+        .frame-gesture-info input {
+            background: var(--bg-secondary);
+            border: 1px solid var(--border-color);
+            border-radius: 4px;
+            padding: 4px 8px;
+            color: var(--text-primary);
+            font-size: 0.75rem;
+        }
+
+        .frame-gesture-info input[type="number"] {
+            width: 60px;
+        }
+
+        /* Legacy support */
+        .frame-container {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            position: relative;
+        }
+
+        .frame-wrapper {
+            position: relative;
+            width: 100px;
+            height: 180px;
+        }
+
+        .frame-wrapper img {
+            position: absolute;
+            top: 0;
+            left: 0;
+            opacity: 0;
+            transition: opacity 0.15s ease-in-out;
+        }
+
+        .frame-wrapper img.active {
+            opacity: 1;
+        }
+
+        .frame-arrow {
+            color: var(--text-secondary);
+            font-size: 1.5rem;
+            font-weight: bold;
+        }
+
+        /* Tap indicator overlay */
+        .tap-indicator {
+            position: absolute;
+            width: 24px;
+            height: 24px;
+            border-radius: 50%;
+            background: rgba(245, 158, 11, 0.6);
+            border: 2px solid #fff;
+            box-shadow: 0 0 0 3px var(--action-tap), 0 4px 12px rgba(0,0,0,0.4);
+            transform: translate(-50%, -50%);
+            pointer-events: none;
+            animation: tapPulse 1.2s ease-out infinite;
+        }
+
+        .tap-indicator::after {
+            content: '';
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            width: 8px;
+            height: 8px;
+            background: #fff;
+            border-radius: 50%;
+            transform: translate(-50%, -50%);
+        }
+
+        @keyframes tapPulse {
+            0% { transform: translate(-50%, -50%) scale(1); box-shadow: 0 0 0 3px var(--action-tap), 0 4px 12px rgba(0,0,0,0.4); }
+            50% { transform: translate(-50%, -50%) scale(1.1); box-shadow: 0 0 0 6px rgba(245, 158, 11, 0.3), 0 4px 16px rgba(0,0,0,0.3); }
+            100% { transform: translate(-50%, -50%) scale(1); box-shadow: 0 0 0 3px var(--action-tap), 0 4px 12px rgba(0,0,0,0.4); }
+        }
+
+        /* Long press indicator */
+        .long-press-indicator {
+            position: absolute;
+            width: 32px;
+            height: 32px;
+            border-radius: 50%;
+            background: transparent;
+            border: 3px solid var(--action-tap);
+            transform: translate(-50%, -50%);
+            pointer-events: none;
+            animation: longPressRing 2s ease-in-out infinite;
+        }
+
+        .long-press-indicator::before {
+            content: '';
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            width: 50px;
+            height: 50px;
+            border: 2px solid rgba(245, 158, 11, 0.4);
+            border-radius: 50%;
+            transform: translate(-50%, -50%);
+            animation: longPressOuter 2s ease-in-out infinite;
+        }
+
+        .long-press-indicator::after {
+            content: '';
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            width: 12px;
+            height: 12px;
+            background: var(--action-tap);
+            border-radius: 50%;
+            transform: translate(-50%, -50%);
+            box-shadow: 0 2px 8px rgba(0,0,0,0.3);
+        }
+
+        @keyframes longPressRing {
+            0%, 100% { transform: translate(-50%, -50%) scale(1); opacity: 1; }
+            50% { transform: translate(-50%, -50%) scale(1.15); opacity: 0.8; }
+        }
+
+        @keyframes longPressOuter {
+            0%, 100% { transform: translate(-50%, -50%) scale(0.9); opacity: 0.3; }
+            50% { transform: translate(-50%, -50%) scale(1.1); opacity: 0.6; }
+        }
+
+        /* Double tap indicator */
+        .double-tap-indicator {
+            position: absolute;
+            transform: translate(-50%, -50%);
+            pointer-events: none;
+        }
+
+        .double-tap-indicator .tap-circle {
+            position: absolute;
+            width: 20px;
+            height: 20px;
+            border-radius: 50%;
+            border: 2px solid #fff;
+            background: rgba(245, 158, 11, 0.7);
+            box-shadow: 0 0 0 2px var(--action-tap), 0 2px 8px rgba(0,0,0,0.3);
+        }
+
+        .double-tap-indicator .tap-1 {
+            top: -14px;
+            left: -14px;
+            animation: doubleTap1 1s ease-in-out infinite;
+        }
+
+        .double-tap-indicator .tap-2 {
+            top: -6px;
+            left: -6px;
+            animation: doubleTap2 1s ease-in-out infinite;
+        }
+
+        @keyframes doubleTap1 {
+            0%, 100% { transform: scale(1); opacity: 1; }
+            25% { transform: scale(0.7); opacity: 0.4; }
+            50% { transform: scale(1); opacity: 1; }
+            75% { transform: scale(1); opacity: 1; }
+        }
+
+        @keyframes doubleTap2 {
+            0%, 100% { transform: scale(0.8); opacity: 0.6; }
+            25% { transform: scale(0.8); opacity: 0.6; }
+            50% { transform: scale(0.7); opacity: 0.4; }
+            75% { transform: scale(1); opacity: 1; }
+        }
+
+        /* Swipe indicator */
+        .swipe-indicator {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            pointer-events: none;
+            overflow: visible;
+        }
+
+        .swipe-indicator .swipe-line {
+            stroke: var(--action-swipe);
+            stroke-width: 3;
+            stroke-linecap: round;
+            filter: drop-shadow(0 2px 4px rgba(0,0,0,0.3));
+        }
+
+        .swipe-indicator .swipe-line-bg {
+            stroke: rgba(236, 72, 153, 0.3);
+            stroke-width: 8;
+            stroke-linecap: round;
+        }
+
+        .swipe-indicator .swipe-arrow {
+            fill: var(--action-swipe);
+            filter: drop-shadow(0 2px 4px rgba(0,0,0,0.3));
+        }
+
+        .swipe-indicator .swipe-start {
+            fill: #fff;
+            stroke: var(--action-swipe);
+            stroke-width: 2;
+            filter: drop-shadow(0 2px 4px rgba(0,0,0,0.3));
+        }
+
+        .swipe-indicator .swipe-motion {
+            stroke: var(--action-swipe);
+            stroke-width: 2;
+            stroke-dasharray: 4 4;
+            opacity: 0.6;
+            animation: swipeMotion 0.8s linear infinite;
+        }
+
+        @keyframes swipeMotion {
+            0% { stroke-dashoffset: 0; }
+            100% { stroke-dashoffset: -16; }
+        }
+
+        .frame-label {
+            font-size: 0.7rem;
+            font-weight: 600;
+            color: var(--text-secondary);
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+            margin-bottom: 6px;
+        }
+
+        .frame-label.before { color: var(--action-wait); }
+        .frame-label.action { color: var(--action-tap); }
+        .frame-label.after { color: var(--pass-color); }
+
+        /* Step summary - single line description */
+        .step-summary {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            padding: 10px 16px;
+            background: var(--bg-tertiary);
+            border-radius: 6px;
+            font-size: 0.8rem;
+            margin-top: 12px;
+        }
+
+        .step-summary .summary-label {
+            color: var(--text-secondary);
+            font-weight: 500;
+            white-space: nowrap;
+        }
+
+        .step-summary .summary-label.before { color: var(--action-wait); }
+        .step-summary .summary-label.action { color: var(--action-tap); }
+        .step-summary .summary-label.after { color: var(--pass-color); }
+
+        .step-summary .summary-text {
+            color: var(--text-primary);
+            flex: 1;
+            overflow: hidden;
+            text-overflow: ellipsis;
+            white-space: nowrap;
+            cursor: pointer;
+        }
+
+        .step-summary .summary-text:hover {
+            color: var(--accent-color);
+        }
+
+        .step-summary .summary-arrow {
+            color: var(--text-secondary);
+            opacity: 0.5;
+        }
+
+        .frame-img {
+            width: 100px;
+            height: 180px;
+            object-fit: cover;
+            border-radius: 10px;
+            border: 2px solid var(--border-color);
+            cursor: pointer;
+            transition: all 0.2s;
+            box-shadow: 0 2px 6px rgba(0, 0, 0, 0.3);
+        }
+
+        .frame-img:hover {
+            transform: scale(1.05);
+            box-shadow: 0 6px 12px rgba(0, 0, 0, 0.4);
+        }
+
+        .frame-container.before .frame-img { border-color: var(--action-wait); }
+        .frame-container.action .frame-img { border-color: var(--action-tap); }
+        .frame-container.after .frame-img { border-color: var(--pass-color); }
+
+        /* Analysis Section */
+        .step-analysis {
+            background: var(--bg-tertiary);
+            border-radius: 6px;
+            padding: 12px;
+            font-size: 0.875rem;
+        }
+
+        .analysis-row {
+            display: flex;
+            margin-bottom: 6px;
+        }
+
+        .analysis-row:last-child {
+            margin-bottom: 0;
+        }
+
+        .analysis-label {
+            width: 60px;
+            color: var(--text-secondary);
+            flex-shrink: 0;
+        }
+
+        .analysis-value {
+            color: var(--text-primary);
+        }
+
+        .analysis-value.editable {
+            cursor: pointer;
+            padding: 2px 6px;
+            border-radius: 4px;
+            transition: background 0.2s;
+        }
+
+        .analysis-value.editable:hover {
+            background: var(--bg-secondary);
+        }
+
+        .step-section {
+            margin-bottom: 12px;
+        }
+
+        .step-coordinates {
+            display: flex;
+            gap: 16px;
+            padding: 10px 12px;
+            background: var(--bg-tertiary);
+            border-radius: 6px;
+            font-size: 0.8rem;
+        }
+
+        .coord-item {
+            display: flex;
+            align-items: center;
+            gap: 6px;
+        }
+
+        .coord-label {
+            color: var(--text-secondary);
+        }
+
+        .coord-value {
+            font-weight: 600;
+            color: var(--accent-color);
+            font-family: 'SF Mono', Monaco, monospace;
+            min-width: 40px;
+        }
+
+        .coord-px {
+            color: var(--text-secondary);
+            font-size: 0.75rem;
+            opacity: 0.7;
+        }
+
+        /* Swipe info styling */
+        .swipe-info .swipe-direction {
+            color: var(--action-swipe);
+        }
+
+        /* Type info styling */
+        .type-info .type-text {
+            color: var(--action-type);
+            font-family: 'SF Mono', Monaco, monospace;
+        }
+
+        .type-info .submit-yes {
+            color: var(--pass-color);
+        }
+
+        .type-info .submit-no {
+            color: var(--text-secondary);
+        }
+
+        /* Suggested Verification */
+        .step-suggestion {
+            background: rgba(139, 92, 246, 0.1);
+            border: 1px solid rgba(139, 92, 246, 0.3);
+            border-radius: 6px;
+            padding: 12px;
+            margin-bottom: 12px;
+        }
+
+        .suggestion-header {
+            display: flex;
+            align-items: center;
+            gap: 6px;
+            margin-bottom: 8px;
+            color: var(--action-verify);
+            font-size: 0.75rem;
+            font-weight: 500;
+        }
+
+        .suggestion-text {
+            font-family: 'SF Mono', Monaco, monospace;
+            font-size: 0.8rem;
+            margin-bottom: 8px;
+        }
+
+        .suggestion-actions {
+            display: flex;
+            gap: 8px;
+        }
+
+        .suggestion-actions button {
+            padding: 4px 12px;
+            font-size: 0.75rem;
+        }
+
+        /* Conditional Section - Collapsed by default */
+        .step-conditional {
+            background: rgba(59, 130, 246, 0.1);
+            border: 1px solid rgba(59, 130, 246, 0.3);
+            border-radius: 6px;
+            margin-bottom: 12px;
+            overflow: hidden;
+        }
+
+        .step-conditional.collapsed {
+            background: transparent;
+            border: 1px dashed rgba(59, 130, 246, 0.2);
+            padding: 8px 12px;
+        }
+
+        .step-conditional:not(.collapsed) {
+            padding: 12px;
+        }
+
+        .conditional-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            cursor: pointer;
+        }
+
+        .step-conditional:not(.collapsed) .conditional-header {
+            margin-bottom: 8px;
+        }
+
+        .conditional-expand-hint {
+            font-size: 0.7rem;
+            color: var(--text-secondary);
+            opacity: 0.6;
+        }
+
+        .step-conditional:not(.collapsed) .conditional-expand-hint {
+            display: none;
+        }
+
+        .conditional-label {
+            font-size: 0.75rem;
+            font-weight: 500;
+            color: var(--accent-color);
+            display: flex;
+            align-items: center;
+            gap: 6px;
+        }
+
+        .conditional-toggle {
+            width: 20px;
+            height: 20px;
+            cursor: pointer;
+            accent-color: var(--accent-color);
+        }
+
+        .conditional-config {
+            display: flex;
+            gap: 12px;
+            flex-wrap: wrap;
+        }
+
+        .conditional-field {
+            display: flex;
+            align-items: center;
+            gap: 6px;
+        }
+
+        .conditional-field label {
+            font-size: 0.75rem;
+            color: var(--text-secondary);
+        }
+
+        .conditional-field select,
+        .conditional-field input {
+            background: var(--bg-tertiary);
+            border: 1px solid var(--border-color);
+            border-radius: 4px;
+            padding: 4px 8px;
+            color: var(--text-primary);
+            font-size: 0.8rem;
+        }
+
+        .conditional-field select {
+            min-width: 140px;
+        }
+
+        .conditional-field input {
+            min-width: 180px;
+        }
+
+        .conditional-badge {
+            background: var(--accent-color);
+            color: white;
+            font-size: 0.65rem;
+            padding: 2px 6px;
+            border-radius: 3px;
+            margin-left: 8px;
+        }
+
+        /* Gesture Config - combines info display with editor */
+        .gesture-config {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 16px;
+            align-items: center;
+            padding: 12px;
+            background: var(--bg-tertiary);
+            border-radius: 6px;
+        }
+
+        .gesture-config .config-group {
+            display: flex;
+            align-items: center;
+            gap: 6px;
+        }
+
+        .gesture-config .config-label {
+            font-size: 0.75rem;
+            color: var(--text-secondary);
+        }
+
+        .gesture-config .config-value {
+            font-size: 0.8rem;
+            font-weight: 600;
+            color: var(--accent-color);
+            font-family: 'SF Mono', Monaco, monospace;
+        }
+
+        .gesture-config .config-value.highlight {
+            color: var(--action-swipe);
+        }
+
+        .gesture-config input,
+        .gesture-config select {
+            background: var(--bg-secondary);
+            border: 1px solid var(--border-color);
+            border-radius: 4px;
+            padding: 4px 8px;
+            color: var(--text-primary);
+            font-size: 0.8rem;
+        }
+
+        .gesture-config input[type="number"] {
+            width: 70px;
+        }
+
+        .gesture-config input[type="text"] {
+            width: 150px;
+        }
+
+        .gesture-config select {
+            min-width: 80px;
+        }
+
+        /* Step Editor */
+        .step-editor {
+            display: flex;
+            gap: 12px;
+            align-items: center;
+            flex-wrap: wrap;
+        }
+
+        .editor-field {
+            display: flex;
+            align-items: center;
+            gap: 6px;
+        }
+
+        .editor-field label {
+            font-size: 0.75rem;
+            color: var(--text-secondary);
+        }
+
+        .editor-field input,
+        .editor-field select {
+            background: var(--bg-tertiary);
+            border: 1px solid var(--border-color);
+            border-radius: 4px;
+            padding: 6px 10px;
+            color: var(--text-primary);
+            font-size: 0.875rem;
+        }
+
+        .editor-field input:focus,
+        .editor-field select:focus {
+            outline: none;
+            border-color: var(--accent-color);
+        }
+
+        .editor-field input[type="number"] {
+            width: 80px;
+        }
+
+        /* Add Step Modal */
+        .modal-overlay {
+            position: fixed;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background: rgba(0, 0, 0, 0.7);
+            display: none;
+            align-items: center;
+            justify-content: center;
+            z-index: 1000;
+        }
+
+        .modal-overlay.active {
+            display: flex;
+        }
+
+        .modal {
+            background: var(--bg-secondary);
+            border-radius: 12px;
+            padding: 24px;
+            width: 400px;
+            max-width: 90%;
+        }
+
+        .modal h2 {
+            font-size: 1.125rem;
+            margin-bottom: 16px;
+        }
+
+        .modal-field {
+            margin-bottom: 16px;
+        }
+
+        .modal-field label {
+            display: block;
+            font-size: 0.875rem;
+            color: var(--text-secondary);
+            margin-bottom: 6px;
+        }
+
+        .modal-field input,
+        .modal-field textarea {
+            width: 100%;
+            background: var(--bg-tertiary);
+            border: 1px solid var(--border-color);
+            border-radius: 6px;
+            padding: 10px;
+            color: var(--text-primary);
+            font-size: 0.875rem;
+        }
+
+        .modal-field textarea {
+            height: 80px;
+            resize: vertical;
+        }
+
+        .modal-actions {
+            display: flex;
+            justify-content: flex-end;
+            gap: 8px;
+        }
+    </style>
+</head>
+<body>
+    <header class="header">
+        <div class="header-left">
+            <div class="header-title">
+                <h1>recording_test</h1>
+                <div class="header-app" id="headerApp">Loading...</div>
+            </div>
+            <div class="header-device" id="headerDevice">
+                <!-- Device info populated by JS -->
+            </div>
+            <div class="header-stats" id="headerStats">
+                <!-- Stats populated by JS -->
+            </div>
+        </div>
+        <div class="header-actions">
+            <button class="btn btn-secondary" onclick="discardTest()">Discard</button>
+            <button class="btn btn-primary" onclick="exportYAML()">Export YAML</button>
+        </div>
+    </header>
+
+    <main class="main">
+        <div class="video-panel">
+            <div class="video-container">
+                <div class="video-wrapper">
+                    <video id="video" src="recording/recording.mp4" controls></video>
+                </div>
+                <div class="video-controls">
+                    <div class="video-timeline" id="timeline" onclick="seekToPosition(event)">
+                        <div class="video-progress" id="progress"></div>
+                        <!-- Step markers injected by JS -->
+                    </div>
+                    <div class="video-time">
+                        <span id="currentTime">0:00</span>
+                        <span id="duration">0:39</span>
+                    </div>
+                </div>
+                <div class="add-step-buttons">
+                    <button class="btn btn-secondary" onclick="addStep('verify_screen')">+ verify_screen</button>
+                    <button class="btn btn-secondary" onclick="addStep('wait_for')">+ wait_for</button>
+                    <button class="btn btn-secondary" onclick="addStep('wait')">+ wait</button>
+                </div>
+            </div>
+        </div>
+
+        <div class="steps-panel" id="stepsPanel">
+            <!-- Steps rendered by JS -->
+        </div>
+    </main>
+
+    <script>
+        // Data embedded during generation
+        const testData = {
+  "testName": "recording_test",
+  "appPackage": "com.example.app",
+  "device": {},
+  "videoFile": "recording/recording.mp4",
+  "videoDuration": "0:39",
+  "steps": [
+    {
+      "id": "step_001",
+      "timestamp": 0.0,
+      "action": "tap",
+      "target": {
+        "x": 217,
+        "y": 1076,
+        "text": ""
+      },
+      "direction": "up",
+      "waitAfter": 0,
+      "frames": {
+        "before": "recording/screenshots/step_001_before_1.png",
+        "action": "recording/screenshots/step_001_exact.png",
+        "after": "recording/screenshots/step_001_after_1.png"
+      }
+    },
+    {
+      "id": "step_002",
+      "timestamp": 2.2773380279541016,
+      "action": "tap",
+      "target": {
+        "x": 433,
+        "y": 1601,
+        "text": ""
+      },
+      "direction": "up",
+      "waitAfter": 0,
+      "frames": {
+        "before": "recording/screenshots/step_002_before_1.png",
+        "action": "recording/screenshots/step_002_exact.png",
+        "after": "recording/screenshots/step_002_after_1.png"
+      }
+    },
+    {
+      "id": "step_003",
+      "timestamp": 2.8624629974365234,
+      "action": "tap",
+      "target": {
+        "x": 926,
+        "y": 1360,
+        "text": ""
+      },
+      "direction": "up",
+      "waitAfter": 0,
+      "frames": {
+        "before": "recording/screenshots/step_003_before_1.png",
+        "action": "recording/screenshots/step_003_exact.png",
+        "after": "recording/screenshots/step_003_after_1.png"
+      }
+    },
+    {
+      "id": "step_004",
+      "timestamp": 3.337207078933716,
+      "action": "tap",
+      "target": {
+        "x": 231,
+        "y": 1849,
+        "text": ""
+      },
+      "direction": "up",
+      "waitAfter": 0,
+      "frames": {
+        "before": "recording/screenshots/step_004_before_1.png",
+        "action": "recording/screenshots/step_004_exact.png",
+        "after": "recording/screenshots/step_004_after_1.png"
+      }
+    },
+    {
+      "id": "step_005",
+      "timestamp": 3.497157096862793,
+      "action": "tap",
+      "target": {
+        "x": 488,
+        "y": 1604,
+        "text": ""
+      },
+      "direction": "up",
+      "waitAfter": 0,
+      "frames": {
+        "before": "recording/screenshots/step_005_before_1.png",
+        "action": "recording/screenshots/step_005_exact.png",
+        "after": "recording/screenshots/step_005_after_1.png"
+      }
+    },
+    {
+      "id": "step_006",
+      "timestamp": 4.663819074630737,
+      "action": "tap",
+      "target": {
+        "x": 958,
+        "y": 2120,
+        "text": ""
+      },
+      "direction": "up",
+      "waitAfter": 0,
+      "frames": {
+        "before": "recording/screenshots/step_006_before_1.png",
+        "action": "recording/screenshots/step_006_exact.png",
+        "after": "recording/screenshots/step_006_after_1.png"
+      }
+    },
+    {
+      "id": "step_007",
+      "timestamp": 7.4185662269592285,
+      "action": "tap",
+      "target": {
+        "x": 937,
+        "y": 1881,
+        "text": ""
+      },
+      "direction": "up",
+      "waitAfter": 0,
+      "frames": {
+        "before": "recording/screenshots/step_007_before_1.png",
+        "action": "recording/screenshots/step_007_exact.png",
+        "after": "recording/screenshots/step_007_after_1.png"
+      }
+    },
+    {
+      "id": "step_008",
+      "timestamp": 7.9100871086120605,
+      "action": "tap",
+      "target": {
+        "x": 205,
+        "y": 1833,
+        "text": ""
+      },
+      "direction": "up",
+      "waitAfter": 0,
+      "frames": {
+        "before": "recording/screenshots/step_008_before_1.png",
+        "action": "recording/screenshots/step_008_exact.png",
+        "after": "recording/screenshots/step_008_after_1.png"
+      }
+    },
+    {
+      "id": "step_009",
+      "timestamp": 8.626887083053589,
+      "action": "tap",
+      "target": {
+        "x": 521,
+        "y": 2138,
+        "text": ""
+      },
+      "direction": "up",
+      "waitAfter": 0,
+      "frames": {
+        "before": "recording/screenshots/step_009_before_1.png",
+        "action": "recording/screenshots/step_009_exact.png",
+        "after": "recording/screenshots/step_009_after_1.png"
+      }
+    },
+    {
+      "id": "step_010",
+      "timestamp": 10.538884162902832,
+      "action": "tap",
+      "target": {
+        "x": 690,
+        "y": 1932,
+        "text": ""
+      },
+      "direction": "up",
+      "waitAfter": 0,
+      "frames": {
+        "before": "recording/screenshots/step_010_before_1.png",
+        "action": "recording/screenshots/step_010_exact.png",
+        "after": "recording/screenshots/step_010_after_1.png"
+      }
+    },
+    {
+      "id": "step_011",
+      "timestamp": 11.524018049240112,
+      "action": "tap",
+      "target": {
+        "x": 959,
+        "y": 2154,
+        "text": ""
+      },
+      "direction": "up",
+      "waitAfter": 0,
+      "frames": {
+        "before": "recording/screenshots/step_011_before_1.png",
+        "action": "recording/screenshots/step_011_exact.png",
+        "after": "recording/screenshots/step_011_after_1.png"
+      }
+    },
+    {
+      "id": "step_012",
+      "timestamp": 15.996105909347534,
+      "action": "tap",
+      "target": {
+        "x": 923,
+        "y": 1311,
+        "text": ""
+      },
+      "direction": "up",
+      "waitAfter": 0,
+      "frames": {
+        "before": "recording/screenshots/step_012_before_1.png",
+        "action": "recording/screenshots/step_012_exact.png",
+        "after": "recording/screenshots/step_012_after_1.png"
+      }
+    },
+    {
+      "id": "step_013",
+      "timestamp": 17.49761414527893,
+      "action": "tap",
+      "target": {
+        "x": 435,
+        "y": 1570,
+        "text": ""
+      },
+      "direction": "up",
+      "waitAfter": 0,
+      "frames": {
+        "before": "recording/screenshots/step_013_before_1.png",
+        "action": "recording/screenshots/step_013_exact.png",
+        "after": "recording/screenshots/step_013_after_1.png"
+      }
+    },
+    {
+      "id": "step_014",
+      "timestamp": 17.94884705543518,
+      "action": "tap",
+      "target": {
+        "x": 437,
+        "y": 1337,
+        "text": ""
+      },
+      "direction": "up",
+      "waitAfter": 0,
+      "frames": {
+        "before": "recording/screenshots/step_014_before_1.png",
+        "action": "recording/screenshots/step_014_exact.png",
+        "after": "recording/screenshots/step_014_after_1.png"
+      }
+    },
+    {
+      "id": "step_015",
+      "timestamp": 18.21409511566162,
+      "action": "tap",
+      "target": {
+        "x": 678,
+        "y": 1288,
+        "text": ""
+      },
+      "direction": "up",
+      "waitAfter": 0,
+      "frames": {
+        "before": "recording/screenshots/step_015_before_1.png",
+        "action": "recording/screenshots/step_015_exact.png",
+        "after": "recording/screenshots/step_015_after_1.png"
+      }
+    },
+    {
+      "id": "step_016",
+      "timestamp": 21.092650890350342,
+      "action": "tap",
+      "target": {
+        "x": 933,
+        "y": 1886,
+        "text": ""
+      },
+      "direction": "up",
+      "waitAfter": 0,
+      "frames": {
+        "before": "recording/screenshots/step_016_before_1.png",
+        "action": "recording/screenshots/step_016_exact.png",
+        "after": "recording/screenshots/step_016_after_1.png"
+      }
+    },
+    {
+      "id": "step_017",
+      "timestamp": 22.02084708213806,
+      "action": "tap",
+      "target": {
+        "x": 374,
+        "y": 1052,
+        "text": ""
+      },
+      "direction": "up",
+      "waitAfter": 0,
+      "frames": {
+        "before": "recording/screenshots/step_017_before_1.png",
+        "action": "recording/screenshots/step_017_exact.png",
+        "after": "recording/screenshots/step_017_after_1.png"
+      }
+    },
+    {
+      "id": "step_018",
+      "timestamp": 23.4303560256958,
+      "action": "tap",
+      "target": {
+        "x": 424,
+        "y": 1348,
+        "text": ""
+      },
+      "direction": "up",
+      "waitAfter": 0,
+      "frames": {
+        "before": "recording/screenshots/step_018_before_1.png",
+        "action": "recording/screenshots/step_018_exact.png",
+        "after": "recording/screenshots/step_018_after_1.png"
+      }
+    },
+    {
+      "id": "step_019",
+      "timestamp": 24.467640161514282,
+      "action": "tap",
+      "target": {
+        "x": 256,
+        "y": 2155,
+        "text": ""
+      },
+      "direction": "up",
+      "waitAfter": 0,
+      "frames": {
+        "before": "recording/screenshots/step_019_before_1.png",
+        "action": "recording/screenshots/step_019_exact.png",
+        "after": "recording/screenshots/step_019_after_1.png"
+      }
+    },
+    {
+      "id": "step_020",
+      "timestamp": 24.69942808151245,
+      "action": "tap",
+      "target": {
+        "x": 240,
+        "y": 2161,
+        "text": ""
+      },
+      "direction": "up",
+      "waitAfter": 0,
+      "frames": {
+        "before": "recording/screenshots/step_020_before_1.png",
+        "action": "recording/screenshots/step_020_exact.png",
+        "after": "recording/screenshots/step_020_after_1.png"
+      }
+    },
+    {
+      "id": "step_021",
+      "timestamp": 25.340107917785645,
+      "action": "tap",
+      "target": {
+        "x": 961,
+        "y": 1893,
+        "text": ""
+      },
+      "direction": "up",
+      "waitAfter": 0,
+      "frames": {
+        "before": "recording/screenshots/step_021_before_1.png",
+        "action": "recording/screenshots/step_021_exact.png",
+        "after": "recording/screenshots/step_021_after_1.png"
+      }
+    },
+    {
+      "id": "step_022",
+      "timestamp": 26.66620421409607,
+      "action": "tap",
+      "target": {
+        "x": 239,
+        "y": 1860,
+        "text": ""
+      },
+      "direction": "up",
+      "waitAfter": 0,
+      "frames": {
+        "before": "recording/screenshots/step_022_before_1.png",
+        "action": "recording/screenshots/step_022_exact.png",
+        "after": "recording/screenshots/step_022_after_1.png"
+      }
+    },
+    {
+      "id": "step_023",
+      "timestamp": 26.892683029174805,
+      "action": "tap",
+      "target": {
+        "x": 721,
+        "y": 1316,
+        "text": ""
+      },
+      "direction": "up",
+      "waitAfter": 0,
+      "frames": {
+        "before": "recording/screenshots/step_023_before_1.png",
+        "action": "recording/screenshots/step_023_exact.png",
+        "after": "recording/screenshots/step_023_after_1.png"
+      }
+    },
+    {
+      "id": "step_024",
+      "timestamp": 27.71814799308777,
+      "action": "tap",
+      "target": {
+        "x": 478,
+        "y": 1077,
+        "text": ""
+      },
+      "direction": "up",
+      "waitAfter": 0,
+      "frames": {
+        "before": "recording/screenshots/step_024_before_1.png",
+        "action": "recording/screenshots/step_024_exact.png",
+        "after": "recording/screenshots/step_024_after_1.png"
+      }
+    },
+    {
+      "id": "step_025",
+      "timestamp": 28.903116941452026,
+      "action": "tap",
+      "target": {
+        "x": 961,
+        "y": 2166,
+        "text": ""
+      },
+      "direction": "up",
+      "waitAfter": 0,
+      "frames": {
+        "before": "recording/screenshots/step_025_before_1.png",
+        "action": "recording/screenshots/step_025_exact.png",
+        "after": "recording/screenshots/step_025_after_1.png"
+      }
+    },
+    {
+      "id": "step_026",
+      "timestamp": 29.880580186843872,
+      "action": "tap",
+      "target": {
+        "x": 914,
+        "y": 1077,
+        "text": ""
+      },
+      "direction": "up",
+      "waitAfter": 0,
+      "frames": {
+        "before": "recording/screenshots/step_026_before_1.png",
+        "action": "recording/screenshots/step_026_exact.png",
+        "after": "recording/screenshots/step_026_after_1.png"
+      }
+    },
+    {
+      "id": "step_027",
+      "timestamp": 32.06499409675598,
+      "action": "tap",
+      "target": {
+        "x": 261,
+        "y": 1610,
+        "text": ""
+      },
+      "direction": "up",
+      "waitAfter": 0,
+      "frames": {
+        "before": "recording/screenshots/step_027_before_1.png",
+        "action": "recording/screenshots/step_027_exact.png",
+        "after": "recording/screenshots/step_027_after_1.png"
+      }
+    },
+    {
+      "id": "step_028",
+      "timestamp": 32.240447998046875,
+      "action": "tap",
+      "target": {
+        "x": 461,
+        "y": 1582,
+        "text": ""
+      },
+      "direction": "up",
+      "waitAfter": 0,
+      "frames": {
+        "before": "recording/screenshots/step_028_before_1.png",
+        "action": "recording/screenshots/step_028_exact.png",
+        "after": "recording/screenshots/step_028_after_1.png"
+      }
+    },
+    {
+      "id": "step_029",
+      "timestamp": 32.381869077682495,
+      "action": "tap",
+      "target": {
+        "x": 678,
+        "y": 1564,
+        "text": ""
+      },
+      "direction": "up",
+      "waitAfter": 0,
+      "frames": {
+        "before": "recording/screenshots/step_029_before_1.png",
+        "action": "recording/screenshots/step_029_exact.png",
+        "after": "recording/screenshots/step_029_after_1.png"
+      }
+    },
+    {
+      "id": "step_030",
+      "timestamp": 33.048792123794556,
+      "action": "tap",
+      "target": {
+        "x": 937,
+        "y": 2147,
+        "text": ""
+      },
+      "direction": "up",
+      "waitAfter": 0,
+      "frames": {
+        "before": "recording/screenshots/step_030_before_1.png",
+        "action": "recording/screenshots/step_030_exact.png",
+        "after": "recording/screenshots/step_030_after_1.png"
+      }
+    },
+    {
+      "id": "step_031",
+      "timestamp": 37.95588302612305,
+      "action": "tap",
+      "target": {
+        "x": 164,
+        "y": 877,
+        "text": ""
+      },
+      "direction": "up",
+      "waitAfter": 0,
+      "frames": {
+        "before": "recording/screenshots/step_031_before_1.png",
+        "action": "recording/screenshots/step_031_exact.png",
+        "after": "recording/screenshots/step_031_after_1.png"
+      }
+    },
+    {
+      "id": "step_032",
+      "timestamp": 38.8743679523468,
+      "action": "tap",
+      "target": {
+        "x": 482,
+        "y": 1906,
+        "text": ""
+      },
+      "direction": "up",
+      "waitAfter": 0,
+      "frames": {
+        "before": "recording/screenshots/step_032_before_1.png",
+        "action": "recording/screenshots/step_032_exact.png",
+        "after": "recording/screenshots/step_032_after_1.png"
+      }
+    },
+    {
+      "id": "step_033",
+      "timestamp": 39.524548053741455,
+      "action": "tap",
+      "target": {
+        "x": 950,
+        "y": 2172,
+        "text": ""
+      },
+      "direction": "up",
+      "waitAfter": 0,
+      "frames": {
+        "before": "recording/screenshots/step_033_before_1.png",
+        "action": "recording/screenshots/step_033_exact.png",
+        "after": "recording/screenshots/step_033_after_1.png"
+      }
+    }
+  ],
+  "availablePreconditions": [
+    "calculator_cleared"
+  ]
+};
+        const availablePreconditions = testData.availablePreconditions || [];
+        let steps = [...testData.steps];
+        let activeStepId = null;
+        let stepIdCounter = 0;
+
+        // Utility: Escape HTML to prevent XSS
+        function escapeHtml(str) {
+            if (!str) return '';
+            return String(str)
+                .replace(/&/g, '&amp;')
+                .replace(/</g, '&lt;')
+                .replace(/>/g, '&gt;')
+                .replace(/"/g, '&quot;')
+                .replace(/'/g, '&#039;');
+        }
+
+        // Initialize on load
+        document.addEventListener('DOMContentLoaded', () => {
+            renderSteps();
+            initVideo();
+            updateHeaderStats();
+            setTimeout(startFrameAnimations, 200);
+        });
+
+        // Update header stats
+        function updateHeaderStats() {
+            // App package
+            document.getElementById('headerApp').textContent = testData.appPackage || 'Unknown app';
+
+            // Device info
+            const device = testData.device || {};
+            const deviceEl = document.getElementById('headerDevice');
+            if (device.name || device.id) {
+                const isAndroid = (device.platform || '').toLowerCase() === 'android';
+                const icon = isAndroid ? '📱' : '📱';
+                const resolution = device.width && device.height ? `${device.width}×${device.height}` : '';
+                deviceEl.innerHTML = `
+                    <span class="device-icon">${icon}</span>
+                    <span class="device-name">${escapeHtml(device.name || device.id || 'Unknown device')}</span>
+                    ${resolution ? `<span class="device-resolution">${resolution}</span>` : ''}
+                `;
+            } else {
+                deviceEl.style.display = 'none';
+            }
+
+            // Count by action type
+            const counts = {
+                taps: 0,
+                swipes: 0,
+                verifies: 0,
+                types: 0,
+                waits: 0
+            };
+
+            steps.forEach(step => {
+                switch (step.action) {
+                    case 'tap':
+                    case 'long_press':
+                    case 'double_tap':
+                        counts.taps++;
+                        break;
+                    case 'swipe':
+                        counts.swipes++;
+                        break;
+                    case 'verify_screen':
+                        counts.verifies++;
+                        break;
+                    case 'type':
+                        counts.types++;
+                        break;
+                    case 'wait':
+                    case 'wait_for':
+                        counts.waits++;
+                        break;
+                }
+            });
+
+            // Build stats HTML
+            const statsHtml = `
+                <div class="stat-item">
+                    <span class="stat-value">${steps.length}</span>
+                    <span class="stat-label">Total</span>
+                </div>
+                <div class="stat-item taps">
+                    <span class="stat-value">${counts.taps}</span>
+                    <span class="stat-label">Taps</span>
+                </div>
+                <div class="stat-item swipes">
+                    <span class="stat-value">${counts.swipes}</span>
+                    <span class="stat-label">Swipes</span>
+                </div>
+                ${counts.verifies > 0 ? `
+                    <div class="stat-item verifies">
+                        <span class="stat-value">${counts.verifies}</span>
+                        <span class="stat-label">Verifies</span>
+                    </div>
+                ` : ''}
+                ${counts.types > 0 ? `
+                    <div class="stat-item">
+                        <span class="stat-value">${counts.types}</span>
+                        <span class="stat-label">Types</span>
+                    </div>
+                ` : ''}
+            `;
+
+            document.getElementById('headerStats').innerHTML = statsHtml;
+        }
+
+        // Video Control
+        function initVideo() {
+            const video = document.getElementById('video');
+            const timeline = document.getElementById('timeline');
+            const progress = document.getElementById('progress');
+
+            video.addEventListener('timeupdate', () => {
+                if (!isFinite(video.duration) || video.duration === 0) return;
+                const percent = (video.currentTime / video.duration) * 100;
+                progress.style.width = percent + '%';
+                document.getElementById('currentTime').textContent = formatTime(video.currentTime);
+            });
+
+            video.addEventListener('loadedmetadata', () => {
+                document.getElementById('duration').textContent = formatTime(video.duration);
+                renderTimelineMarkers();
+            });
+        }
+
+        function formatTime(seconds) {
+            const m = Math.floor(seconds / 60);
+            const s = Math.floor(seconds % 60);
+            return `${m}:${s.toString().padStart(2, '0')}`;
+        }
+
+        function seekToPosition(event) {
+            const video = document.getElementById('video');
+            const timeline = document.getElementById('timeline');
+            const rect = timeline.getBoundingClientRect();
+            const percent = (event.clientX - rect.left) / rect.width;
+            video.currentTime = percent * video.duration;
+        }
+
+        function seekToStep(stepId) {
+            const step = steps.find(s => s.id === stepId);
+            if (step && step.timestamp !== undefined) {
+                document.getElementById('video').currentTime = step.timestamp;
+            }
+            setActiveStep(stepId);
+        }
+
+        function renderTimelineMarkers() {
+            const timeline = document.getElementById('timeline');
+            const video = document.getElementById('video');
+
+            // Remove existing markers
+            timeline.querySelectorAll('.video-marker').forEach(m => m.remove());
+
+            steps.forEach(step => {
+                if (step.timestamp !== undefined && step.action !== 'verify_screen' && step.action !== 'wait_for' && step.action !== 'wait') {
+                    const marker = document.createElement('div');
+                    marker.className = 'video-marker';
+                    marker.style.left = (step.timestamp / video.duration * 100) + '%';
+                    marker.onclick = (e) => {
+                        e.stopPropagation();
+                        seekToStep(step.id);
+                    };
+                    timeline.appendChild(marker);
+                }
+            });
+        }
+
+        // Step Rendering
+        function renderSteps() {
+            const panel = document.getElementById('stepsPanel');
+            panel.innerHTML = steps.map((step, index) => renderStepCard(step, index)).join('');
+            renderTimelineMarkers();
+        }
+
+        function renderStepCard(step, index) {
+            const actionClass = step.action.replace('_', '');
+            const isActive = step.id === activeStepId;
+            const gestureInfo = getGestureInfo(step);
+
+            return `
+                <div class="step-card ${isActive ? 'active' : ''}" data-id="${step.id}" onclick="seekToStep('${step.id}')">
+                    <!-- Header -->
+                    <div class="step-header">
+                        <div class="step-title">
+                            <span class="step-number">${index + 1}</span>
+                            <span class="gesture-badge ${actionClass}" title="${gestureInfo.tooltip}">${gestureInfo.icon} ${gestureInfo.label}</span>
+                            <span class="step-action-title ${actionClass}" onclick="editStepTitle('${step.id}'); event.stopPropagation();" title="Click to edit">
+                                ${step.analysis?.action || getStepTargetDisplay(step)}
+                            </span>
+                            ${step.conditional?.enabled ? '<span class="conditional-badge">if</span>' : ''}
+                        </div>
+                        <div class="step-controls">
+                            <button onclick="moveStep('${step.id}', -1); event.stopPropagation();" title="Move up">↑</button>
+                            <button onclick="moveStep('${step.id}', 1); event.stopPropagation();" title="Move down">↓</button>
+                            <button class="delete" onclick="deleteStep('${step.id}'); event.stopPropagation();" title="Delete">×</button>
+                        </div>
+                    </div>
+
+                    <div class="step-content">
+                        <!-- 3-Column Story Layout: Before | Action | After -->
+                        ${renderFrames(step)}
+
+                        <!-- Conditional and suggestions -->
+                        ${renderConditional(step)}
+                        ${step.suggestedVerification && !step.verificationAdded ? renderSuggestion(step) : ''}
+                    </div>
+                </div>
+            `;
+        }
+
+        // Screen dimensions for percentage calculations
+        const SCREEN_WIDTH = 1080;
+        const SCREEN_HEIGHT = 2340;
+
+        function toPercent(value, max) {
+            return Math.round((value / max) * 100);
+        }
+
+        function getGestureInfo(step) {
+            const x = step.target?.x || 0;
+            const y = step.target?.y || 0;
+            const xPct = toPercent(x, SCREEN_WIDTH);
+            const yPct = toPercent(y, SCREEN_HEIGHT);
+            const dir = step.direction || 'up';
+
+            switch (step.action) {
+                case 'tap':
+                    return {
+                        icon: '👆',
+                        label: 'TAP',
+                        tooltip: `Tap at ${xPct}%, ${yPct}% (${x}, ${y})`
+                    };
+                case 'swipe':
+                    const arrows = { up: '⬆️', down: '⬇️', left: '⬅️', right: '➡️' };
+                    return {
+                        icon: arrows[dir] || '↕️',
+                        label: `SWIPE ${dir.toUpperCase()}`,
+                        tooltip: `Swipe ${dir}`
+                    };
+                case 'long_press':
+                    return {
+                        icon: '👇',
+                        label: 'LONG PRESS',
+                        tooltip: `Long press at ${xPct}%, ${yPct}%`
+                    };
+                case 'double_tap':
+                    return {
+                        icon: '👆👆',
+                        label: 'DOUBLE TAP',
+                        tooltip: `Double tap at ${xPct}%, ${yPct}%`
+                    };
+                case 'type':
+                    return {
+                        icon: '⌨️',
+                        label: 'TYPE',
+                        tooltip: 'Type text'
+                    };
+                case 'verify_screen':
+                    return {
+                        icon: '✓',
+                        label: 'VERIFY',
+                        tooltip: 'Verify screen state'
+                    };
+                case 'wait':
+                case 'wait_for':
+                    return {
+                        icon: '⏱️',
+                        label: 'WAIT',
+                        tooltip: 'Wait'
+                    };
+                default:
+                    return {
+                        icon: '•',
+                        label: step.action.toUpperCase(),
+                        tooltip: step.action
+                    };
+            }
+        }
+
+        function getStepTargetDisplay(step) {
+            if (step.action === 'tap' || step.action === 'wait_for') {
+                if (step.target?.text) {
+                    return escapeHtml(step.target.text);
+                }
+                const xPct = toPercent(step.target?.x || 0, SCREEN_WIDTH);
+                const yPct = toPercent(step.target?.y || 0, SCREEN_HEIGHT);
+                return `at ${xPct}%, ${yPct}%`;
+            }
+            if (step.action === 'verify_screen') {
+                return `"${escapeHtml(step.description || '')}"`;
+            }
+            if (step.action === 'wait') {
+                return `${step.duration || 0}ms`;
+            }
+            if (step.action === 'swipe') {
+                return step.direction || 'up';
+            }
+            return '';
+        }
+
+        function renderFrames(step) {
+            if (!step.frames) return '<div class="no-frames">No frames available</div>';
+
+            const beforeFrame = step.frames.before || '';
+            const actionFrame = step.frames.action || beforeFrame;
+            const afterFrame = step.frames.after || '';
+            const analysis = step.analysis || {};
+
+            // Calculate position as percentage for overlay
+            const posX = step.target?.x || Math.round(SCREEN_WIDTH / 2);
+            const posY = step.target?.y || Math.round(SCREEN_HEIGHT / 2);
+            const posXPercent = (posX / SCREEN_WIDTH) * 100;
+            const posYPercent = (posY / SCREEN_HEIGHT) * 100;
+
+            // Render gesture-specific indicator
+            function renderGestureIndicator() {
+                if (step.action === 'tap') {
+                    return `<div class="tap-indicator" style="left: ${posXPercent}%; top: ${posYPercent}%;"></div>`;
+                }
+                if (step.action === 'long_press') {
+                    return `<div class="long-press-indicator" style="left: ${posXPercent}%; top: ${posYPercent}%;"></div>`;
+                }
+                if (step.action === 'double_tap') {
+                    return `
+                        <div class="double-tap-indicator" style="left: ${posXPercent}%; top: ${posYPercent}%;">
+                            <div class="tap-circle tap-1"></div>
+                            <div class="tap-circle tap-2"></div>
+                        </div>
+                    `;
+                }
+                if (step.action === 'swipe') {
+                    const dir = step.direction || 'up';
+                    const distance = step.distance || 400;
+                    const distPercent = (distance / SCREEN_HEIGHT) * 100;
+                    let endX = posXPercent, endY = posYPercent;
+                    if (dir === 'up') endY = Math.max(5, posYPercent - distPercent);
+                    if (dir === 'down') endY = Math.min(95, posYPercent + distPercent);
+                    if (dir === 'left') endX = Math.max(5, posXPercent - (distance / SCREEN_WIDTH) * 100);
+                    if (dir === 'right') endX = Math.min(95, posXPercent + (distance / SCREEN_WIDTH) * 100);
+
+                    return `
+                        <svg class="swipe-indicator" viewBox="0 0 100 100" preserveAspectRatio="none">
+                            <defs>
+                                <marker id="arrowhead-${step.id}" markerWidth="10" markerHeight="7" refX="9" refY="3.5" orient="auto">
+                                    <polygon class="swipe-arrow" points="0 0, 10 3.5, 0 7" />
+                                </marker>
+                            </defs>
+                            <line class="swipe-line"
+                                  x1="${posXPercent}" y1="${posYPercent}"
+                                  x2="${endX}" y2="${endY}"
+                                  marker-end="url(#arrowhead-${step.id})" />
+                            <circle class="swipe-start" cx="${posXPercent}" cy="${posYPercent}" r="2" />
+                        </svg>
+                    `;
+                }
+                return '';
+            }
+
+            // Render gesture info for action column
+            function renderGestureInfo() {
+                const x = step.target?.x || 0;
+                const y = step.target?.y || 0;
+                const xPct = toPercent(x, SCREEN_WIDTH);
+                const yPct = toPercent(y, SCREEN_HEIGHT);
+
+                if (step.action === 'tap' || step.action === 'long_press' || step.action === 'double_tap') {
+                    const hasTarget = step.target?.text;
+                    return `
+                        <div class="frame-gesture-info">
+                            <div class="gesture-row">
+                                <span class="gesture-label">Target:</span>
+                                <input type="text" value="${escapeHtml(step.target?.text || '')}"
+                                       onchange="updateStepTarget('${step.id}', this.value); event.stopPropagation();"
+                                       onclick="event.stopPropagation();"
+                                       placeholder="Element text">
+                            </div>
+                            <div class="gesture-row">
+                                <span class="gesture-label">Position:</span>
+                                <span class="gesture-value">${xPct}%, ${yPct}%</span>
+                            </div>
+                            ${step.action === 'long_press' ? `
+                                <div class="gesture-row">
+                                    <span class="gesture-label">Duration:</span>
+                                    <input type="number" value="${step.duration || 500}"
+                                           onchange="updateStepDuration('${step.id}', this.value); event.stopPropagation();"
+                                           onclick="event.stopPropagation();"
+                                           min="300" step="100">
+                                    <span class="gesture-label">ms</span>
+                                </div>
+                            ` : ''}
+                        </div>
+                    `;
+                }
+
+                if (step.action === 'swipe') {
+                    const dir = step.direction || 'up';
+                    const distance = step.distance || 400;
+                    return `
+                        <div class="frame-gesture-info">
+                            <div class="gesture-row">
+                                <span class="gesture-label">Direction:</span>
+                                <select onchange="updateSwipeDirection('${step.id}', this.value); event.stopPropagation();"
+                                        onclick="event.stopPropagation();">
+                                    <option value="up" ${dir === 'up' ? 'selected' : ''}>⬆️ Up</option>
+                                    <option value="down" ${dir === 'down' ? 'selected' : ''}>⬇️ Down</option>
+                                    <option value="left" ${dir === 'left' ? 'selected' : ''}>⬅️ Left</option>
+                                    <option value="right" ${dir === 'right' ? 'selected' : ''}>➡️ Right</option>
+                                </select>
+                            </div>
+                            <div class="gesture-row">
+                                <span class="gesture-label">Start:</span>
+                                <span class="gesture-value">${xPct}%, ${yPct}%</span>
+                            </div>
+                            <div class="gesture-row">
+                                <span class="gesture-label">Distance:</span>
+                                <input type="number" value="${distance}"
+                                       onchange="updateSwipeDistance('${step.id}', this.value); event.stopPropagation();"
+                                       onclick="event.stopPropagation();"
+                                       min="100" step="50">
+                                <span class="gesture-label">px</span>
+                            </div>
+                        </div>
+                    `;
+                }
+
+                if (step.action === 'type') {
+                    return `
+                        <div class="frame-gesture-info">
+                            <div class="gesture-row">
+                                <span class="gesture-label">Text:</span>
+                                <input type="text" value="${escapeHtml(step.text || '')}"
+                                       onchange="updateStepText('${step.id}', this.value); event.stopPropagation();"
+                                       onclick="event.stopPropagation();"
+                                       style="flex: 1;">
+                            </div>
+                            <div class="gesture-row">
+                                <span class="gesture-label">Submit:</span>
+                                <input type="checkbox" ${step.submit ? 'checked' : ''}
+                                       onchange="updateStepSubmit('${step.id}', this.checked); event.stopPropagation();"
+                                       onclick="event.stopPropagation();">
+                            </div>
+                        </div>
+                    `;
+                }
+
+                return '';
+            }
+
+            const showActionFrame = ['tap', 'long_press', 'double_tap', 'swipe'].includes(step.action);
+            const beforeText = analysis.before || '';
+            const actionText = analysis.action || '';
+            const afterText = analysis.after || '';
+
+            return `
+                <div class="step-frames">
+                    <!-- BEFORE Column -->
+                    <div class="frame-column before">
+                        <div class="frame-column-header">Before</div>
+                        <div class="frame-image-container" onclick="openModal('${beforeFrame}'); event.stopPropagation();">
+                            ${beforeFrame ? `<img src="${beforeFrame}">` : '<em>No frame</em>'}
+                        </div>
+                        <div class="frame-description" onclick="editAnalysisField('${step.id}', 'before'); event.stopPropagation();" title="Click to edit">
+                            ${beforeText ? escapeHtml(beforeText) : '<em>Click to add description</em>'}
+                        </div>
+                    </div>
+
+                    <!-- ACTION Column -->
+                    <div class="frame-column action">
+                        <div class="frame-column-header">Action</div>
+                        <div class="frame-image-container" onclick="openModal('${actionFrame}'); event.stopPropagation();">
+                            ${actionFrame && showActionFrame ? `
+                                <img src="${actionFrame}">
+                                ${renderGestureIndicator()}
+                            ` : '<em>No action frame</em>'}
+                        </div>
+                        <div class="frame-description" onclick="editAnalysisField('${step.id}', 'action'); event.stopPropagation();" title="Click to edit">
+                            ${actionText ? escapeHtml(actionText) : '<em>Click to add description</em>'}
+                        </div>
+                        ${renderGestureInfo()}
+                    </div>
+
+                    <!-- AFTER Column -->
+                    <div class="frame-column after">
+                        <div class="frame-column-header">After</div>
+                        <div class="frame-image-container" onclick="openModal('${afterFrame}'); event.stopPropagation();">
+                            ${afterFrame ? `<img src="${afterFrame}">` : '<em>No frame</em>'}
+                        </div>
+                        <div class="frame-description" onclick="editAnalysisField('${step.id}', 'after'); event.stopPropagation();" title="Click to edit">
+                            ${afterText ? escapeHtml(afterText) : '<em>Click to add description</em>'}
+                        </div>
+                    </div>
+                </div>
+            `;
+        }
+
+        function renderGestureConfig(step) {
+            const x = step.target?.x || 0;
+            const y = step.target?.y || 0;
+            const xPct = toPercent(x, SCREEN_WIDTH);
+            const yPct = toPercent(y, SCREEN_HEIGHT);
+
+            // TAP gestures
+            if (step.action === 'tap') {
+                return `
+                    <div class="gesture-config">
+                        <div class="config-group">
+                            <span class="config-label">Target:</span>
+                            <input type="text" value="${escapeHtml(step.target?.text || '')}"
+                                   onchange="updateStepTarget('${step.id}', this.value); event.stopPropagation();"
+                                   placeholder="Element text">
+                        </div>
+                        <div class="config-group">
+                            <span class="config-label">Position:</span>
+                            <span class="config-value">${xPct}%, ${yPct}%</span>
+                            <span class="config-label" style="opacity: 0.5">(${x}, ${y})</span>
+                        </div>
+                        <div class="config-group">
+                            <span class="config-label">Wait after:</span>
+                            <input type="number" value="${step.waitAfter || 0}"
+                                   onchange="updateStepWait('${step.id}', this.value); event.stopPropagation();"
+                                   min="0" step="100">
+                            <span class="config-label">ms</span>
+                        </div>
+                    </div>
+                `;
+            }
+
+            // SWIPE gestures
+            if (step.action === 'swipe') {
+                const dir = step.direction || 'up';
+                const distance = step.distance || 400;
+                const distPct = Math.round((distance / SCREEN_HEIGHT) * 100);
+                return `
+                    <div class="gesture-config">
+                        <div class="config-group">
+                            <span class="config-label">Direction:</span>
+                            <select onchange="updateSwipeDirection('${step.id}', this.value); event.stopPropagation();">
+                                <option value="up" ${dir === 'up' ? 'selected' : ''}>⬆️ Up</option>
+                                <option value="down" ${dir === 'down' ? 'selected' : ''}>⬇️ Down</option>
+                                <option value="left" ${dir === 'left' ? 'selected' : ''}>⬅️ Left</option>
+                                <option value="right" ${dir === 'right' ? 'selected' : ''}>➡️ Right</option>
+                            </select>
+                        </div>
+                        <div class="config-group">
+                            <span class="config-label">Start:</span>
+                            <span class="config-value">${xPct}%, ${yPct}%</span>
+                        </div>
+                        <div class="config-group">
+                            <span class="config-label">Distance:</span>
+                            <input type="number" value="${distance}"
+                                   onchange="updateSwipeDistance('${step.id}', this.value); event.stopPropagation();"
+                                   min="100" step="50">
+                            <span class="config-label">px (${distPct}%)</span>
+                        </div>
+                    </div>
+                `;
+            }
+
+            // LONG PRESS gestures
+            if (step.action === 'long_press') {
+                const duration = step.duration || 500;
+                return `
+                    <div class="gesture-config">
+                        <div class="config-group">
+                            <span class="config-label">Target:</span>
+                            <input type="text" value="${escapeHtml(step.target?.text || '')}"
+                                   onchange="updateStepTarget('${step.id}', this.value); event.stopPropagation();"
+                                   placeholder="Element text">
+                        </div>
+                        <div class="config-group">
+                            <span class="config-label">Position:</span>
+                            <span class="config-value">${xPct}%, ${yPct}%</span>
+                        </div>
+                        <div class="config-group">
+                            <span class="config-label">Duration:</span>
+                            <input type="number" value="${duration}"
+                                   onchange="updateStepDuration('${step.id}', this.value); event.stopPropagation();"
+                                   min="300" step="100">
+                            <span class="config-label">ms</span>
+                        </div>
+                    </div>
+                `;
+            }
+
+            // DOUBLE TAP gestures
+            if (step.action === 'double_tap') {
+                return `
+                    <div class="gesture-config">
+                        <div class="config-group">
+                            <span class="config-label">Target:</span>
+                            <input type="text" value="${escapeHtml(step.target?.text || '')}"
+                                   onchange="updateStepTarget('${step.id}', this.value); event.stopPropagation();"
+                                   placeholder="Element text">
+                        </div>
+                        <div class="config-group">
+                            <span class="config-label">Position:</span>
+                            <span class="config-value">${xPct}%, ${yPct}%</span>
+                        </div>
+                    </div>
+                `;
+            }
+
+            // TYPE gestures
+            if (step.action === 'type') {
+                const text = step.text || step.target?.text || '';
+                return `
+                    <div class="gesture-config">
+                        <div class="config-group" style="flex: 1;">
+                            <span class="config-label">Text:</span>
+                            <input type="text" value="${escapeHtml(text)}"
+                                   onchange="updateTypeText('${step.id}', this.value); event.stopPropagation();"
+                                   style="width: 200px;">
+                        </div>
+                        <div class="config-group">
+                            <span class="config-label">Submit:</span>
+                            <input type="checkbox" ${step.submit ? 'checked' : ''}
+                                   onchange="updateTypeSubmit('${step.id}', this.checked); event.stopPropagation();">
+                            <span class="config-label">(press Enter)</span>
+                        </div>
+                    </div>
+                `;
+            }
+
+            // VERIFY_SCREEN
+            if (step.action === 'verify_screen') {
+                return `
+                    <div class="gesture-config">
+                        <div class="config-group" style="flex: 1;">
+                            <span class="config-label">Description:</span>
+                            <input type="text" value="${escapeHtml(step.description || '')}"
+                                   onchange="updateStepDescription('${step.id}', this.value); event.stopPropagation();"
+                                   style="width: 300px;" placeholder="What should the screen show?">
+                        </div>
+                    </div>
+                `;
+            }
+
+            // WAIT_FOR
+            if (step.action === 'wait_for') {
+                return `
+                    <div class="gesture-config">
+                        <div class="config-group">
+                            <span class="config-label">Wait for element:</span>
+                            <input type="text" value="${escapeHtml(step.target?.text || '')}"
+                                   onchange="updateStepTarget('${step.id}', this.value); event.stopPropagation();">
+                        </div>
+                        <div class="config-group">
+                            <span class="config-label">Timeout:</span>
+                            <input type="number" value="${step.timeout || 10}"
+                                   onchange="updateStepTimeout('${step.id}', this.value); event.stopPropagation();"
+                                   min="1" max="60">
+                            <span class="config-label">s</span>
+                        </div>
+                    </div>
+                `;
+            }
+
+            // WAIT
+            if (step.action === 'wait') {
+                return `
+                    <div class="gesture-config">
+                        <div class="config-group">
+                            <span class="config-label">Duration:</span>
+                            <input type="number" value="${step.duration || 1000}"
+                                   onchange="updateStepDuration('${step.id}', this.value); event.stopPropagation();"
+                                   min="100" step="100">
+                            <span class="config-label">ms</span>
+                        </div>
+                    </div>
+                `;
+            }
+
+            return '';
+        }
+
+        // Frame animation system
+        const frameAnimations = new Map();
+
+        function startFrameAnimations() {
+            document.querySelectorAll('.frame-wrapper[data-frames]').forEach(wrapper => {
+                const stepId = wrapper.dataset.stepId;
+                if (frameAnimations.has(stepId)) return; // Already animating
+
+                const imgs = wrapper.querySelectorAll('img');
+                if (imgs.length <= 1) return;
+
+                let currentIndex = 0;
+                const interval = setInterval(() => {
+                    imgs[currentIndex].classList.remove('active');
+                    currentIndex = (currentIndex + 1) % imgs.length;
+                    imgs[currentIndex].classList.add('active');
+                }, 400); // 400ms per frame
+
+                frameAnimations.set(stepId, interval);
+            });
+        }
+
+        function stopFrameAnimations() {
+            frameAnimations.forEach((interval, stepId) => {
+                clearInterval(interval);
+            });
+            frameAnimations.clear();
+        }
+
+        // Restart animations after re-render
+        const originalRenderSteps = renderSteps;
+        renderSteps = function() {
+            stopFrameAnimations();
+            const panel = document.getElementById('stepsPanel');
+            panel.innerHTML = steps.map((step, index) => renderStepCard(step, index)).join('');
+            renderTimelineMarkers();
+            updateHeaderStats();
+            setTimeout(startFrameAnimations, 100);
+        };
+
+        function editAnalysisField(stepId, field) {
+            const step = steps.find(s => s.id === stepId);
+            if (!step) return;
+
+            if (!step.analysis) step.analysis = {};
+            const currentValue = step.analysis[field] || '';
+            const fieldLabels = { before: 'Before', action: 'Action', after: 'After' };
+            const newValue = prompt('Edit "' + fieldLabels[field] + '" description:', currentValue);
+
+            if (newValue !== null) {
+                step.analysis[field] = newValue.trim();
+                renderSteps();
+            }
+        }
+
+        function renderSuggestion(step) {
+            return `
+                <div class="step-suggestion">
+                    <div class="suggestion-header">💡 Suggested verification</div>
+                    <div class="suggestion-text">verify_screen: "${escapeHtml(step.suggestedVerification)}"</div>
+                    <div class="suggestion-actions">
+                        <button class="btn btn-primary" onclick="acceptSuggestion('${step.id}'); event.stopPropagation();">+ Add</button>
+                        <button class="btn btn-secondary" onclick="editSuggestion('${step.id}'); event.stopPropagation();">Edit</button>
+                        <button class="btn btn-secondary" onclick="skipSuggestion('${step.id}'); event.stopPropagation();">Skip</button>
+                    </div>
+                </div>
+            `;
+        }
+
+        function renderConditional(step) {
+            const isConditional = step.conditional && step.conditional.enabled;
+            const condType = step.conditional?.type || 'if_present';
+            const condValue = step.conditional?.value || step.target?.text || '';
+            // Collapsed by default unless conditional is enabled
+            const isCollapsed = !isConditional;
+
+            return `
+                <div class="step-conditional ${isCollapsed ? 'collapsed' : ''}" data-step-id="${step.id}">
+                    <div class="conditional-header" onclick="toggleConditionalExpand('${step.id}'); event.stopPropagation();">
+                        <span class="conditional-label">
+                            ⚡ CONDITIONAL
+                            <span class="conditional-expand-hint">(click to expand)</span>
+                        </span>
+                        <input type="checkbox" class="conditional-toggle"
+                               ${isConditional ? 'checked' : ''}
+                               onchange="toggleConditional('${step.id}', this.checked); event.stopPropagation();"
+                               onclick="event.stopPropagation();">
+                    </div>
+                    <div class="conditional-config" ${isCollapsed ? 'style="display:none;"' : ''}>
+                        <div class="conditional-field">
+                            <label>Type:</label>
+                            <select onchange="updateConditionalType('${step.id}', this.value); event.stopPropagation();">
+                                <option value="if_present" ${condType === 'if_present' ? 'selected' : ''}>if_present</option>
+                                <option value="if_absent" ${condType === 'if_absent' ? 'selected' : ''}>if_absent</option>
+                                <option value="if_precondition" ${condType === 'if_precondition' ? 'selected' : ''}>if_precondition</option>
+                                <option value="if_screen" ${condType === 'if_screen' ? 'selected' : ''}>if_screen</option>
+                            </select>
+                        </div>
+                        <div class="conditional-field">
+                            <label>${condType === 'if_precondition' ? 'Precondition:' : 'Check for:'}</label>
+                            ${condType === 'if_precondition' ? `
+                                <select onchange="updateConditionalValue('${step.id}', this.value); event.stopPropagation();">
+                                    <option value="">Select...</option>
+                                    ${availablePreconditions.map(p =>
+                                        `<option value="${escapeHtml(p)}" ${condValue === p ? 'selected' : ''}>${escapeHtml(p)}</option>`
+                                    ).join('')}
+                                </select>
+                            ` : `
+                                <input type="text" value="${escapeHtml(condValue)}"
+                                       onchange="updateConditionalValue('${step.id}', this.value); event.stopPropagation();"
+                                       placeholder="${condType === 'if_screen' ? 'Screen description...' : 'Element text...'}">
+                            `}
+                        </div>
+                    </div>
+                </div>
+            `;
+        }
+
+        function setActiveStep(stepId) {
+            activeStepId = stepId;
+            document.querySelectorAll('.step-card').forEach(card => {
+                card.classList.toggle('active', card.dataset.id === stepId);
+            });
+        }
+
+        // Step Editing Functions
+        function moveStep(stepId, direction) {
+            const index = steps.findIndex(s => s.id === stepId);
+            const newIndex = index + direction;
+            if (newIndex < 0 || newIndex >= steps.length) return;
+
+            [steps[index], steps[newIndex]] = [steps[newIndex], steps[index]];
+            renderSteps();
+        }
+
+        function deleteStep(stepId) {
+            if (!confirm('Delete this step?')) return;
+            steps = steps.filter(s => s.id !== stepId);
+            renderSteps();
+        }
+
+        function editStepTitle(stepId) {
+            const step = steps.find(s => s.id === stepId);
+            if (!step) return;
+
+            const currentTitle = step.analysis?.action || (step.action + ': ' + getStepTargetDisplay(step));
+            const newTitle = prompt('Edit step title:', currentTitle);
+
+            if (newTitle !== null && newTitle.trim() !== '') {
+                if (!step.analysis) step.analysis = {};
+                step.analysis.action = newTitle.trim();
+                renderSteps();
+            }
+        }
+
+        function updateStepTarget(stepId, value) {
+            const step = steps.find(s => s.id === stepId);
+            if (step) {
+                if (!step.target) step.target = {};
+                step.target.text = value;
+            }
+        }
+
+        function updateStepWait(stepId, value) {
+            const step = steps.find(s => s.id === stepId);
+            if (step) step.waitAfter = parseInt(value) || 0;
+        }
+
+        function updateStepDescription(stepId, value) {
+            const step = steps.find(s => s.id === stepId);
+            if (step) step.description = value;
+        }
+
+        function updateStepTimeout(stepId, value) {
+            const step = steps.find(s => s.id === stepId);
+            if (step) step.timeout = parseInt(value) || 10;
+        }
+
+        function updateStepDuration(stepId, value) {
+            const step = steps.find(s => s.id === stepId);
+            if (step) step.duration = parseInt(value) || 1000;
+        }
+
+        function updateStepText(stepId, value) {
+            const step = steps.find(s => s.id === stepId);
+            if (step) step.text = value;
+        }
+
+        function updateStepSubmit(stepId, value) {
+            const step = steps.find(s => s.id === stepId);
+            if (step) step.submit = value;
+        }
+
+        function updateSwipeDirection(stepId, value) {
+            const step = steps.find(s => s.id === stepId);
+            if (step) {
+                step.direction = value;
+                renderSteps();
+            }
+        }
+
+        function updateSwipeDistance(stepId, value) {
+            const step = steps.find(s => s.id === stepId);
+            if (step) {
+                step.distance = parseInt(value) || 400;
+                renderSteps();
+            }
+        }
+
+        function updateTypeText(stepId, value) {
+            const step = steps.find(s => s.id === stepId);
+            if (step) {
+                step.text = value;
+                if (!step.target) step.target = {};
+                step.target.text = value;
+                renderSteps();
+            }
+        }
+
+        function updateTypeSubmit(stepId, checked) {
+            const step = steps.find(s => s.id === stepId);
+            if (step) {
+                step.submit = checked;
+                renderSteps();
+            }
+        }
+
+        // Conditional Management
+        function toggleConditionalExpand(stepId) {
+            const conditionalDiv = document.querySelector(`.step-conditional[data-step-id="${stepId}"]`);
+            if (conditionalDiv) {
+                const isCollapsed = conditionalDiv.classList.contains('collapsed');
+                conditionalDiv.classList.toggle('collapsed');
+                const config = conditionalDiv.querySelector('.conditional-config');
+                if (config) {
+                    config.style.display = isCollapsed ? 'flex' : 'none';
+                }
+            }
+        }
+
+        function toggleConditional(stepId, enabled) {
+            const step = steps.find(s => s.id === stepId);
+            if (step) {
+                if (!step.conditional) {
+                    step.conditional = {
+                        enabled: false,
+                        type: 'if_present',
+                        value: step.target?.text || ''
+                    };
+                }
+                step.conditional.enabled = enabled;
+                renderSteps();
+            }
+        }
+
+        function updateConditionalType(stepId, type) {
+            const step = steps.find(s => s.id === stepId);
+            if (step && step.conditional) {
+                step.conditional.type = type;
+                if (type === 'if_precondition') {
+                    step.conditional.value = '';
+                }
+                renderSteps();
+            }
+        }
+
+        function updateConditionalValue(stepId, value) {
+            const step = steps.find(s => s.id === stepId);
+            if (step && step.conditional) {
+                step.conditional.value = value;
+            }
+        }
+
+        // Suggestion Functions
+        function acceptSuggestion(stepId) {
+            const stepIndex = steps.findIndex(s => s.id === stepId);
+            const step = steps[stepIndex];
+            if (!step || !step.suggestedVerification) return;
+
+            const newStep = {
+                id: 'verify_' + Date.now() + '_' + (++stepIdCounter),
+                action: 'verify_screen',
+                description: step.suggestedVerification,
+                timestamp: step.timestamp
+            };
+
+            steps.splice(stepIndex + 1, 0, newStep);
+            step.verificationAdded = true;
+            renderSteps();
+        }
+
+        function editSuggestion(stepId) {
+            const step = steps.find(s => s.id === stepId);
+            if (!step) return;
+
+            const newDesc = prompt('Edit verification:', step.suggestedVerification);
+            if (newDesc !== null) {
+                step.suggestedVerification = newDesc;
+                acceptSuggestion(stepId);
+            }
+        }
+
+        function skipSuggestion(stepId) {
+            const step = steps.find(s => s.id === stepId);
+            if (step) {
+                step.verificationAdded = true;
+                renderSteps();
+            }
+        }
+
+        // Add Step Functions
+        function addStep(type) {
+            const video = document.getElementById('video');
+            const timestamp = video.currentTime;
+
+            let newStep;
+            if (type === 'verify_screen') {
+                const desc = prompt('What should the screen show?');
+                if (!desc) return;
+                newStep = { id: 'verify_' + Date.now() + '_' + (++stepIdCounter), action: 'verify_screen', description: desc, timestamp };
+            } else if (type === 'wait_for') {
+                const element = prompt('What element to wait for?');
+                if (!element) return;
+                newStep = { id: 'wait_for_' + Date.now() + '_' + (++stepIdCounter), action: 'wait_for', target: { text: element }, timeout: 10, timestamp };
+            } else if (type === 'wait') {
+                const duration = prompt('Wait duration in milliseconds:', '1000');
+                if (!duration) return;
+                newStep = { id: 'wait_' + Date.now() + '_' + (++stepIdCounter), action: 'wait', duration: parseInt(duration), timestamp };
+            }
+
+            // Insert at correct position based on timestamp
+            const insertIndex = steps.findIndex(s => s.timestamp > timestamp);
+            if (insertIndex === -1) {
+                steps.push(newStep);
+            } else {
+                steps.splice(insertIndex, 0, newStep);
+            }
+            renderSteps();
+        }
+
+        // Export Functions
+        function exportYAML() {
+            const yaml = generateYAML();
+            downloadFile(testData.testName + '.yaml', yaml);
+        }
+
+        function generateYAML() {
+            let yaml = `config:\n  app: ${testData.appPackage}\n\ntests:\n  - name: ${testData.testName}\n    steps:\n`;
+
+            for (const step of steps) {
+                yaml += stepToYAML(step);
+            }
+
+            return yaml;
+        }
+
+        function stepToYAML(step, indent = '      ') {
+            let yaml = '';
+
+            if (step.conditional?.enabled && step.conditional.value) {
+                yaml = `${indent}- ${step.conditional.type}: "${escapeYamlString(step.conditional.value)}"\n`;
+                yaml += `${indent}  then:\n`;
+                yaml += stepToYAMLInner(step, indent + '    ');
+                return yaml;
+            }
+
+            return stepToYAMLInner(step, indent);
+        }
+
+        function stepToYAMLInner(step, indent) {
+            let yaml = '';
+            const analysis = step.analysis || {};
+
+            // Add context comment from step title/analysis
+            if (analysis.action) {
+                yaml += `${indent}# ${analysis.action}\n`;
+            }
+
+            if (step.action === 'tap') {
+                const x = step.target?.x || 0;
+                const y = step.target?.y || 0;
+                const xPct = toPercent(x, SCREEN_WIDTH);
+                const yPct = toPercent(y, SCREEN_HEIGHT);
+                const pctCoords = `["${xPct}%", "${yPct}%"]`;
+                const elementText = step.target?.text;
+
+                // Use element text as primary target for better readability and Claude understanding
+                if (elementText && elementText.length > 0) {
+                    yaml += `${indent}- tap: "${escapeYamlString(elementText)}"  # fallback: ${pctCoords}\n`;
+                } else {
+                    yaml += `${indent}- tap: ${pctCoords}\n`;
+                }
+                if (step.waitAfter > 0) {
+                    yaml += `${indent}- wait: ${step.waitAfter}ms\n`;
+                }
+            } else if (step.action === 'long_press') {
+                const x = step.target?.x || 0;
+                const y = step.target?.y || 0;
+                const xPct = toPercent(x, SCREEN_WIDTH);
+                const yPct = toPercent(y, SCREEN_HEIGHT);
+                const pctCoords = `["${xPct}%", "${yPct}%"]`;
+                const elementText = step.target?.text;
+                const duration = step.duration || 500;
+
+                if (elementText && elementText.length > 0) {
+                    yaml += `${indent}- long_press: {element: "${escapeYamlString(elementText)}", duration: ${duration}}  # fallback: ${pctCoords}\n`;
+                } else {
+                    yaml += `${indent}- long_press: {position: ${pctCoords}, duration: ${duration}}\n`;
+                }
+            } else if (step.action === 'double_tap') {
+                const x = step.target?.x || 0;
+                const y = step.target?.y || 0;
+                const xPct = toPercent(x, SCREEN_WIDTH);
+                const yPct = toPercent(y, SCREEN_HEIGHT);
+                const pctCoords = `["${xPct}%", "${yPct}%"]`;
+                const elementText = step.target?.text;
+
+                if (elementText && elementText.length > 0) {
+                    yaml += `${indent}- double_tap: "${escapeYamlString(elementText)}"  # fallback: ${pctCoords}\n`;
+                } else {
+                    yaml += `${indent}- double_tap: ${pctCoords}\n`;
+                }
+            } else if (step.action === 'swipe') {
+                const dir = step.direction || 'up';
+                const distance = step.distance || 400;
+                // Only include distance if non-default
+                if (distance !== 400) {
+                    yaml += `${indent}- swipe: {direction: ${dir}, distance: ${distance}}\n`;
+                } else {
+                    yaml += `${indent}- swipe: ${dir}\n`;
+                }
+            } else if (step.action === 'type') {
+                const text = step.text || step.target?.text || '';
+                const submit = step.submit || false;
+                if (submit) {
+                    yaml += `${indent}- type: {text: "${escapeYamlString(text)}", submit: true}\n`;
+                } else {
+                    yaml += `${indent}- type: "${escapeYamlString(text)}"\n`;
+                }
+            } else if (step.action === 'verify_screen') {
+                yaml += `${indent}- verify_screen: "${escapeYamlString(step.description || '')}"\n`;
+            } else if (step.action === 'wait_for') {
+                yaml += `${indent}- wait_for: "${escapeYamlString(step.target?.text || '')}"\n`;
+            } else if (step.action === 'wait') {
+                yaml += `${indent}- wait: ${step.duration}ms\n`;
+            }
+
+            // Add suggested verification as comment if available
+            if (step.suggestedVerification) {
+                yaml += `${indent}# Suggested: verify_screen: "${escapeYamlString(step.suggestedVerification)}"\n`;
+            }
+
+            return yaml;
+        }
+
+        // Escape special characters for YAML double-quoted strings
+        function escapeYamlString(str) {
+            if (!str) return '';
+            return String(str)
+                .replace(/\\/g, '\\\\')
+                .replace(/"/g, '\\"')
+                .replace(/\n/g, '\\n')
+                .replace(/\r/g, '\\r');
+        }
+
+        function downloadFile(filename, content) {
+            const blob = new Blob([content], { type: 'text/yaml' });
+            const url = URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = filename;
+            document.body.appendChild(a);
+            a.click();
+            document.body.removeChild(a);
+            URL.revokeObjectURL(url);
+        }
+
+        function discardTest() {
+            if (confirm('Discard this test recording? This cannot be undone.')) {
+                window.close();
+            }
+        }
+
+        // Image Modal (simple version)
+        function openModal(src) {
+            const img = new Image();
+            img.src = src;
+            img.style.cssText = 'max-width: 90vw; max-height: 90vh; border-radius: 8px;';
+
+            const overlay = document.createElement('div');
+            overlay.style.cssText = 'position: fixed; top: 0; left: 0; right: 0; bottom: 0; background: rgba(0,0,0,0.9); display: flex; align-items: center; justify-content: center; z-index: 9999; cursor: pointer;';
+            overlay.appendChild(img);
+            overlay.onclick = () => overlay.remove();
+            document.body.appendChild(overlay);
+        }
+    </script>
+</body>
+</html>

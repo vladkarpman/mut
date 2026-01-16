@@ -1,0 +1,35 @@
+config:
+  app: com.google.android.calculator
+
+setup:
+  - terminate_app
+  - launch_app
+  - wait: 2s
+
+teardown:
+  - terminate_app
+
+tests:
+  - name: Complex calculation with wait_for
+    steps:
+      - tap: "AC"
+      - wait_for: "5"
+      - tap: "5"
+      - tap: "+"
+      - tap: "3"
+      - tap: "="
+      - wait_for: "8"
+      - verify_screen: "Result is 8"
+
+  - name: Retry mechanism test
+    steps:
+      - tap: "AC"
+      - retry:
+          attempts: 3
+          delay: 500ms
+          steps:
+            - tap: "2"
+            - tap: "+"
+            - tap: "2"
+            - tap: "="
+            - verify_screen: "Display shows 4"

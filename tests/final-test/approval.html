@@ -1,0 +1,1428 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Approve Test - final-test</title>
+    <style>
+        :root {
+            --pass-color: #10b981;
+            --fail-color: #ef4444;
+            --skip-color: #6b7280;
+            --bg-primary: #111827;
+            --bg-secondary: #1f2937;
+            --bg-tertiary: #374151;
+            --text-primary: #f9fafb;
+            --text-secondary: #9ca3af;
+            --border-color: #4b5563;
+            --accent-color: #3b82f6;
+            --action-tap: #f59e0b;
+            --action-verify: #8b5cf6;
+            --action-type: #06b6d4;
+            --action-wait: #6b7280;
+            --action-swipe: #ec4899;
+            --warning-color: #f59e0b;
+        }
+
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            background: var(--bg-primary);
+            color: var(--text-primary);
+            line-height: 1.6;
+            height: 100vh;
+            overflow: hidden;
+        }
+
+        /* Header */
+        .header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 16px 24px;
+            background: var(--bg-secondary);
+            border-bottom: 1px solid var(--border-color);
+        }
+
+        .header h1 {
+            font-size: 1.25rem;
+            font-weight: 500;
+        }
+
+        .header-meta {
+            color: var(--text-secondary);
+            font-size: 0.875rem;
+        }
+
+        .header-actions {
+            display: flex;
+            gap: 12px;
+        }
+
+        .btn {
+            padding: 8px 16px;
+            border-radius: 6px;
+            font-size: 0.875rem;
+            font-weight: 500;
+            cursor: pointer;
+            transition: all 0.15s;
+            border: none;
+        }
+
+        .btn-primary {
+            background: var(--accent-color);
+            color: white;
+        }
+
+        .btn-primary:hover {
+            background: #2563eb;
+        }
+
+        .btn-secondary {
+            background: var(--bg-tertiary);
+            color: var(--text-primary);
+            border: 1px solid var(--border-color);
+        }
+
+        .btn-secondary:hover {
+            background: var(--border-color);
+        }
+
+        .btn-danger {
+            background: var(--fail-color);
+            color: white;
+        }
+
+        /* Main Layout - Two Panels */
+        .main {
+            display: flex;
+            height: calc(100vh - 65px);
+        }
+
+        .video-panel {
+            width: 30%;
+            min-width: 280px;
+            padding: 16px;
+            border-right: 1px solid var(--border-color);
+            display: flex;
+            flex-direction: column;
+        }
+
+        .steps-panel {
+            width: 70%;
+            overflow-y: auto;
+            padding: 24px;
+        }
+
+        /* Video Player */
+        .video-container {
+            flex: 1;
+            display: flex;
+            flex-direction: column;
+        }
+
+        .video-wrapper {
+            flex: 1;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            background: var(--bg-secondary);
+            border-radius: 8px;
+            overflow: hidden;
+            margin-bottom: 16px;
+        }
+
+        .video-wrapper video {
+            max-width: 100%;
+            max-height: 100%;
+            border-radius: 8px;
+        }
+
+        /* Ensure video controls are always visible */
+        .video-wrapper video::-webkit-media-controls {
+            display: flex !important;
+        }
+
+        .video-controls {
+            display: flex;
+            flex-direction: column;
+            gap: 12px;
+        }
+
+        .video-timeline {
+            position: relative;
+            height: 40px;
+            background: var(--bg-secondary);
+            border-radius: 4px;
+            cursor: pointer;
+        }
+
+        .video-progress {
+            position: absolute;
+            top: 0;
+            left: 0;
+            height: 100%;
+            background: var(--accent-color);
+            opacity: 0.3;
+            border-radius: 4px;
+        }
+
+        .video-marker {
+            position: absolute;
+            top: 0;
+            width: 3px;
+            height: 100%;
+            background: var(--action-tap);
+            cursor: pointer;
+        }
+
+        .video-marker:hover {
+            background: var(--warning-color);
+        }
+
+        .video-time {
+            display: flex;
+            justify-content: space-between;
+            font-size: 0.75rem;
+            color: var(--text-secondary);
+        }
+
+        .add-step-buttons {
+            display: flex;
+            gap: 8px;
+            margin-top: 12px;
+        }
+
+        .add-step-buttons .btn {
+            flex: 1;
+            font-size: 0.75rem;
+            padding: 6px 12px;
+        }
+
+        /* Step Cards */
+        .step-card {
+            background: var(--bg-secondary);
+            border-radius: 12px;
+            padding: 24px;
+            margin-bottom: 20px;
+            border: 2px solid var(--border-color);
+            transition: all 0.2s;
+        }
+
+        .step-card:hover {
+            border-color: var(--text-secondary);
+            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
+        }
+
+        .step-card.active {
+            border-color: var(--accent-color);
+            box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.2);
+        }
+
+        .step-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 20px;
+            padding-bottom: 16px;
+            border-bottom: 1px solid var(--border-color);
+        }
+
+        .step-title {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+        }
+
+        .step-number {
+            width: 40px;
+            height: 40px;
+            background: var(--accent-color);
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 1rem;
+            font-weight: 700;
+            color: white;
+        }
+
+        .step-action {
+            font-weight: 600;
+            font-size: 1.1rem;
+        }
+
+        .step-action.tap { color: var(--action-tap); }
+        .step-action.verify { color: var(--action-verify); }
+        .step-action.wait { color: var(--action-wait); }
+        .step-action.type { color: var(--action-type); }
+
+        .step-controls {
+            display: flex;
+            gap: 8px;
+        }
+
+        .step-controls button {
+            width: 36px;
+            height: 36px;
+            border: none;
+            background: var(--bg-tertiary);
+            color: var(--text-secondary);
+            border-radius: 8px;
+            cursor: pointer;
+            font-size: 1.1rem;
+            transition: all 0.15s;
+        }
+
+        .step-controls button:hover {
+            background: var(--border-color);
+            color: var(--text-primary);
+            transform: scale(1.1);
+        }
+
+        .step-controls button.delete:hover {
+            background: var(--fail-color);
+            color: white;
+        }
+
+        /* Frame Display */
+        .step-frames {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 16px;
+            margin-bottom: 20px;
+            padding: 20px;
+            background: var(--bg-primary);
+            border-radius: 12px;
+        }
+
+        .frame-container {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            position: relative;
+        }
+
+        .frame-wrapper {
+            position: relative;
+            width: 140px;
+            height: 300px;
+        }
+
+        .frame-wrapper img {
+            position: absolute;
+            top: 0;
+            left: 0;
+            opacity: 0;
+            transition: opacity 0.15s ease-in-out;
+        }
+
+        .frame-wrapper img.active {
+            opacity: 1;
+        }
+
+        /* Tap indicator overlay */
+        .tap-indicator {
+            position: absolute;
+            width: 40px;
+            height: 40px;
+            border-radius: 50%;
+            background: rgba(245, 158, 11, 0.4);
+            border: 3px solid var(--action-tap);
+            transform: translate(-50%, -50%);
+            pointer-events: none;
+            animation: tapPulse 1s ease-in-out infinite;
+        }
+
+        @keyframes tapPulse {
+            0%, 100% { transform: translate(-50%, -50%) scale(1); opacity: 1; }
+            50% { transform: translate(-50%, -50%) scale(1.3); opacity: 0.6; }
+        }
+
+        /* Swipe indicator */
+        .swipe-indicator {
+            position: absolute;
+            pointer-events: none;
+        }
+
+        .swipe-indicator .swipe-line {
+            stroke: var(--action-swipe);
+            stroke-width: 4;
+            stroke-linecap: round;
+            stroke-dasharray: 8 4;
+        }
+
+        .swipe-indicator .swipe-arrow {
+            fill: var(--action-swipe);
+        }
+
+        .frame-label {
+            font-size: 0.8rem;
+            font-weight: 600;
+            color: var(--text-secondary);
+            margin-bottom: 8px;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+        }
+
+        .frame-label.before { color: var(--action-wait); }
+        .frame-label.action { color: var(--action-tap); }
+        .frame-label.after { color: var(--pass-color); }
+
+        .frame-img {
+            width: 140px;
+            height: 300px;
+            object-fit: cover;
+            border-radius: 12px;
+            border: 3px solid var(--border-color);
+            cursor: pointer;
+            transition: all 0.2s;
+            box-shadow: 0 4px 8px rgba(0, 0, 0, 0.3);
+        }
+
+        .frame-img:hover {
+            transform: scale(1.08);
+            box-shadow: 0 8px 16px rgba(0, 0, 0, 0.4);
+        }
+
+        .frame-container.before .frame-img { border-color: var(--action-wait); }
+        .frame-container.action .frame-img { border-color: var(--action-tap); }
+        .frame-container.after .frame-img { border-color: var(--pass-color); }
+
+        .frame-arrow {
+            color: var(--text-secondary);
+            font-size: 2rem;
+            font-weight: bold;
+        }
+
+        /* Analysis Section */
+        .step-analysis {
+            background: var(--bg-tertiary);
+            border-radius: 6px;
+            padding: 12px;
+            margin-bottom: 12px;
+            font-size: 0.875rem;
+        }
+
+        .analysis-row {
+            display: flex;
+            margin-bottom: 6px;
+        }
+
+        .analysis-row:last-child {
+            margin-bottom: 0;
+        }
+
+        .analysis-label {
+            width: 60px;
+            color: var(--text-secondary);
+            flex-shrink: 0;
+        }
+
+        .analysis-value {
+            color: var(--text-primary);
+        }
+
+        /* Suggested Verification */
+        .step-suggestion {
+            background: rgba(139, 92, 246, 0.1);
+            border: 1px solid rgba(139, 92, 246, 0.3);
+            border-radius: 6px;
+            padding: 12px;
+            margin-bottom: 12px;
+        }
+
+        .suggestion-header {
+            display: flex;
+            align-items: center;
+            gap: 6px;
+            margin-bottom: 8px;
+            color: var(--action-verify);
+            font-size: 0.75rem;
+            font-weight: 500;
+        }
+
+        .suggestion-text {
+            font-family: 'SF Mono', Monaco, monospace;
+            font-size: 0.8rem;
+            margin-bottom: 8px;
+        }
+
+        .suggestion-actions {
+            display: flex;
+            gap: 8px;
+        }
+
+        .suggestion-actions button {
+            padding: 4px 12px;
+            font-size: 0.75rem;
+        }
+
+        /* Conditional Section - Collapsed by default */
+        .step-conditional {
+            background: rgba(59, 130, 246, 0.1);
+            border: 1px solid rgba(59, 130, 246, 0.3);
+            border-radius: 6px;
+            margin-bottom: 12px;
+            overflow: hidden;
+        }
+
+        .step-conditional.collapsed {
+            background: transparent;
+            border: 1px dashed rgba(59, 130, 246, 0.2);
+            padding: 8px 12px;
+        }
+
+        .step-conditional:not(.collapsed) {
+            padding: 12px;
+        }
+
+        .conditional-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            cursor: pointer;
+        }
+
+        .step-conditional:not(.collapsed) .conditional-header {
+            margin-bottom: 8px;
+        }
+
+        .conditional-expand-hint {
+            font-size: 0.7rem;
+            color: var(--text-secondary);
+            opacity: 0.6;
+        }
+
+        .step-conditional:not(.collapsed) .conditional-expand-hint {
+            display: none;
+        }
+
+        .conditional-label {
+            font-size: 0.75rem;
+            font-weight: 500;
+            color: var(--accent-color);
+            display: flex;
+            align-items: center;
+            gap: 6px;
+        }
+
+        .conditional-toggle {
+            width: 20px;
+            height: 20px;
+            cursor: pointer;
+            accent-color: var(--accent-color);
+        }
+
+        .conditional-config {
+            display: flex;
+            gap: 12px;
+            flex-wrap: wrap;
+        }
+
+        .conditional-field {
+            display: flex;
+            align-items: center;
+            gap: 6px;
+        }
+
+        .conditional-field label {
+            font-size: 0.75rem;
+            color: var(--text-secondary);
+        }
+
+        .conditional-field select,
+        .conditional-field input {
+            background: var(--bg-tertiary);
+            border: 1px solid var(--border-color);
+            border-radius: 4px;
+            padding: 4px 8px;
+            color: var(--text-primary);
+            font-size: 0.8rem;
+        }
+
+        .conditional-field select {
+            min-width: 140px;
+        }
+
+        .conditional-field input {
+            min-width: 180px;
+        }
+
+        .conditional-badge {
+            background: var(--accent-color);
+            color: white;
+            font-size: 0.65rem;
+            padding: 2px 6px;
+            border-radius: 3px;
+            margin-left: 8px;
+        }
+
+        /* Step Editor */
+        .step-editor {
+            display: flex;
+            gap: 12px;
+            align-items: center;
+            flex-wrap: wrap;
+        }
+
+        .editor-field {
+            display: flex;
+            align-items: center;
+            gap: 6px;
+        }
+
+        .editor-field label {
+            font-size: 0.75rem;
+            color: var(--text-secondary);
+        }
+
+        .editor-field input,
+        .editor-field select {
+            background: var(--bg-tertiary);
+            border: 1px solid var(--border-color);
+            border-radius: 4px;
+            padding: 6px 10px;
+            color: var(--text-primary);
+            font-size: 0.875rem;
+        }
+
+        .editor-field input:focus,
+        .editor-field select:focus {
+            outline: none;
+            border-color: var(--accent-color);
+        }
+
+        .editor-field input[type="number"] {
+            width: 80px;
+        }
+
+        /* Add Step Modal */
+        .modal-overlay {
+            position: fixed;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background: rgba(0, 0, 0, 0.7);
+            display: none;
+            align-items: center;
+            justify-content: center;
+            z-index: 1000;
+        }
+
+        .modal-overlay.active {
+            display: flex;
+        }
+
+        .modal {
+            background: var(--bg-secondary);
+            border-radius: 12px;
+            padding: 24px;
+            width: 400px;
+            max-width: 90%;
+        }
+
+        .modal h2 {
+            font-size: 1.125rem;
+            margin-bottom: 16px;
+        }
+
+        .modal-field {
+            margin-bottom: 16px;
+        }
+
+        .modal-field label {
+            display: block;
+            font-size: 0.875rem;
+            color: var(--text-secondary);
+            margin-bottom: 6px;
+        }
+
+        .modal-field input,
+        .modal-field textarea {
+            width: 100%;
+            background: var(--bg-tertiary);
+            border: 1px solid var(--border-color);
+            border-radius: 6px;
+            padding: 10px;
+            color: var(--text-primary);
+            font-size: 0.875rem;
+        }
+
+        .modal-field textarea {
+            height: 80px;
+            resize: vertical;
+        }
+
+        .modal-actions {
+            display: flex;
+            justify-content: flex-end;
+            gap: 8px;
+        }
+    </style>
+</head>
+<body>
+    <header class="header">
+        <div>
+            <h1>Approve: final-test</h1>
+            <div class="header-meta">5 steps recorded</div>
+        </div>
+        <div class="header-actions">
+            <button class="btn btn-secondary" onclick="discardTest()">Discard</button>
+            <button class="btn btn-primary" onclick="exportYAML()">Export YAML</button>
+        </div>
+    </header>
+
+    <main class="main">
+        <div class="video-panel">
+            <div class="video-container">
+                <div class="video-wrapper">
+                    <video id="video" src="recording/recording.mp4" controls></video>
+                </div>
+                <div class="video-controls">
+                    <div class="video-timeline" id="timeline" onclick="seekToPosition(event)">
+                        <div class="video-progress" id="progress"></div>
+                        <!-- Step markers injected by JS -->
+                    </div>
+                    <div class="video-time">
+                        <span id="currentTime">0:00</span>
+                        <span id="duration">0:04</span>
+                    </div>
+                </div>
+                <div class="add-step-buttons">
+                    <button class="btn btn-secondary" onclick="addStep('verify_screen')">+ verify_screen</button>
+                    <button class="btn btn-secondary" onclick="addStep('wait_for')">+ wait_for</button>
+                    <button class="btn btn-secondary" onclick="addStep('wait')">+ wait</button>
+                </div>
+            </div>
+        </div>
+
+        <div class="steps-panel" id="stepsPanel">
+            <!-- Steps rendered by JS -->
+        </div>
+    </main>
+
+    <script>
+        // Data embedded during generation
+        const testData = {
+  "testName": "final-test",
+  "appPackage": "com.example.app",
+  "videoFile": "recording/recording.mp4",
+  "videoDuration": "0:04",
+  "steps": [
+    {
+      "id": "step_001",
+      "timestamp": 0.0,
+      "action": "tap",
+      "target": {
+        "x": 181,
+        "y": 1070,
+        "text": "AC"
+      },
+      "waitAfter": 0,
+      "frames": {
+        "before": "recording/screenshots/step_001_before.png",
+        "action": "recording/screenshots/step_001_action.png",
+        "after": "recording/screenshots/step_001_after.png"
+      },
+      "analysis": {
+        "before": "Calculator showing previous result '92'",
+        "action": "Tapped 'AC' button to clear",
+        "after": "Display cleared"
+      },
+      "suggestedVerification": null
+    },
+    {
+      "id": "step_002",
+      "timestamp": 1.1875910758972168,
+      "action": "tap",
+      "target": {
+        "x": 474,
+        "y": 1518,
+        "text": "5"
+      },
+      "waitAfter": 0,
+      "frames": {
+        "before": "recording/screenshots/step_002_before.png",
+        "action": "recording/screenshots/step_002_action.png",
+        "after": "recording/screenshots/step_002_after.png"
+      },
+      "analysis": {
+        "before": "Calculator with empty display",
+        "action": "Tapped '5' button",
+        "after": "Display shows '5'"
+      },
+      "suggestedVerification": null
+    },
+    {
+      "id": "step_003",
+      "timestamp": 1.7973589897155762,
+      "action": "tap",
+      "target": {
+        "x": 980,
+        "y": 1854,
+        "text": "+"
+      },
+      "waitAfter": 0,
+      "frames": {
+        "before": "recording/screenshots/step_003_before.png",
+        "action": "recording/screenshots/step_003_action.png",
+        "after": "recording/screenshots/step_003_after.png"
+      },
+      "analysis": {
+        "before": "Display shows '5'",
+        "action": "Tapped '+' operator button",
+        "after": "Display shows '5+'"
+      },
+      "suggestedVerification": null
+    },
+    {
+      "id": "step_004",
+      "timestamp": 3.4360978603363037,
+      "action": "tap",
+      "target": {
+        "x": 645,
+        "y": 1805,
+        "text": "3"
+      },
+      "waitAfter": 0,
+      "frames": {
+        "before": "recording/screenshots/step_004_before.png",
+        "action": "recording/screenshots/step_004_action.png",
+        "after": "recording/screenshots/step_004_after.png"
+      },
+      "analysis": {
+        "before": "Display shows '5+'",
+        "action": "Tapped '3' button",
+        "after": "Display shows '5+3' with preview '8'"
+      },
+      "suggestedVerification": null
+    },
+    {
+      "id": "step_005",
+      "timestamp": 4.8361451625823975,
+      "action": "tap",
+      "target": {
+        "x": 941,
+        "y": 2125,
+        "text": "="
+      },
+      "waitAfter": 0,
+      "frames": {
+        "before": "recording/screenshots/step_005_before.png",
+        "action": "recording/screenshots/step_005_action.png",
+        "after": "recording/screenshots/step_005_after.png"
+      },
+      "analysis": {
+        "before": "Display shows '5+3' with preview '8'",
+        "action": "Tapped '=' button to calculate",
+        "after": "Display shows result '8'"
+      },
+      "suggestedVerification": "Display shows calculation result '8'"
+    }
+  ],
+  "availablePreconditions": [
+    "calculator_cleared"
+  ]
+};
+        const availablePreconditions = testData.availablePreconditions || [];
+        let steps = [...testData.steps];
+        let activeStepId = null;
+        let stepIdCounter = 0;
+
+        // Utility: Escape HTML to prevent XSS
+        function escapeHtml(str) {
+            if (!str) return '';
+            return String(str)
+                .replace(/&/g, '&amp;')
+                .replace(/</g, '&lt;')
+                .replace(/>/g, '&gt;')
+                .replace(/"/g, '&quot;')
+                .replace(/'/g, '&#039;');
+        }
+
+        // Initialize on load
+        document.addEventListener('DOMContentLoaded', () => {
+            renderSteps();
+            initVideo();
+            setTimeout(startFrameAnimations, 200);
+        });
+
+        // Video Control
+        function initVideo() {
+            const video = document.getElementById('video');
+            const timeline = document.getElementById('timeline');
+            const progress = document.getElementById('progress');
+
+            video.addEventListener('timeupdate', () => {
+                if (!isFinite(video.duration) || video.duration === 0) return;
+                const percent = (video.currentTime / video.duration) * 100;
+                progress.style.width = percent + '%';
+                document.getElementById('currentTime').textContent = formatTime(video.currentTime);
+            });
+
+            video.addEventListener('loadedmetadata', () => {
+                document.getElementById('duration').textContent = formatTime(video.duration);
+                renderTimelineMarkers();
+            });
+        }
+
+        function formatTime(seconds) {
+            const m = Math.floor(seconds / 60);
+            const s = Math.floor(seconds % 60);
+            return `${m}:${s.toString().padStart(2, '0')}`;
+        }
+
+        function seekToPosition(event) {
+            const video = document.getElementById('video');
+            const timeline = document.getElementById('timeline');
+            const rect = timeline.getBoundingClientRect();
+            const percent = (event.clientX - rect.left) / rect.width;
+            video.currentTime = percent * video.duration;
+        }
+
+        function seekToStep(stepId) {
+            const step = steps.find(s => s.id === stepId);
+            if (step && step.timestamp !== undefined) {
+                document.getElementById('video').currentTime = step.timestamp;
+            }
+            setActiveStep(stepId);
+        }
+
+        function renderTimelineMarkers() {
+            const timeline = document.getElementById('timeline');
+            const video = document.getElementById('video');
+
+            // Remove existing markers
+            timeline.querySelectorAll('.video-marker').forEach(m => m.remove());
+
+            steps.forEach(step => {
+                if (step.timestamp !== undefined && step.action !== 'verify_screen' && step.action !== 'wait_for' && step.action !== 'wait') {
+                    const marker = document.createElement('div');
+                    marker.className = 'video-marker';
+                    marker.style.left = (step.timestamp / video.duration * 100) + '%';
+                    marker.onclick = (e) => {
+                        e.stopPropagation();
+                        seekToStep(step.id);
+                    };
+                    timeline.appendChild(marker);
+                }
+            });
+        }
+
+        // Step Rendering
+        function renderSteps() {
+            const panel = document.getElementById('stepsPanel');
+            panel.innerHTML = steps.map((step, index) => renderStepCard(step, index)).join('');
+            renderTimelineMarkers();
+        }
+
+        function renderStepCard(step, index) {
+            const actionClass = step.action.replace('_', '');
+            const isActive = step.id === activeStepId;
+
+            return `
+                <div class="step-card ${isActive ? 'active' : ''}" data-id="${step.id}" onclick="seekToStep('${step.id}')">
+                    <div class="step-header">
+                        <div class="step-title">
+                            <span class="step-number">${index + 1}</span>
+                            <span class="step-action ${actionClass}">${step.action}: ${getStepTargetDisplay(step)}${step.conditional?.enabled ? '<span class="conditional-badge">if</span>' : ''}</span>
+                        </div>
+                        <div class="step-controls">
+                            <button onclick="moveStep('${step.id}', -1); event.stopPropagation();" title="Move up">↑</button>
+                            <button onclick="moveStep('${step.id}', 1); event.stopPropagation();" title="Move down">↓</button>
+                            <button class="delete" onclick="deleteStep('${step.id}'); event.stopPropagation();" title="Delete">×</button>
+                        </div>
+                    </div>
+
+                    ${step.frames ? renderFrames(step) : ''}
+
+                    ${renderConditional(step)}
+
+                    ${step.analysis ? renderAnalysis(step.analysis) : ''}
+
+                    ${step.suggestedVerification && !step.verificationAdded ? renderSuggestion(step) : ''}
+
+                    <div class="step-editor">
+                        ${renderStepEditor(step)}
+                    </div>
+                </div>
+            `;
+        }
+
+        function getStepTargetDisplay(step) {
+            if (step.action === 'tap' || step.action === 'wait_for') {
+                return escapeHtml(step.target?.text) || `(${step.target?.x}, ${step.target?.y})`;
+            }
+            if (step.action === 'verify_screen') {
+                return `"${escapeHtml(step.description || '')}"`;
+            }
+            if (step.action === 'wait') {
+                return `${step.duration || 0}ms`;
+            }
+            return '';
+        }
+
+        function renderFrames(step) {
+            if (!step.frames) return '';
+
+            const beforeFrame = step.frames.before || '';
+            const actionFrame = step.frames.action || beforeFrame;
+            const afterFrame = step.frames.after || '';
+
+            // Calculate tap position as percentage for overlay
+            const tapX = step.target?.x || 0;
+            const tapY = step.target?.y || 0;
+            const screenW = 1080; // Default screen width
+            const screenH = 2340; // Default screen height
+            const tapXPercent = (tapX / screenW) * 100;
+            const tapYPercent = (tapY / screenH) * 100;
+
+            return `
+                <div class="step-frames">
+                    ${beforeFrame ? `
+                        <div class="frame-container before">
+                            <span class="frame-label before">Before</span>
+                            <div class="frame-wrapper">
+                                <img class="frame-img active" src="${beforeFrame}" onclick="openModal('${beforeFrame}'); event.stopPropagation();">
+                            </div>
+                        </div>
+                        <span class="frame-arrow">→</span>
+                    ` : ''}
+                    ${actionFrame && step.action === 'tap' ? `
+                        <div class="frame-container action">
+                            <span class="frame-label action">Action</span>
+                            <div class="frame-wrapper">
+                                <img class="frame-img active" src="${actionFrame}" onclick="openModal('${actionFrame}'); event.stopPropagation();">
+                                <div class="tap-indicator" style="left: ${tapXPercent}%; top: ${tapYPercent}%;"></div>
+                            </div>
+                        </div>
+                        <span class="frame-arrow">→</span>
+                    ` : ''}
+                    ${afterFrame ? `
+                        <div class="frame-container after">
+                            <span class="frame-label after">After</span>
+                            <div class="frame-wrapper">
+                                <img class="frame-img active" src="${afterFrame}" onclick="openModal('${afterFrame}'); event.stopPropagation();">
+                            </div>
+                        </div>
+                    ` : ''}
+                </div>
+            `;
+        }
+
+        // Frame animation system
+        const frameAnimations = new Map();
+
+        function startFrameAnimations() {
+            document.querySelectorAll('.frame-wrapper[data-frames]').forEach(wrapper => {
+                const stepId = wrapper.dataset.stepId;
+                if (frameAnimations.has(stepId)) return; // Already animating
+
+                const imgs = wrapper.querySelectorAll('img');
+                if (imgs.length <= 1) return;
+
+                let currentIndex = 0;
+                const interval = setInterval(() => {
+                    imgs[currentIndex].classList.remove('active');
+                    currentIndex = (currentIndex + 1) % imgs.length;
+                    imgs[currentIndex].classList.add('active');
+                }, 400); // 400ms per frame
+
+                frameAnimations.set(stepId, interval);
+            });
+        }
+
+        function stopFrameAnimations() {
+            frameAnimations.forEach((interval, stepId) => {
+                clearInterval(interval);
+            });
+            frameAnimations.clear();
+        }
+
+        // Restart animations after re-render
+        const originalRenderSteps = renderSteps;
+        renderSteps = function() {
+            stopFrameAnimations();
+            const panel = document.getElementById('stepsPanel');
+            panel.innerHTML = steps.map((step, index) => renderStepCard(step, index)).join('');
+            renderTimelineMarkers();
+            setTimeout(startFrameAnimations, 100);
+        };
+
+        function renderAnalysis(analysis) {
+            return `
+                <div class="step-analysis">
+                    ${analysis.before ? `<div class="analysis-row"><span class="analysis-label">Before:</span><span class="analysis-value">${escapeHtml(analysis.before)}</span></div>` : ''}
+                    ${analysis.action ? `<div class="analysis-row"><span class="analysis-label">Action:</span><span class="analysis-value">${escapeHtml(analysis.action)}</span></div>` : ''}
+                    ${analysis.after ? `<div class="analysis-row"><span class="analysis-label">After:</span><span class="analysis-value">${escapeHtml(analysis.after)}</span></div>` : ''}
+                </div>
+            `;
+        }
+
+        function renderSuggestion(step) {
+            return `
+                <div class="step-suggestion">
+                    <div class="suggestion-header">💡 Suggested verification</div>
+                    <div class="suggestion-text">verify_screen: "${escapeHtml(step.suggestedVerification)}"</div>
+                    <div class="suggestion-actions">
+                        <button class="btn btn-primary" onclick="acceptSuggestion('${step.id}'); event.stopPropagation();">+ Add</button>
+                        <button class="btn btn-secondary" onclick="editSuggestion('${step.id}'); event.stopPropagation();">Edit</button>
+                        <button class="btn btn-secondary" onclick="skipSuggestion('${step.id}'); event.stopPropagation();">Skip</button>
+                    </div>
+                </div>
+            `;
+        }
+
+        function renderStepEditor(step) {
+            if (step.action === 'tap') {
+                return `
+                    <div class="editor-field">
+                        <label>Target:</label>
+                        <input type="text" value="${escapeHtml(step.target?.text || '')}" onchange="updateStepTarget('${step.id}', this.value); event.stopPropagation();" placeholder="Element text">
+                    </div>
+                    <div class="editor-field">
+                        <label>Wait after:</label>
+                        <input type="number" value="${step.waitAfter || 0}" onchange="updateStepWait('${step.id}', this.value); event.stopPropagation();" min="0" step="100"> ms
+                    </div>
+                `;
+            }
+            if (step.action === 'verify_screen') {
+                return `
+                    <div class="editor-field" style="flex: 1;">
+                        <label>Description:</label>
+                        <input type="text" value="${escapeHtml(step.description || '')}" onchange="updateStepDescription('${step.id}', this.value); event.stopPropagation();" style="width: 300px;">
+                    </div>
+                `;
+            }
+            if (step.action === 'wait_for') {
+                return `
+                    <div class="editor-field">
+                        <label>Element:</label>
+                        <input type="text" value="${escapeHtml(step.target?.text || '')}" onchange="updateStepTarget('${step.id}', this.value); event.stopPropagation();">
+                    </div>
+                    <div class="editor-field">
+                        <label>Timeout:</label>
+                        <input type="number" value="${step.timeout || 10}" onchange="updateStepTimeout('${step.id}', this.value); event.stopPropagation();" min="1" max="60"> s
+                    </div>
+                `;
+            }
+            if (step.action === 'wait') {
+                return `
+                    <div class="editor-field">
+                        <label>Duration:</label>
+                        <input type="number" value="${step.duration || 1000}" onchange="updateStepDuration('${step.id}', this.value); event.stopPropagation();" min="100" step="100"> ms
+                    </div>
+                `;
+            }
+            return '';
+        }
+
+        function renderConditional(step) {
+            const isConditional = step.conditional && step.conditional.enabled;
+            const condType = step.conditional?.type || 'if_present';
+            const condValue = step.conditional?.value || step.target?.text || '';
+            // Collapsed by default unless conditional is enabled
+            const isCollapsed = !isConditional;
+
+            return `
+                <div class="step-conditional ${isCollapsed ? 'collapsed' : ''}" data-step-id="${step.id}">
+                    <div class="conditional-header" onclick="toggleConditionalExpand('${step.id}'); event.stopPropagation();">
+                        <span class="conditional-label">
+                            ⚡ CONDITIONAL
+                            <span class="conditional-expand-hint">(click to expand)</span>
+                        </span>
+                        <input type="checkbox" class="conditional-toggle"
+                               ${isConditional ? 'checked' : ''}
+                               onchange="toggleConditional('${step.id}', this.checked); event.stopPropagation();"
+                               onclick="event.stopPropagation();">
+                    </div>
+                    <div class="conditional-config" ${isCollapsed ? 'style="display:none;"' : ''}>
+                        <div class="conditional-field">
+                            <label>Type:</label>
+                            <select onchange="updateConditionalType('${step.id}', this.value); event.stopPropagation();">
+                                <option value="if_present" ${condType === 'if_present' ? 'selected' : ''}>if_present</option>
+                                <option value="if_absent" ${condType === 'if_absent' ? 'selected' : ''}>if_absent</option>
+                                <option value="if_precondition" ${condType === 'if_precondition' ? 'selected' : ''}>if_precondition</option>
+                                <option value="if_screen" ${condType === 'if_screen' ? 'selected' : ''}>if_screen</option>
+                            </select>
+                        </div>
+                        <div class="conditional-field">
+                            <label>${condType === 'if_precondition' ? 'Precondition:' : 'Check for:'}</label>
+                            ${condType === 'if_precondition' ? `
+                                <select onchange="updateConditionalValue('${step.id}', this.value); event.stopPropagation();">
+                                    <option value="">Select...</option>
+                                    ${availablePreconditions.map(p =>
+                                        `<option value="${escapeHtml(p)}" ${condValue === p ? 'selected' : ''}>${escapeHtml(p)}</option>`
+                                    ).join('')}
+                                </select>
+                            ` : `
+                                <input type="text" value="${escapeHtml(condValue)}"
+                                       onchange="updateConditionalValue('${step.id}', this.value); event.stopPropagation();"
+                                       placeholder="${condType === 'if_screen' ? 'Screen description...' : 'Element text...'}">
+                            `}
+                        </div>
+                    </div>
+                </div>
+            `;
+        }
+
+        function setActiveStep(stepId) {
+            activeStepId = stepId;
+            document.querySelectorAll('.step-card').forEach(card => {
+                card.classList.toggle('active', card.dataset.id === stepId);
+            });
+        }
+
+        // Step Editing Functions
+        function moveStep(stepId, direction) {
+            const index = steps.findIndex(s => s.id === stepId);
+            const newIndex = index + direction;
+            if (newIndex < 0 || newIndex >= steps.length) return;
+
+            [steps[index], steps[newIndex]] = [steps[newIndex], steps[index]];
+            renderSteps();
+        }
+
+        function deleteStep(stepId) {
+            if (!confirm('Delete this step?')) return;
+            steps = steps.filter(s => s.id !== stepId);
+            renderSteps();
+        }
+
+        function updateStepTarget(stepId, value) {
+            const step = steps.find(s => s.id === stepId);
+            if (step) {
+                if (!step.target) step.target = {};
+                step.target.text = value;
+            }
+        }
+
+        function updateStepWait(stepId, value) {
+            const step = steps.find(s => s.id === stepId);
+            if (step) step.waitAfter = parseInt(value) || 0;
+        }
+
+        function updateStepDescription(stepId, value) {
+            const step = steps.find(s => s.id === stepId);
+            if (step) step.description = value;
+        }
+
+        function updateStepTimeout(stepId, value) {
+            const step = steps.find(s => s.id === stepId);
+            if (step) step.timeout = parseInt(value) || 10;
+        }
+
+        function updateStepDuration(stepId, value) {
+            const step = steps.find(s => s.id === stepId);
+            if (step) step.duration = parseInt(value) || 1000;
+        }
+
+        // Conditional Management
+        function toggleConditionalExpand(stepId) {
+            const conditionalDiv = document.querySelector(`.step-conditional[data-step-id="${stepId}"]`);
+            if (conditionalDiv) {
+                const isCollapsed = conditionalDiv.classList.contains('collapsed');
+                conditionalDiv.classList.toggle('collapsed');
+                const config = conditionalDiv.querySelector('.conditional-config');
+                if (config) {
+                    config.style.display = isCollapsed ? 'flex' : 'none';
+                }
+            }
+        }
+
+        function toggleConditional(stepId, enabled) {
+            const step = steps.find(s => s.id === stepId);
+            if (step) {
+                if (!step.conditional) {
+                    step.conditional = {
+                        enabled: false,
+                        type: 'if_present',
+                        value: step.target?.text || ''
+                    };
+                }
+                step.conditional.enabled = enabled;
+                renderSteps();
+            }
+        }
+
+        function updateConditionalType(stepId, type) {
+            const step = steps.find(s => s.id === stepId);
+            if (step && step.conditional) {
+                step.conditional.type = type;
+                if (type === 'if_precondition') {
+                    step.conditional.value = '';
+                }
+                renderSteps();
+            }
+        }
+
+        function updateConditionalValue(stepId, value) {
+            const step = steps.find(s => s.id === stepId);
+            if (step && step.conditional) {
+                step.conditional.value = value;
+            }
+        }
+
+        // Suggestion Functions
+        function acceptSuggestion(stepId) {
+            const stepIndex = steps.findIndex(s => s.id === stepId);
+            const step = steps[stepIndex];
+            if (!step || !step.suggestedVerification) return;
+
+            const newStep = {
+                id: 'verify_' + Date.now() + '_' + (++stepIdCounter),
+                action: 'verify_screen',
+                description: step.suggestedVerification,
+                timestamp: step.timestamp
+            };
+
+            steps.splice(stepIndex + 1, 0, newStep);
+            step.verificationAdded = true;
+            renderSteps();
+        }
+
+        function editSuggestion(stepId) {
+            const step = steps.find(s => s.id === stepId);
+            if (!step) return;
+
+            const newDesc = prompt('Edit verification:', step.suggestedVerification);
+            if (newDesc !== null) {
+                step.suggestedVerification = newDesc;
+                acceptSuggestion(stepId);
+            }
+        }
+
+        function skipSuggestion(stepId) {
+            const step = steps.find(s => s.id === stepId);
+            if (step) {
+                step.verificationAdded = true;
+                renderSteps();
+            }
+        }
+
+        // Add Step Functions
+        function addStep(type) {
+            const video = document.getElementById('video');
+            const timestamp = video.currentTime;
+
+            let newStep;
+            if (type === 'verify_screen') {
+                const desc = prompt('What should the screen show?');
+                if (!desc) return;
+                newStep = { id: 'verify_' + Date.now() + '_' + (++stepIdCounter), action: 'verify_screen', description: desc, timestamp };
+            } else if (type === 'wait_for') {
+                const element = prompt('What element to wait for?');
+                if (!element) return;
+                newStep = { id: 'wait_for_' + Date.now() + '_' + (++stepIdCounter), action: 'wait_for', target: { text: element }, timeout: 10, timestamp };
+            } else if (type === 'wait') {
+                const duration = prompt('Wait duration in milliseconds:', '1000');
+                if (!duration) return;
+                newStep = { id: 'wait_' + Date.now() + '_' + (++stepIdCounter), action: 'wait', duration: parseInt(duration), timestamp };
+            }
+
+            // Insert at correct position based on timestamp
+            const insertIndex = steps.findIndex(s => s.timestamp > timestamp);
+            if (insertIndex === -1) {
+                steps.push(newStep);
+            } else {
+                steps.splice(insertIndex, 0, newStep);
+            }
+            renderSteps();
+        }
+
+        // Export Functions
+        function exportYAML() {
+            const yaml = generateYAML();
+            downloadFile(testData.testName + '.yaml', yaml);
+        }
+
+        function generateYAML() {
+            let yaml = `config:\n  app: ${testData.appPackage}\n\ntests:\n  - name: ${testData.testName}\n    steps:\n`;
+
+            for (const step of steps) {
+                yaml += stepToYAML(step);
+            }
+
+            return yaml;
+        }
+
+        function stepToYAML(step, indent = '      ') {
+            let yaml = '';
+
+            if (step.conditional?.enabled && step.conditional.value) {
+                yaml = `${indent}- ${step.conditional.type}: "${escapeYamlString(step.conditional.value)}"\n`;
+                yaml += `${indent}  then:\n`;
+                yaml += stepToYAMLInner(step, indent + '    ');
+                return yaml;
+            }
+
+            return stepToYAMLInner(step, indent);
+        }
+
+        function stepToYAMLInner(step, indent) {
+            let yaml = '';
+
+            if (step.action === 'tap') {
+                const target = step.target?.text || `[${step.target?.x}, ${step.target?.y}]`;
+                yaml = `${indent}- tap: "${escapeYamlString(target)}"\n`;
+                if (step.waitAfter > 0) {
+                    yaml += `${indent}- wait: ${step.waitAfter}ms\n`;
+                }
+            } else if (step.action === 'verify_screen') {
+                yaml = `${indent}- verify_screen: "${escapeYamlString(step.description || '')}"\n`;
+            } else if (step.action === 'wait_for') {
+                yaml = `${indent}- wait_for: "${escapeYamlString(step.target?.text || '')}"\n`;
+            } else if (step.action === 'wait') {
+                yaml = `${indent}- wait: ${step.duration}ms\n`;
+            }
+
+            return yaml;
+        }
+
+        // Escape special characters for YAML double-quoted strings
+        function escapeYamlString(str) {
+            if (!str) return '';
+            return String(str)
+                .replace(/\\/g, '\\\\')
+                .replace(/"/g, '\\"')
+                .replace(/\n/g, '\\n')
+                .replace(/\r/g, '\\r');
+        }
+
+        function downloadFile(filename, content) {
+            const blob = new Blob([content], { type: 'text/yaml' });
+            const url = URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = filename;
+            document.body.appendChild(a);
+            a.click();
+            document.body.removeChild(a);
+            URL.revokeObjectURL(url);
+        }
+
+        function discardTest() {
+            if (confirm('Discard this test recording? This cannot be undone.')) {
+                window.close();
+            }
+        }
+
+        // Image Modal (simple version)
+        function openModal(src) {
+            const img = new Image();
+            img.src = src;
+            img.style.cssText = 'max-width: 90vw; max-height: 90vh; border-radius: 8px;';
+
+            const overlay = document.createElement('div');
+            overlay.style.cssText = 'position: fixed; top: 0; left: 0; right: 0; bottom: 0; background: rgba(0,0,0,0.9); display: flex; align-items: center; justify-content: center; z-index: 9999; cursor: pointer;';
+            overlay.appendChild(img);
+            overlay.onclick = () => overlay.remove();
+            document.body.appendChild(overlay);
+        }
+    </script>
+</body>
+</html>

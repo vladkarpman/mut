@@ -1,0 +1,57 @@
+# youtube-recorded
+# Generated from recording on 2026-01-14
+# Captured flow: Search "real madrid", browse results, view profile
+
+config:
+  app: com.google.android.youtube
+
+setup:
+  - terminate_app
+  - launch_app
+  - wait: 3s
+
+teardown:
+  - terminate_app
+
+tests:
+  - name: YouTube Search and Browse Flow
+    description: Search for Real Madrid content, browse results, navigate to profile
+    timeout: 120s
+    steps:
+      # Search for content
+      - tap: "Search"
+      - wait: 1s
+      - type: "real madrid"
+      - tap: "Search"
+      - wait: 2s
+      - verify_screen: "Search results for Real Madrid"
+
+      # Browse search results
+      - swipe: up
+      - wait: 1s
+      - verify_screen: "More Real Madrid content visible"
+
+      # Tap on a video
+      - tap: [701, 809]
+      - wait: 3s
+      - verify_screen: "Video content displayed"
+
+      # Navigate back
+      - press: BACK
+      - wait: 1s
+
+      # Go to Shorts tab
+      - tap: "Shorts"
+      - wait: 2s
+      - verify_screen: "Shorts vertical video"
+
+      # Swipe through Shorts
+      - swipe: up
+      - wait: 1s
+      - swipe: up
+      - wait: 1s
+
+      # Navigate to profile
+      - tap: "Вы"
+      - wait: 2s
+      - verify_screen: "User profile page"

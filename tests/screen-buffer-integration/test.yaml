@@ -1,0 +1,25 @@
+config:
+  app: com.google.android.calculator
+
+setup:
+  - terminate_app
+  - launch_app
+  - wait: 2s
+
+tests:
+  - name: Screen-buffer integration test
+    steps:
+      # Test screenshot via screen-buffer
+      - verify_screen: "Calculator app is open with number pad visible"
+
+      # Test tap via mobile-mcp
+      - tap: "5"
+      - tap: "+"
+      - tap: "3"
+      - tap: "="
+
+      # Verify result with screenshot
+      - verify_screen: "Display shows result 8"
+
+teardown:
+  - terminate_app

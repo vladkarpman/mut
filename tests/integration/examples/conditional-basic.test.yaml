@@ -1,0 +1,65 @@
+config:
+  app: com.example.testapp
+
+setup:
+  - terminate_app
+  - launch_app
+  - wait: 3s
+
+teardown:
+  - terminate_app
+
+tests:
+  - name: if_exists - Basic element check
+    steps:
+      - tap: "Show Dialog"
+      - wait_for: "Dialog Title"
+      # Check if dialog appeared after action, handle both success and failure
+      - if_exists: "Dialog Title"
+        then:
+          - tap: "OK"
+        else:
+          - tap: "Retry"
+
+  - name: if_not_exists - Inverse check
+    steps:
+      - tap: "Start Process"
+      - wait: 2s
+      # Wait for process to complete by checking loading spinner is gone
+      - if_not_exists: "Loading Spinner"
+        then:
+          - verify_screen: "Process complete"
+        else:
+          - wait: 3s
+
+  - name: if_all_exist - Multiple elements AND
+    steps:
+      - tap: "Open Editor"
+      - wait_for: "Save"
+      # Verify all expected editing tools are present (AND logic)
+      - if_all_exist: ["Save", "Share", "Edit"]
+        then:
+          - verify_screen: "Full editor mode"
+        else:
+          - verify_screen: "Limited mode"
+
+  - name: if_any_exist - Multiple elements OR
+    steps:
+      - tap: "Go Home"
+      - wait: 2s
+      # Check for any variant of login button (OR logic)
+      - if_any_exist: ["Login", "Sign In", "Get Started"]
+        then:
+          - tap: "Login"
+        else:
+          - verify_screen: "Already logged in"
+
+  - name: Condition false without else branch
+    steps:
+      - tap: "Check Premium"
+      - wait: 1s
+      # Optional upgrade - only tap if button exists, continue either way
+      - if_exists: "Upgrade Button"
+        then:
+          - tap: "Upgrade Button"
+      - verify_screen: "Status checked"

@@ -1,17 +1,16 @@
 """CLI commands for mut."""
 
 from pathlib import Path
-from typing import Optional
 
-from dotenv import load_dotenv
 import typer
-
-# Load .env file from current directory or parent directories
-load_dotenv()
+from dotenv import load_dotenv
 from rich.console import Console
 from rich.table import Table
 
 from mut import __version__
+
+# Load .env file from current directory or parent directories
+load_dotenv()
 
 app = typer.Typer(
     name="mut",
@@ -30,7 +29,7 @@ def version_callback(value: bool) -> None:
 
 @app.callback()
 def main(
-    version: Optional[bool] = typer.Option(
+    version: bool | None = typer.Option(
         None, "--version", "-v", callback=version_callback, is_eager=True,
         help="Show version and exit"
     ),
@@ -42,8 +41,8 @@ def main(
 @app.command()
 def run(
     test_file: Path = typer.Argument(..., help="YAML test file to execute"),
-    device: Optional[str] = typer.Option(None, "--device", "-d", help="Device ID"),
-    output: Optional[Path] = typer.Option(None, "--output", "-o", help="Output directory"),
+    device: str | None = typer.Option(None, "--device", "-d", help="Device ID"),
+    output: Path | None = typer.Option(None, "--output", "-o", help="Output directory"),
     no_ai: bool = typer.Option(False, "--no-ai", help="Skip AI verifications"),
     no_video: bool = typer.Option(False, "--no-video", help="Skip video recording"),
     verbose: bool = typer.Option(False, "--verbose", help="Verbose output"),
@@ -66,7 +65,7 @@ def run(
 @app.command()
 def record(
     name: str = typer.Argument(..., help="Test name"),
-    device: Optional[str] = typer.Option(None, "--device", "-d", help="Device ID"),
+    device: str | None = typer.Option(None, "--device", "-d", help="Device ID"),
 ) -> None:
     """Start recording user interactions."""
     console.print(f"[blue]Starting recording:[/blue] {name}")

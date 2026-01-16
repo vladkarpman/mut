@@ -1,0 +1,71 @@
+config:
+  app: com.example.testapp
+
+setup:
+  - terminate_app
+  - launch_app
+  - wait: 3s
+
+teardown:
+  - terminate_app
+
+tests:
+  - name: Two-level nesting
+    steps:
+      - tap: "Features"
+      - wait_for: "Premium Features"
+      # Level 1: Check if premium section is accessible
+      - if_exists: "Premium Features"
+        then:
+          - tap: "Premium Features"
+          # Level 2: Check if purchase confirmation is required
+          - if_exists: "Confirm Purchase"
+            then:
+              - tap: "Cancel"
+            else:
+              - verify_screen: "Feature activated"
+        else:
+          - tap: "Upgrade"
+
+  - name: Three-level nesting
+    steps:
+      - tap: "Settings"
+      - wait_for: "Account"
+      # Level 1: Check if user is logged in
+      - if_exists: "Account"
+        then:
+          - tap: "Account"
+          # Level 2: Check if subscription section exists
+          - if_exists: "Subscription"
+            then:
+              - tap: "Subscription"
+              # Level 3: Check if active subscription can be cancelled
+              - if_exists: "Cancel Subscription"
+                then:
+                  - tap: "Keep Subscription"
+                else:
+                  - verify_screen: "Manage subscription"
+            else:
+              - tap: "Subscribe"
+        else:
+          - tap: "Sign In"
+
+  - name: Nested with mixed operators
+    steps:
+      - tap: "Gallery"
+      - wait_for: "Photos"
+      # Level 1: Verify gallery has content (both tabs present)
+      - if_all_exist: ["Photos", "Albums"]
+        then:
+          - tap: "Photos"
+          # Level 2: Check for bulk selection options
+          - if_any_exist: ["Select All", "Select"]
+            then:
+              - tap: "Select All"
+            else:
+              # Level 3: If no bulk select, check for individual photos
+              - if_exists: "First Photo"
+                then:
+                  - tap: "First Photo"
+        else:
+          - verify_screen: "Gallery empty"

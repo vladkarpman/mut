@@ -1,8 +1,7 @@
 """Tests for AIAnalyzer."""
 
 import os
-import pytest
-from unittest.mock import patch, MagicMock
+from unittest.mock import MagicMock, patch
 
 from mut.core.ai_analyzer import AIAnalyzer
 
@@ -44,8 +43,9 @@ class TestVerifyScreen:
         analyzer = AIAnalyzer(api_key=None)
 
         # Create a minimal PNG (1x1 pixel)
-        from PIL import Image
         import io
+
+        from PIL import Image
         img = Image.new("RGB", (1, 1), color="red")
         buffer = io.BytesIO()
         img.save(buffer, format="PNG")
@@ -70,8 +70,9 @@ class TestVerifyScreen:
         analyzer = AIAnalyzer(api_key="test-key")
 
         # Create test image
-        from PIL import Image
         import io
+
+        from PIL import Image
         img = Image.new("RGB", (100, 100), color="blue")
         buffer = io.BytesIO()
         img.save(buffer, format="PNG")
@@ -94,8 +95,9 @@ class TestVerifyScreen:
 
         analyzer = AIAnalyzer(api_key="test-key")
 
-        from PIL import Image
         import io
+
+        from PIL import Image
         img = Image.new("RGB", (100, 100))
         buffer = io.BytesIO()
         img.save(buffer, format="PNG")
@@ -114,8 +116,9 @@ class TestVerifyScreen:
 
         analyzer = AIAnalyzer(api_key="test-key")
 
-        from PIL import Image
         import io
+
+        from PIL import Image
         img = Image.new("RGB", (100, 100))
         buffer = io.BytesIO()
         img.save(buffer, format="PNG")
@@ -133,8 +136,9 @@ class TestIfScreen:
         """Should return False when no API key (safe default)."""
         analyzer = AIAnalyzer(api_key=None)
 
-        from PIL import Image
         import io
+
+        from PIL import Image
         img = Image.new("RGB", (1, 1))
         buffer = io.BytesIO()
         img.save(buffer, format="PNG")
@@ -155,8 +159,9 @@ class TestIfScreen:
 
         analyzer = AIAnalyzer(api_key="test-key")
 
-        from PIL import Image
         import io
+
+        from PIL import Image
         img = Image.new("RGB", (100, 100))
         buffer = io.BytesIO()
         img.save(buffer, format="PNG")
@@ -176,8 +181,9 @@ class TestIfScreen:
 
         analyzer = AIAnalyzer(api_key="test-key")
 
-        from PIL import Image
         import io
+
+        from PIL import Image
         img = Image.new("RGB", (100, 100))
         buffer = io.BytesIO()
         img.save(buffer, format="PNG")
@@ -194,8 +200,9 @@ class TestAnalyzeStep:
         """Should return skipped result when no API key."""
         analyzer = AIAnalyzer(api_key=None)
 
-        from PIL import Image
         import io
+
+        from PIL import Image
 
         def make_image():
             img = Image.new("RGB", (100, 100))
@@ -226,8 +233,9 @@ class TestAnalyzeStep:
 
         analyzer = AIAnalyzer(api_key="test-key")
 
-        from PIL import Image
         import io
+
+        from PIL import Image
 
         def make_image(color):
             img = Image.new("RGB", (100, 100), color=color)

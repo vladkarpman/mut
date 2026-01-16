@@ -5,11 +5,12 @@ They also require a connected Android device for screenshot capture.
 """
 
 import os
+
 import pytest
 
 from mut.core.ai_analyzer import AIAnalyzer
-from mut.core.scrcpy_service import ScrcpyService
 from mut.core.device_controller import DeviceController
+from mut.core.scrcpy_service import ScrcpyService
 
 
 @pytest.fixture

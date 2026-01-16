@@ -1,0 +1,29 @@
+config:
+  app: com.google.android.calculator
+
+setup:
+  - terminate_app
+  - launch_app
+  - wait: 2s
+
+teardown:
+  - terminate_app
+
+tests:
+  - name: Simple addition 2+2=4
+    steps:
+      - tap: "2"
+      - tap: "+"
+      - tap: "2"
+      - tap: "="
+      - verify_screen: "Display shows 4"
+
+  - name: Clear and calculate 5+3=8
+    steps:
+      - tap: "AC"
+      - wait: 500ms
+      - tap: "5"
+      - tap: "+"
+      - tap: "3"
+      - tap: "="
+      - verify_screen: "Display shows 8"

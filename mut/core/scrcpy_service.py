@@ -8,10 +8,10 @@ from collections import deque
 from pathlib import Path
 from typing import Any
 
+import numpy as np
 from adbutils import adb
 from myscrcpy.core import Session, VideoArgs
 from PIL import Image
-import numpy as np
 
 logger = logging.getLogger("mut.scrcpy")
 
