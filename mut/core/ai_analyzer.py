@@ -53,8 +53,51 @@ class AIAnalyzer:
         return self._api_key is not None
 
     def verify_screen(self, screenshot: bytes, description: str) -> dict[str, Any]:
-        """Verify screen matches description."""
-        raise NotImplementedError("verify_screen not yet implemented")
+        """Verify screen matches description.
+
+        Args:
+            screenshot: PNG image bytes
+            description: Expected screen description
+
+        Returns:
+            Dict with pass (bool), reason (str), and optional skipped (bool)
+        """
+        if not self.is_available or self._client is None:
+            return {
+                "pass": True,
+                "reason": "AI verification skipped (no API key)",
+                "skipped": True,
+            }
+
+        prompt = f'''Analyze this mobile app screenshot.
+
+Question: Does the screen show "{description}"?
+
+Respond with JSON only (no markdown, no code blocks):
+{{"pass": true/false, "reason": "brief explanation"}}'''
+
+        try:
+            # Create image part from bytes
+            image_part = types.Part.from_bytes(
+                data=screenshot,
+                mime_type="image/png",
+            )
+
+            response = self._client.models.generate_content(
+                model=self._model,
+                contents=[image_part, prompt],
+            )
+
+            # Parse response
+            return self._parse_json_response(response.text)
+
+        except Exception as e:
+            logger.error(f"verify_screen failed: {e}")
+            return {
+                "pass": False,
+                "reason": f"AI verification error: {str(e)}",
+                "error": True,
+            }
 
     def if_screen(self, screenshot: bytes, condition: str) -> bool:
         """Check if screen matches condition."""
