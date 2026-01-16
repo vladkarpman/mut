@@ -5,6 +5,7 @@ from mutcli.core.config import ConfigLoader, MutConfig, RetryConfig, TimeoutConf
 from mutcli.core.device_controller import DeviceController
 from mutcli.core.executor import StepResult, TestExecutor, TestResult
 from mutcli.core.parser import ParseError, TestParser
+from mutcli.core.report import ReportGenerator
 from mutcli.core.scrcpy_service import ScrcpyService
 
 __all__ = [
@@ -13,6 +14,7 @@ __all__ = [
     "DeviceController",
     "MutConfig",
     "ParseError",
+    "ReportGenerator",
     "RetryConfig",
     "ScrcpyService",
     "StepResult",
