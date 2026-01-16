@@ -424,6 +424,21 @@ steps:
 class TestParserErrors:
     """Test parser error handling."""
 
+    def test_raises_on_file_not_found(self, tmp_path):
+        """Raises ParseError when file does not exist."""
+        nonexistent = tmp_path / "does_not_exist.yaml"
+
+        with pytest.raises(ParseError, match="Test file not found"):
+            TestParser.parse(nonexistent)
+
+    def test_raises_on_empty_file(self, tmp_path):
+        """Raises ParseError for empty file."""
+        test_file = tmp_path / "test.yaml"
+        test_file.write_text("")
+
+        with pytest.raises(ParseError, match="Test file is empty"):
+            TestParser.parse(test_file)
+
     def test_raises_on_invalid_yaml(self, tmp_path):
         """Raises ParseError for invalid YAML."""
         test_file = tmp_path / "test.yaml"

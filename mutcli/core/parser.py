@@ -51,10 +51,15 @@ class TestParser:
             ParseError: If file is invalid
         """
         try:
-            with open(path) as f:
+            with open(path, encoding="utf-8") as f:
                 data = yaml.safe_load(f)
+        except FileNotFoundError:
+            raise ParseError(f"Test file not found: {path}")
         except yaml.YAMLError as e:
             raise ParseError(f"Invalid YAML: {e}")
+
+        if data is None:
+            raise ParseError("Test file is empty")
 
         if not isinstance(data, dict):
             raise ParseError("Test file must be a YAML mapping")
