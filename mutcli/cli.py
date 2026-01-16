@@ -54,9 +54,6 @@ def run(
     device: str | None = typer.Option(None, "--device", "-d", help="Device ID"),
     output: Path | None = typer.Option(None, "--output", "-o", help="Output directory"),
     junit: Path | None = typer.Option(None, "--junit", help="JUnit XML output path"),
-    no_ai: bool = typer.Option(False, "--no-ai", help="Skip AI verifications"),
-    no_video: bool = typer.Option(False, "--no-video", help="Skip video recording"),
-    verbose: bool = typer.Option(False, "--verbose", help="Verbose output"),
 ) -> None:
     """Execute a YAML test file."""
     from datetime import datetime
