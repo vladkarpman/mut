@@ -33,7 +33,7 @@ class ScrcpyService:
         """
         self._device_id = device_id
         self._session: Session | None = None
-        self._frame_buffer: deque = deque(maxlen=self.FRAME_BUFFER_SIZE)
+        self._frame_buffer: deque[Any] = deque(maxlen=self.FRAME_BUFFER_SIZE)
         self._lock = threading.Lock()
         self._running = False
         self._frame_thread: threading.Thread | None = None
@@ -42,8 +42,8 @@ class ScrcpyService:
 
         # Recording state
         self._recording = False
-        self._video_writer = None
-        self._video_stream = None
+        self._video_writer: Any = None
+        self._video_stream: Any = None
         self._recording_output_path: str | None = None
         self._recording_start_time: float | None = None
 
@@ -228,11 +228,13 @@ class ScrcpyService:
         try:
             import av
 
-            self._video_writer = av.open(output_path, "w")
-            self._video_stream = self._video_writer.add_stream("h264", rate=30)
-            self._video_stream.width = width
-            self._video_stream.height = height
-            self._video_stream.pix_fmt = "yuv420p"
+            container = av.open(output_path, "w")
+            self._video_writer = container
+            stream = container.add_stream("h264", rate=30)
+            stream.width = width
+            stream.height = height
+            stream.pix_fmt = "yuv420p"
+            self._video_stream = stream
 
             with self._lock:
                 self._recording = True

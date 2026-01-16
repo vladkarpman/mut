@@ -89,7 +89,8 @@ Respond with JSON only (no markdown, no code blocks):
             )
 
             # Parse response
-            return self._parse_json_response(response.text)
+            response_text = response.text or ""
+            return self._parse_json_response(response_text)
 
         except Exception as e:
             logger.error(f"verify_screen failed: {e}")
@@ -117,7 +118,7 @@ Respond with JSON only (no markdown, no code blocks):
             return False
 
         result = self.verify_screen(screenshot, condition)
-        return result.get("pass", False)
+        return bool(result.get("pass", False))
 
     def analyze_step(self, before: bytes, after: bytes) -> dict[str, Any]:
         """Analyze before/after frames to describe a step.
@@ -175,7 +176,8 @@ Respond with JSON only (no markdown, no code blocks):
                 contents=[before_part, after_part, prompt],
             )
 
-            return self._parse_json_response(response.text)
+            response_text = response.text or ""
+            return self._parse_json_response(response_text)
 
         except Exception as e:
             logger.error(f"analyze_step failed: {e}")
@@ -198,7 +200,8 @@ Respond with JSON only (no markdown, no code blocks):
             text = text.strip()
 
         try:
-            return json.loads(text)
+            result: dict[str, Any] = json.loads(text)
+            return result
         except json.JSONDecodeError as e:
             logger.warning(f"Failed to parse JSON response: {e}")
             return {
