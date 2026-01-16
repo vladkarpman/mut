@@ -9,8 +9,8 @@ from unittest.mock import patch
 import pytest
 from PIL import Image
 
-from mut.core.device_controller import DeviceController
-from mut.core.scrcpy_service import ScrcpyService
+from pymut.core.device_controller import DeviceController
+from pymut.core.scrcpy_service import ScrcpyService
 
 
 @pytest.fixture

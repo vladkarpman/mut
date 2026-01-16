@@ -54,4 +54,4 @@ jobs:
           pip install -e ".[dev]"
 
       - name: Type check with mypy
-        run: mypy mut/ --ignore-missing-imports
+        run: mypy pymut/ --ignore-missing-imports

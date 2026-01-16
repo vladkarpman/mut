@@ -8,9 +8,9 @@ import os
 
 import pytest
 
-from mut.core.ai_analyzer import AIAnalyzer
-from mut.core.device_controller import DeviceController
-from mut.core.scrcpy_service import ScrcpyService
+from pymut.core.ai_analyzer import AIAnalyzer
+from pymut.core.device_controller import DeviceController
+from pymut.core.scrcpy_service import ScrcpyService
 
 
 @pytest.fixture

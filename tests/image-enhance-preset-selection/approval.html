@@ -2332,63 +2332,54 @@
         }
 
         .frame-description {
-            padding: 12px 16px;
-            padding-right: 44px;
-            font-size: 0.9rem;
+            padding: 12px 14px;
+            padding-top: 18px;
+            font-size: 0.875rem;
             font-weight: 400;
-            color: var(--text-primary);
+            color: var(--md-on-surface);
             line-height: 1.5;
-            min-height: 44px;
-            cursor: pointer;
+            min-height: 48px;
+            cursor: text;
             transition: all var(--md-duration-short3) var(--md-easing-standard);
             letter-spacing: 0.01em;
             position: relative;
-            border-radius: 12px;
-            margin: 8px;
-            border: 1px solid transparent;
+            border-radius: 8px;
+            margin: 8px 10px;
+            border: 1px solid var(--md-outline);
+            background: transparent;
         }
 
         .frame-description::before {
-            content: 'Click to edit';
+            content: 'Description';
             position: absolute;
-            top: 50%;
-            left: 50%;
-            transform: translate(-50%, -50%);
-            padding: 4px 10px;
-            background: var(--md-surface-container-highest);
-            border-radius: 4px;
-            font-size: 0.75rem;
+            top: -8px;
+            left: 10px;
+            padding: 0 4px;
+            background: var(--md-surface-container);
+            font-size: 0.6875rem;
+            font-weight: 600;
+            text-transform: uppercase;
+            letter-spacing: 0.05em;
             color: var(--md-on-surface-variant);
-            opacity: 0;
-            transition: all var(--md-duration-short3) var(--md-easing-standard);
-            pointer-events: none;
-            white-space: nowrap;
-        }
-
-        .frame-description::after {
-            content: '›';
-            font-size: 20px;
-            font-weight: 300;
-            position: absolute;
-            right: 14px;
-            top: 50%;
-            transform: translateY(-50%) rotate(90deg);
-            color: var(--md-on-surface-variant);
-            opacity: 0;
-            transition: all var(--md-duration-short3) var(--md-easing-standard);
         }
 
         .frame-description:hover {
-            border-color: var(--md-outline);
-            background: var(--md-surface-container-low);
+            border-color: var(--md-on-surface);
+            background: rgba(255, 255, 255, 0.02);
         }
 
-        .frame-description:hover::before {
-            opacity: 1;
+        .frame-description:focus {
+            border: 2px solid var(--md-primary);
+            padding: 11px 13px;
+            padding-top: 17px;
+            outline: none;
         }
 
-        .frame-description:hover::after {
-            opacity: 0.7;
+        .frame-description:empty::after {
+            content: attr(data-placeholder);
+            color: var(--md-on-surface-variant);
+            opacity: 0.6;
+            font-style: italic;
         }
 
         .frame-description em {
@@ -2794,7 +2785,6 @@
 
         .frame-gesture-info input[type="text"] {
             width: 100%;
-            max-width: 200px;
         }
 
         /* Modern Grid layout for gesture controls */
@@ -5456,9 +5446,10 @@
                         <div class="frame-image-container" onclick="openModal('${beforeFrame}'); event.stopPropagation();">
                             ${beforeFrame ? `<img src="${beforeFrame}">` : '<em>No frame</em>'}
                         </div>
-                        <div class="frame-description" onclick="editAnalysisField('${step.id}', 'before'); event.stopPropagation();" title="Click to edit">
-                            ${beforeText ? escapeHtml(beforeText) : '<em>Click to add description</em>'}
-                        </div>
+                        <div class="frame-description" contenteditable="true"
+                             onclick="event.stopPropagation();"
+                             onblur="saveAnalysisField('${step.id}', 'before', this.innerText)"
+                             data-placeholder="Click to add description">${beforeText ? escapeHtml(beforeText) : ''}</div>
                         <!-- Conditions list -->
                         ${renderConditionsList()}
                         <!-- Spacer to push button to bottom -->
@@ -5480,9 +5471,10 @@
                                 </div>
                             ` : '<em>No action frame</em>'}
                         </div>
-                        <div class="frame-description" onclick="editAnalysisField('${step.id}', 'action'); event.stopPropagation();" title="Click to edit">
-                            ${actionText ? escapeHtml(actionText) : '<em>Click to add description</em>'}
-                        </div>
+                        <div class="frame-description" contenteditable="true"
+                             onclick="event.stopPropagation();"
+                             onblur="saveAnalysisField('${step.id}', 'action', this.innerText)"
+                             data-placeholder="Click to add description">${actionText ? escapeHtml(actionText) : ''}</div>
                         ${renderGestureInfo()}
                     </div>
 
@@ -5492,9 +5484,10 @@
                         <div class="frame-image-container" onclick="openModal('${afterFrame}'); event.stopPropagation();">
                             ${afterFrame ? `<img src="${afterFrame}">` : '<em>No frame</em>'}
                         </div>
-                        <div class="frame-description" onclick="editAnalysisField('${step.id}', 'after'); event.stopPropagation();" title="Click to edit">
-                            ${afterText ? escapeHtml(afterText) : '<em>Click to add description</em>'}
-                        </div>
+                        <div class="frame-description" contenteditable="true"
+                             onclick="event.stopPropagation();"
+                             onblur="saveAnalysisField('${step.id}', 'after', this.innerText)"
+                             data-placeholder="Click to add description">${afterText ? escapeHtml(afterText) : ''}</div>
                         <!-- Verifications list -->
                         ${renderVerificationsList()}
                         <!-- Suggested verification prompt (inline in AFTER column) -->
@@ -5768,6 +5761,15 @@
                     }
                 }
             );
+        }
+
+        // Direct inline save for contenteditable descriptions
+        function saveAnalysisField(stepId, field, value) {
+            const step = steps.find(s => s.id === stepId);
+            if (!step) return;
+
+            if (!step.analysis) step.analysis = {};
+            step.analysis[field] = value.trim();
         }
 
         function renderSuggestion(step) {

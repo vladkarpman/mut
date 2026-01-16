@@ -3,7 +3,7 @@
 import os
 from unittest.mock import MagicMock, patch
 
-from mut.core.ai_analyzer import AIAnalyzer
+from pymut.core.ai_analyzer import AIAnalyzer
 
 
 class TestAIAnalyzerInit:

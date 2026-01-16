@@ -1,4 +1,4 @@
-"""CLI commands for mut."""
+"""CLI commands for pymut."""
 
 from pathlib import Path
 
@@ -7,13 +7,13 @@ from dotenv import load_dotenv
 from rich.console import Console
 from rich.table import Table
 
-from mut import __version__
+from pymut import __version__
 
 # Load .env file from current directory or parent directories
 load_dotenv()
 
 app = typer.Typer(
-    name="mut",
+    name="pymut",
     help="Mobile UI Testing CLI - Run YAML-based mobile tests anywhere",
     no_args_is_help=True,
 )
@@ -23,7 +23,7 @@ console = Console()
 def version_callback(value: bool) -> None:
     """Print version and exit."""
     if value:
-        console.print(f"mut version {__version__}")
+        console.print(f"pymut version {__version__}")
         raise typer.Exit()
 
 
@@ -34,7 +34,7 @@ def main(
         help="Show version and exit"
     ),
 ) -> None:
-    """mut - Mobile UI Testing CLI."""
+    """pymut - Mobile UI Testing CLI."""
     pass
 
 
@@ -55,7 +55,7 @@ def run(
     console.print(f"[blue]Running test:[/blue] {test_file}")
 
     # TODO: Implement test execution
-    # from mut.core.test_executor import TestExecutor
+    # from pymut.core.test_executor import TestExecutor
     # executor = TestExecutor(device=device, no_ai=no_ai, no_video=no_video)
     # result = executor.run(test_file)
 
@@ -71,7 +71,7 @@ def record(
     console.print(f"[blue]Starting recording:[/blue] {name}")
 
     # TODO: Implement recording
-    # from mut.core.recorder import Recorder
+    # from pymut.core.recorder import Recorder
     # recorder = Recorder(name=name, device=device)
     # recorder.start()
 
@@ -84,7 +84,7 @@ def stop() -> None:
     console.print("[blue]Stopping recording...[/blue]")
 
     # TODO: Implement stop recording
-    # from mut.core.recorder import Recorder
+    # from pymut.core.recorder import Recorder
     # recorder = Recorder.load_state()
     # recorder.stop()
     # recorder.open_approval_ui()
@@ -95,7 +95,7 @@ def stop() -> None:
 @app.command()
 def devices() -> None:
     """List connected devices."""
-    from mut.core.device_controller import DeviceController
+    from pymut.core.device_controller import DeviceController
 
     try:
         devices_list = DeviceController.list_devices()
@@ -142,7 +142,7 @@ def report(
     console.print(f"[blue]Generating report from:[/blue] {json_file}")
 
     # TODO: Implement report generation
-    # from mut.core.report_generator import ReportGenerator
+    # from pymut.core.report_generator import ReportGenerator
     # generator = ReportGenerator()
     # html_path = generator.generate(json_file)
     # console.print(f"[green]Generated:[/green] {html_path}")
