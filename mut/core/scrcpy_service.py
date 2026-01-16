@@ -1,18 +1,19 @@
 """Scrcpy service for fast screenshots and video recording."""
 
 import io
+import logging
 import threading
 import time
 from collections import deque
 from pathlib import Path
 from typing import Any
 
-# TODO: Import these when implementing
-# from myscrcpy.core import Session, VideoArgs
-# from adbutils import adb
-# from PIL import Image
-# import numpy as np
-# import av
+from adbutils import adb
+from myscrcpy.core import Session, VideoArgs
+from PIL import Image
+import numpy as np
+
+logger = logging.getLogger("mut.scrcpy")
 
 
 class ScrcpyService:
@@ -22,6 +23,8 @@ class ScrcpyService:
     for instant screenshots (~50ms) and handles video recording via PyAV.
     """
 
+    FRAME_BUFFER_SIZE = 10
+
     def __init__(self, device_id: str):
         """Initialize service for a specific device.
 
@@ -29,67 +32,142 @@ class ScrcpyService:
             device_id: ADB device identifier
         """
         self._device_id = device_id
-        self._session = None
-        self._frame_buffer: deque = deque(maxlen=10)
+        self._session: Session | None = None
+        self._frame_buffer: deque = deque(maxlen=self.FRAME_BUFFER_SIZE)
         self._lock = threading.Lock()
         self._running = False
         self._frame_thread: threading.Thread | None = None
+        self._width = 0
+        self._height = 0
 
         # Recording state
         self._recording = False
         self._video_writer = None
+        self._video_stream = None
         self._recording_output_path: str | None = None
         self._recording_start_time: float | None = None
 
     @property
     def is_connected(self) -> bool:
-        """Check if scrcpy is connected."""
-        return self._session is not None and self._running
+        """Check if scrcpy is connected and receiving frames."""
+        return (
+            self._session is not None
+            and self._running
+            and self._session.va is not None
+        )
 
     @property
     def is_recording(self) -> bool:
         """Check if recording is active."""
-        return self._recording
+        return self._recording and self._video_writer is not None
 
-    async def connect(self) -> bool:
+    def connect(self) -> bool:
         """Connect to device via MYScrcpy.
 
         Returns:
             True if connected successfully
         """
-        # TODO: Implement MYScrcpy connection
-        # try:
-        #     from adbutils import adb
-        #     from myscrcpy.core import Session, VideoArgs
-        #
-        #     devices = adb.device_list()
-        #     device = None
-        #     for d in devices:
-        #         if d.serial == self._device_id:
-        #             device = d
-        #             break
-        #
-        #     if not device:
-        #         return False
-        #
-        #     self._session = Session(
-        #         device,
-        #         video_args=VideoArgs(fps=60),
-        #         control_args=None,
-        #     )
-        #
-        #     self._running = True
-        #     self._frame_thread = threading.Thread(
-        #         target=self._frame_loop, daemon=True
-        #     )
-        #     self._frame_thread.start()
-        #
-        #     return True
-        #
-        # except Exception as e:
-        #     return False
+        if self.is_connected:
+            return True
 
-        raise NotImplementedError("ScrcpyService.connect() not yet implemented")
+        try:
+            # Find device
+            devices = adb.device_list()
+            device = None
+            for d in devices:
+                if d.serial == self._device_id:
+                    device = d
+                    break
+
+            if device is None:
+                logger.error(f"Device {self._device_id} not found")
+                return False
+
+            logger.info(f"Connecting to {self._device_id}...")
+
+            # Create session with video only
+            self._session = Session(
+                device,
+                video_args=VideoArgs(fps=60),
+                control_args=None,  # No control needed
+            )
+
+            # Wait for video stream to initialize
+            time.sleep(1.0)
+
+            if self._session.va is None:
+                logger.error("Video stream failed to initialize")
+                self._session = None
+                return False
+
+            # Start frame capture thread
+            self._running = True
+            self._frame_thread = threading.Thread(
+                target=self._frame_loop,
+                daemon=True,
+            )
+            self._frame_thread.start()
+
+            # Wait for first frame
+            time.sleep(0.5)
+
+            logger.info(f"Connected to {self._device_id}")
+            return True
+
+        except Exception as e:
+            logger.error(f"Connection failed: {e}")
+            self._session = None
+            return False
+
+    def disconnect(self) -> None:
+        """Disconnect from device and clean up."""
+        self._running = False
+
+        if self._frame_thread:
+            self._frame_thread.join(timeout=2)
+            self._frame_thread = None
+
+        if self._session:
+            try:
+                self._session.stop()
+            except Exception:
+                pass
+            self._session = None
+
+        with self._lock:
+            self._frame_buffer.clear()
+
+        self._width = 0
+        self._height = 0
+        logger.info("Disconnected")
+
+    def _frame_loop(self) -> None:
+        """Continuous frame capture loop."""
+        while self._running and self._session and self._session.va:
+            try:
+                frame = self._session.va.get_frame()
+                if frame is not None:
+                    timestamp = time.time()
+
+                    with self._lock:
+                        self._frame_buffer.append({
+                            "frame": frame,
+                            "timestamp": timestamp,
+                        })
+
+                        # Update dimensions from first frame
+                        if self._height == 0:
+                            self._height, self._width = frame.shape[:2]
+
+                    # Write to video if recording
+                    if self._recording:
+                        self._write_frame(frame)
+
+                time.sleep(0.016)  # ~60 fps polling
+
+            except Exception as e:
+                logger.debug(f"Frame loop error: {e}")
+                time.sleep(0.1)
 
     def screenshot(self) -> bytes:
         """Get latest frame as PNG from buffer.
@@ -101,22 +179,20 @@ class ScrcpyService:
             RuntimeError: If not connected or no frames available
         """
         if not self.is_connected:
-            raise RuntimeError("scrcpy not connected")
+            raise RuntimeError("Not connected to device")
 
         with self._lock:
             if not self._frame_buffer:
                 raise RuntimeError("No frames available in buffer")
 
-            frame = self._frame_buffer[-1]
+            frame_data = self._frame_buffer[-1]
+            frame = frame_data["frame"]
 
-        # TODO: Convert numpy array to PNG
-        # from PIL import Image
-        # img = Image.fromarray(frame)
-        # buffer = io.BytesIO()
-        # img.save(buffer, format="PNG")
-        # return buffer.getvalue()
-
-        raise NotImplementedError("ScrcpyService.screenshot() not yet implemented")
+        # Convert numpy array to PNG bytes
+        img = Image.fromarray(frame)
+        buffer = io.BytesIO()
+        img.save(buffer, format="PNG")
+        return buffer.getvalue()
 
     def start_recording(self, output_path: str) -> dict[str, Any]:
         """Start writing frames to video file.
@@ -136,20 +212,30 @@ class ScrcpyService:
         # Ensure output directory exists
         Path(output_path).parent.mkdir(parents=True, exist_ok=True)
 
-        # TODO: Initialize PyAV video writer
-        # import av
-        # self._video_writer = av.open(output_path, 'w')
-        # self._stream = self._video_writer.add_stream('h264', rate=30)
+        try:
+            import av
 
-        self._recording = True
-        self._recording_output_path = output_path
-        self._recording_start_time = time.time()
+            self._video_writer = av.open(output_path, "w")
+            self._video_stream = self._video_writer.add_stream("h264", rate=30)
+            self._video_stream.width = self._width
+            self._video_stream.height = self._height
+            self._video_stream.pix_fmt = "yuv420p"
 
-        return {
-            "success": True,
-            "output_path": output_path,
-            "recording_start_time": self._recording_start_time,
-        }
+            self._recording = True
+            self._recording_output_path = output_path
+            self._recording_start_time = time.time()
+
+            logger.info(f"Recording started: {output_path}")
+
+            return {
+                "success": True,
+                "output_path": output_path,
+                "recording_start_time": self._recording_start_time,
+            }
+
+        except Exception as e:
+            logger.error(f"Failed to start recording: {e}")
+            return {"success": False, "error": str(e)}
 
     def stop_recording(self) -> dict[str, Any]:
         """Stop recording and finalize video.
@@ -161,64 +247,66 @@ class ScrcpyService:
             return {"success": False, "error": "No recording in progress"}
 
         duration = time.time() - (self._recording_start_time or 0)
-
-        # TODO: Finalize video
-        # if self._video_writer:
-        #     self._video_writer.close()
-
         output_path = self._recording_output_path
 
-        # Reset recording state
-        self._recording = False
-        self._video_writer = None
-        self._recording_output_path = None
-        self._recording_start_time = None
+        try:
+            self._recording = False
+
+            # Finalize video
+            if self._video_writer:
+                self._video_writer.close()
+
+            file_size = Path(output_path).stat().st_size if output_path else 0
+
+            logger.info(f"Recording stopped: {output_path} ({duration:.1f}s)")
+
+            return {
+                "success": True,
+                "output_path": output_path,
+                "duration_seconds": round(duration, 2),
+                "file_size_bytes": file_size,
+            }
+
+        except Exception as e:
+            logger.error(f"Error stopping recording: {e}")
+            return {"success": False, "error": str(e)}
+
+        finally:
+            self._video_writer = None
+            self._video_stream = None
+            self._recording_output_path = None
+            self._recording_start_time = None
+
+    def _write_frame(self, frame: np.ndarray) -> None:
+        """Write frame to video file."""
+        if not self._video_writer or not self._video_stream:
+            return
+
+        try:
+            import av
+
+            # Convert RGB to video frame
+            video_frame = av.VideoFrame.from_ndarray(frame, format="rgb24")
+
+            # Encode and write
+            for packet in self._video_stream.encode(video_frame):
+                self._video_writer.mux(packet)
+
+        except Exception as e:
+            logger.debug(f"Error writing frame: {e}")
+
+    def get_buffer_info(self) -> dict[str, Any]:
+        """Get info about current frame buffer state."""
+        with self._lock:
+            count = len(self._frame_buffer)
+            oldest_ts = self._frame_buffer[0]["timestamp"] if count > 0 else None
+            newest_ts = self._frame_buffer[-1]["timestamp"] if count > 0 else None
 
         return {
-            "success": True,
-            "output_path": output_path,
-            "duration_seconds": round(duration, 2),
+            "frame_count": count,
+            "buffer_size": self.FRAME_BUFFER_SIZE,
+            "width": self._width,
+            "height": self._height,
+            "oldest_frame_age_ms": int((time.time() - oldest_ts) * 1000) if oldest_ts else None,
+            "newest_frame_age_ms": int((time.time() - newest_ts) * 1000) if newest_ts else None,
         }
-
-    def disconnect(self) -> None:
-        """Disconnect from device and clean up."""
-        self._running = False
-
-        if self._frame_thread:
-            self._frame_thread.join(timeout=1)
-            self._frame_thread = None
-
-        if self._session:
-            try:
-                self._session.stop()
-            except Exception:
-                pass
-            self._session = None
-
-        self._frame_buffer.clear()
-
-    def _frame_loop(self) -> None:
-        """Continuous frame capture loop."""
-        while self._running and self._session:
-            try:
-                # TODO: Get frame from MYScrcpy
-                # frame = self._session.va.get_frame()
-                # if frame is not None:
-                #     with self._lock:
-                #         self._frame_buffer.append(frame)
-                #     if self._recording:
-                #         self._write_frame(frame)
-
-                time.sleep(0.016)  # ~60 fps
-
-            except Exception:
-                time.sleep(0.1)
-
-    def _write_frame(self, frame) -> None:
-        """Write frame to video file."""
-        # TODO: Implement frame writing with PyAV
-        # import av
-        # video_frame = av.VideoFrame.from_ndarray(frame, format='rgb24')
-        # packet = self._stream.encode(video_frame)
-        # self._video_writer.mux(packet)
-        pass
