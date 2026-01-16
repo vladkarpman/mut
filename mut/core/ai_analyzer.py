@@ -120,8 +120,72 @@ Respond with JSON only (no markdown, no code blocks):
         return result.get("pass", False)
 
     def analyze_step(self, before: bytes, after: bytes) -> dict[str, Any]:
-        """Analyze before/after frames to describe a step."""
-        raise NotImplementedError("analyze_step not yet implemented")
+        """Analyze before/after frames to describe a step.
+
+        Used in recording workflow to generate step descriptions and
+        suggested verifications.
+
+        Args:
+            before: PNG image bytes before action
+            after: PNG image bytes after action
+
+        Returns:
+            Dict with before, action, after descriptions and suggested_verification
+        """
+        if not self.is_available or self._client is None:
+            return {
+                "before": "Unknown (AI unavailable)",
+                "action": "Unknown",
+                "after": "Unknown",
+                "suggested_verification": None,
+                "skipped": True,
+            }
+
+        prompt = '''Compare these two mobile app screenshots (before and after an action).
+
+The first image is BEFORE the action, the second is AFTER.
+
+Describe:
+1. What was the UI state before?
+2. What action was likely performed?
+3. What changed after?
+4. What verification would confirm this step succeeded?
+
+Respond with JSON only (no markdown, no code blocks):
+{
+  "before": "description of before state",
+  "action": "description of action performed",
+  "after": "description of after state",
+  "suggested_verification": "verification description or null if not applicable"
+}'''
+
+        try:
+            # Create image parts
+            before_part = types.Part.from_bytes(
+                data=before,
+                mime_type="image/png",
+            )
+            after_part = types.Part.from_bytes(
+                data=after,
+                mime_type="image/png",
+            )
+
+            response = self._client.models.generate_content(
+                model=self._model,
+                contents=[before_part, after_part, prompt],
+            )
+
+            return self._parse_json_response(response.text)
+
+        except Exception as e:
+            logger.error(f"analyze_step failed: {e}")
+            return {
+                "before": "Analysis failed",
+                "action": "Unknown",
+                "after": "Analysis failed",
+                "suggested_verification": None,
+                "error": str(e),
+            }
 
     def _parse_json_response(self, text: str) -> dict[str, Any]:
         """Parse JSON from model response, handling markdown code blocks."""

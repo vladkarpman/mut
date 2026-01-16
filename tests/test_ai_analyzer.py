@@ -185,3 +185,65 @@ class TestIfScreen:
         result = analyzer.if_screen(buffer.getvalue(), "error dialog visible")
 
         assert result is False
+
+
+class TestAnalyzeStep:
+    """Test analyze_step method."""
+
+    def test_returns_skipped_when_no_api_key(self):
+        """Should return skipped result when no API key."""
+        analyzer = AIAnalyzer(api_key=None)
+
+        from PIL import Image
+        import io
+
+        def make_image():
+            img = Image.new("RGB", (100, 100))
+            buffer = io.BytesIO()
+            img.save(buffer, format="PNG")
+            return buffer.getvalue()
+
+        result = analyzer.analyze_step(make_image(), make_image())
+
+        assert result["skipped"] is True
+        assert "before" in result
+        assert "action" in result
+        assert "after" in result
+
+    @patch("mut.core.ai_analyzer.genai")
+    def test_analyzes_before_after_frames(self, mock_genai):
+        """Should analyze before/after frames and return descriptions."""
+        mock_client = MagicMock()
+        mock_genai.Client.return_value = mock_client
+        mock_response = MagicMock()
+        mock_response.text = '''{
+            "before": "Login screen with empty form",
+            "action": "User tapped on email field",
+            "after": "Keyboard appeared, email field focused",
+            "suggested_verification": "keyboard is visible"
+        }'''
+        mock_client.models.generate_content.return_value = mock_response
+
+        analyzer = AIAnalyzer(api_key="test-key")
+
+        from PIL import Image
+        import io
+
+        def make_image(color):
+            img = Image.new("RGB", (100, 100), color=color)
+            buffer = io.BytesIO()
+            img.save(buffer, format="PNG")
+            return buffer.getvalue()
+
+        result = analyzer.analyze_step(make_image("white"), make_image("blue"))
+
+        assert result["before"] == "Login screen with empty form"
+        assert result["action"] == "User tapped on email field"
+        assert result["after"] == "Keyboard appeared, email field focused"
+        assert result["suggested_verification"] == "keyboard is visible"
+
+        # Verify API was called with two images
+        call_args = mock_client.models.generate_content.call_args
+        contents = call_args.kwargs.get("contents") or call_args[1].get("contents")
+        # Should have 2 image parts + 1 text prompt
+        assert len(contents) == 3
