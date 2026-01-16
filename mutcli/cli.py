@@ -143,30 +143,183 @@ def run(
 def record(
     name: str = typer.Argument(..., help="Test name"),
     device: str | None = typer.Option(None, "--device", "-d", help="Device ID"),
+    app: str | None = typer.Option(None, "--app", "-a", help="App package name"),
 ) -> None:
     """Start recording user interactions."""
+    from mutcli.core.device_controller import DeviceController
+    from mutcli.core.recorder import Recorder
+
+    # Determine device
+    device_id = device
+    if not device_id:
+        devices_list = DeviceController.list_devices()
+        if not devices_list:
+            console.print("[red]Error:[/red] No devices found. Run 'mut devices' to check.")
+            raise typer.Exit(2)
+        device_id = devices_list[0]["id"]
+
     console.print(f"[blue]Starting recording:[/blue] {name}")
+    console.print(f"[dim]Device: {device_id}[/dim]")
+    if app:
+        console.print(f"[dim]App: {app}[/dim]")
+    console.print()
 
-    # TODO: Implement recording
-    # from mutcli.core.recorder import Recorder
-    # recorder = Recorder(name=name, device=device)
-    # recorder.start()
+    # Create and start recorder
+    recorder = Recorder(name=name, device_id=device_id)
+    result = recorder.start()
 
-    console.print("[yellow]Not yet implemented[/yellow]")
+    if not result.get("success"):
+        console.print(f"[red]Error:[/red] {result.get('error', 'Failed to start recording')}")
+        raise typer.Exit(2)
+
+    console.print("[green]Recording started![/green]")
+    console.print("Interact with your device now.")
+    console.print()
+
+    # Wait for user input
+    try:
+        console.print("Press Enter when done recording...")
+        input()
+    except KeyboardInterrupt:
+        console.print("\n[yellow]Recording interrupted[/yellow]")
+
+    # Stop recording
+    stop_result = recorder.stop()
+
+    if not stop_result.get("success"):
+        console.print(f"[red]Error:[/red] {stop_result.get('error', 'Failed to stop recording')}")
+        raise typer.Exit(1)
+
+    # Show results
+    console.print()
+    console.print("[green]Recording saved![/green]")
+    console.print(f"  Events: {stop_result.get('event_count', 0)}")
+    duration = stop_result.get("duration_seconds")
+    if duration is not None:
+        console.print(f"  Duration: {duration:.1f}s")
+    console.print(f"  Output: {stop_result.get('output_dir')}")
+    console.print()
+    console.print("[dim]Run 'mut stop' to generate YAML test file.[/dim]")
 
 
 @app.command()
-def stop() -> None:
-    """Stop recording and generate YAML test."""
-    console.print("[blue]Stopping recording...[/blue]")
+def stop(
+    test_dir: Path | None = typer.Argument(None, help="Test directory (optional, uses most recent)"),
+) -> None:
+    """Process recording and generate YAML test."""
+    import json
 
-    # TODO: Implement stop recording
-    # from mutcli.core.recorder import Recorder
-    # recorder = Recorder.load_state()
-    # recorder.stop()
-    # recorder.open_approval_ui()
+    from mutcli.core.config import ConfigLoader
+    from mutcli.core.frame_extractor import FrameExtractor
+    from mutcli.core.yaml_generator import YAMLGenerator
 
-    console.print("[yellow]Not yet implemented[/yellow]")
+    # Find recording directory
+    if test_dir:
+        recording_dir = test_dir / "recording"
+        if not recording_dir.exists():
+            # Maybe test_dir is the recording dir itself
+            recording_dir = test_dir
+    else:
+        recording_dir = _find_most_recent_recording()
+        if recording_dir is None:
+            console.print("[red]Error:[/red] No recordings found in tests/ directory")
+            console.print("\nRecord a test first with: mut record <name>")
+            raise typer.Exit(2)
+        # Get parent (test_dir) from recording_dir
+        test_dir = recording_dir.parent
+
+    console.print("[blue]Processing recording...[/blue]")
+
+    # Load touch events
+    touch_events_path = recording_dir / "touch_events.json"
+    if not touch_events_path.exists():
+        console.print(f"[red]Error:[/red] touch_events.json not found in {recording_dir}")
+        console.print("\nMake sure recording completed successfully.")
+        raise typer.Exit(2)
+
+    with open(touch_events_path) as f:
+        touch_events = json.load(f)
+
+    console.print(f"  Found {len(touch_events)} touch events")
+
+    # Extract frames from video (if exists)
+    video_path = recording_dir / "recording.mp4"
+    if video_path.exists():
+        console.print("  Extracting frames...")
+        extractor = FrameExtractor(video_path)
+        screenshots_dir = recording_dir / "screenshots"
+        extracted = extractor.extract_for_touches(touch_events, screenshots_dir)
+        console.print(f"  Extracted {len(extracted)} frames")
+    else:
+        console.print("  [dim]No video found, skipping frame extraction[/dim]")
+
+    # Get app package from config
+    try:
+        config = ConfigLoader.load(require_api_key=False)
+        app_package = config.app or "com.example.app"
+    except Exception:
+        app_package = "com.example.app"
+
+    # Generate YAML
+    console.print("  Generating YAML...")
+
+    # Derive test name from directory
+    if test_dir is None:
+        test_dir = recording_dir.parent
+    test_name = test_dir.name
+
+    generator = YAMLGenerator(name=test_name, app_package=app_package)
+
+    # Add setup
+    generator.add_launch_app()
+
+    # Add steps from touch events
+    for event in touch_events:
+        x = event.get("x", 0)
+        y = event.get("y", 0)
+        generator.add_tap(x=x, y=y)
+
+    # Add teardown
+    generator.add_terminate_app()
+
+    # Save YAML
+    yaml_path = test_dir / "test.yaml"
+    generator.save(yaml_path)
+
+    # Show results
+    console.print()
+    console.print("[green]Test generated![/green]")
+    console.print(f"  Output: {yaml_path}")
+    console.print()
+    console.print("[dim]Edit the YAML file to add element names and verifications.[/dim]")
+    console.print(f"[dim]Run with: mut run {yaml_path}[/dim]")
+
+
+def _find_most_recent_recording() -> Path | None:
+    """Find the most recent recording directory.
+
+    Looks for directories in tests/ that contain recording/touch_events.json.
+
+    Returns:
+        Path to the recording directory (tests/{name}/recording), or None if not found.
+    """
+    tests_dir = Path("tests")
+    if not tests_dir.exists():
+        return None
+
+    candidates: list[Path] = []
+    for d in tests_dir.iterdir():
+        if d.is_dir():
+            recording_dir = d / "recording"
+            touch_events = recording_dir / "touch_events.json"
+            if touch_events.exists():
+                candidates.append(recording_dir)
+
+    if not candidates:
+        return None
+
+    # Sort by modification time, return most recent
+    return max(candidates, key=lambda p: p.stat().st_mtime)
 
 
 @app.command()
@@ -207,6 +360,11 @@ def report(
     results_dir: Path = typer.Argument(..., help="Results directory with report.json"),
 ) -> None:
     """Generate HTML report from JSON results."""
+    import json
+
+    from mutcli.core.executor import StepResult, TestResult
+    from mutcli.core.report import ReportGenerator
+
     if not results_dir.exists():
         console.print(f"[red]Error:[/red] Directory not found: {results_dir}")
         raise typer.Exit(1)
@@ -216,15 +374,51 @@ def report(
         console.print(f"[red]Error:[/red] report.json not found in {results_dir}")
         raise typer.Exit(1)
 
-    console.print(f"[blue]Generating report from:[/blue] {json_file}")
+    console.print(f"Generating report from: {json_file}")
 
-    # TODO: Implement report generation
-    # from mutcli.core.report_generator import ReportGenerator
-    # generator = ReportGenerator()
-    # html_path = generator.generate(json_file)
-    # console.print(f"[green]Generated:[/green] {html_path}")
+    # Load JSON data
+    with open(json_file) as f:
+        data = json.load(f)
 
-    console.print("[yellow]Not yet implemented[/yellow]")
+    # Convert to TestResult
+    step_results = [
+        StepResult(
+            step_number=s.get("number", i + 1),
+            action=s.get("action", "unknown"),
+            status=s.get("status", "passed"),
+            duration=_parse_duration(s.get("duration", "0.0s")),
+            error=s.get("error"),
+        )
+        for i, s in enumerate(data.get("steps", []))
+    ]
+
+    result = TestResult(
+        name=data.get("test", "unknown"),
+        status=data.get("status", "passed"),
+        duration=_parse_duration(data.get("duration", "0.0s")),
+        steps=step_results,
+        error=data.get("error"),
+    )
+
+    # Generate HTML
+    generator = ReportGenerator(results_dir)
+    html_path = generator.generate_html(result)
+
+    console.print(f"[green]Generated:[/green] {html_path}")
+
+
+def _parse_duration(duration_str: str) -> float:
+    """Parse duration string to float.
+
+    Args:
+        duration_str: Duration string like "1.2s" or "0.5s"
+
+    Returns:
+        Duration in seconds as float
+    """
+    if isinstance(duration_str, (int, float)):
+        return float(duration_str)
+    return float(duration_str.rstrip("s"))
 
 
 def _generate_junit(result: TestResult, path: Path) -> None:
