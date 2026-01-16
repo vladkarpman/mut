@@ -1,7 +1,9 @@
 """Tests for ScrcpyService."""
 
 import io
+import tempfile
 import time
+from pathlib import Path
 
 import pytest
 from PIL import Image
@@ -128,6 +130,62 @@ class TestScrcpyServiceScreenshot:
             elapsed_ms = (time.perf_counter() - start) * 1000
 
             assert elapsed_ms < 100, f"Screenshot took {elapsed_ms:.1f}ms, expected <100ms"
+
+        finally:
+            service.disconnect()
+
+
+class TestScrcpyServiceRecording:
+    """Test video recording functionality."""
+
+    def test_start_recording_creates_file(self, device_id):
+        """Should start recording and create output file."""
+        service = ScrcpyService(device_id)
+        service.connect()
+
+        try:
+            time.sleep(0.5)
+
+            with tempfile.TemporaryDirectory() as tmpdir:
+                output_path = Path(tmpdir) / "test.mp4"
+
+                result = service.start_recording(str(output_path))
+
+                assert result["success"] is True
+                assert service.is_recording is True
+
+                # Record for 2 seconds
+                time.sleep(2)
+
+                stop_result = service.stop_recording()
+
+                assert stop_result["success"] is True
+                assert stop_result["duration_seconds"] >= 1.5
+                assert output_path.exists()
+                assert output_path.stat().st_size > 0
+
+        finally:
+            service.disconnect()
+
+    def test_start_recording_fails_when_not_connected(self, device_id):
+        """Should fail if not connected."""
+        service = ScrcpyService(device_id)
+
+        result = service.start_recording("/tmp/test.mp4")
+
+        assert result["success"] is False
+        assert "Not connected" in result["error"]
+
+    def test_stop_recording_fails_when_not_recording(self, device_id):
+        """Should fail if not recording."""
+        service = ScrcpyService(device_id)
+        service.connect()
+
+        try:
+            result = service.stop_recording()
+
+            assert result["success"] is False
+            assert "No recording" in result["error"]
 
         finally:
             service.disconnect()
