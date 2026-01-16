@@ -1,5 +1,6 @@
 """Test report generation."""
 
+import html
 import json
 from datetime import datetime
 from pathlib import Path
@@ -94,6 +95,9 @@ class ReportGenerator:
             "skipped": "#f59e0b",
         }
 
+        # Escape user-controlled values to prevent XSS
+        test_name = html.escape(data["test"])
+
         steps_html = ""
         for step in data["steps"]:
             color = status_color.get(step["status"], "#6b7280")
@@ -105,13 +109,17 @@ class ReportGenerator:
                 icon = "[SKIP]"
             error_html = ""
             if step["error"]:
-                error_html = f'<div class="error">{step["error"]}</div>'
+                escaped_error = html.escape(step["error"])
+                error_html = f'<div class="error">{escaped_error}</div>'
+            escaped_action = html.escape(step["action"])
             steps_html += f"""
-            <div class="step">
-                <span class="icon">{icon}</span>
-                <span class="action">Step {step["number"]}: {step["action"]}</span>
-                <span class="duration">{step["duration"]}</span>
-                <span class="status" style="color: {color}">{step["status"]}</span>
+            <div class="step-wrapper">
+                <div class="step">
+                    <span class="icon">{icon}</span>
+                    <span class="action">Step {step["number"]}: {escaped_action}</span>
+                    <span class="duration">{step["duration"]}</span>
+                    <span class="status" style="color: {color}">{step["status"]}</span>
+                </div>
                 {error_html}
             </div>
             """
@@ -142,22 +150,22 @@ class ReportGenerator:
         .stat-label { color: #94a3b8; }
         .status { font-weight: bold; }
         .steps { background: #1e293b; padding: 20px; border-radius: 8px; }
+        .step-wrapper { padding: 12px 0; border-bottom: 1px solid #334155; }
+        .step-wrapper:last-child { border-bottom: none; }
         .step {
             display: flex; align-items: center; gap: 12px;
-            padding: 12px 0; border-bottom: 1px solid #334155;
         }
-        .step:last-child { border-bottom: none; }
         .icon { font-size: 1.2rem; }
         .action { flex: 1; }
         .duration { color: #94a3b8; }
-        .error { color: #fca5a5; font-size: 0.9rem; margin-top: 4px; }
+        .error { color: #fca5a5; font-size: 0.9rem; margin-top: 8px; padding-left: 32px; }
         """
 
         return f"""<!DOCTYPE html>
 <html>
 <head>
     <meta charset="UTF-8">
-    <title>Test Report: {data["test"]}</title>
+    <title>Test Report: {test_name}</title>
     <style>{css}</style>
 </head>
 <body>
@@ -166,7 +174,7 @@ class ReportGenerator:
 
         <div class="summary">
             <div>
-                <strong>Test:</strong> {data["test"]}<br>
+                <strong>Test:</strong> {test_name}<br>
                 <strong>Status:</strong>
                 <span class="status" style="color: {main_color}">{status_upper}</span><br>
                 <strong>Duration:</strong> {data["duration"]}<br>
