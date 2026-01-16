@@ -134,48 +134,58 @@ class Recorder:
         recording_dir = self._output_dir / "recording"
         recording_dir.mkdir(parents=True, exist_ok=True)
 
-        # Connect ScrcpyService
-        self._scrcpy = ScrcpyService(self._device_id)
-        if not self._scrcpy.connect():
-            return {"success": False, "error": "Failed to connect ScrcpyService"}
-
-        # Start video recording
         video_path = str(recording_dir / "recording.mp4")
-        recording_result = self._scrcpy.start_recording(video_path)
-        if not recording_result.get("success"):
-            self._scrcpy.disconnect()
+
+        try:
+            # Connect ScrcpyService
+            self._scrcpy = ScrcpyService(self._device_id)
+            if not self._scrcpy.connect():
+                self._scrcpy = None
+                return {"success": False, "error": "Failed to connect ScrcpyService"}
+
+            # Start video recording
+            recording_result = self._scrcpy.start_recording(video_path)
+            if not recording_result.get("success"):
+                self._cleanup_scrcpy()
+                return {
+                    "success": False,
+                    "error": f"Failed to start video recording: {recording_result.get('error')}",
+                }
+
+            # Start touch monitor
+            self._touch_monitor = TouchMonitor(self._device_id)
+            if not self._touch_monitor.start():
+                self._cleanup_scrcpy()
+                self._touch_monitor = None
+                return {"success": False, "error": "Failed to start touch monitor"}
+
+            # Set recording state BEFORE saving state file (Issue 5)
+            self._start_time = time.time()
+            self._recording = True
+
+            # Save state file
+            state = RecordingState(
+                name=self._name,
+                device_id=self._device_id,
+                output_dir=self._output_dir,
+                start_time=self._start_time,
+            )
+            state.save(self.STATE_FILE)
+
+            logger.info(f"Recording started: {self._name}")
+
             return {
-                "success": False,
-                "error": f"Failed to start video recording: {recording_result.get('error')}",
+                "success": True,
+                "name": self._name,
+                "output_dir": str(self._output_dir),
+                "video_path": video_path,
             }
 
-        # Start touch monitor
-        self._touch_monitor = TouchMonitor(self._device_id)
-        if not self._touch_monitor.start():
-            self._scrcpy.stop_recording()
-            self._scrcpy.disconnect()
-            return {"success": False, "error": "Failed to start touch monitor"}
-
-        # Save state
-        self._start_time = time.time()
-        self._recording = True
-
-        state = RecordingState(
-            name=self._name,
-            device_id=self._device_id,
-            output_dir=self._output_dir,
-            start_time=self._start_time,
-        )
-        state.save(self.STATE_FILE)
-
-        logger.info(f"Recording started: {self._name}")
-
-        return {
-            "success": True,
-            "name": self._name,
-            "output_dir": str(self._output_dir),
-            "video_path": video_path,
-        }
+        except Exception as e:
+            # Rollback on any unexpected exception (Issue 3)
+            logger.error(f"Failed to start recording: {e}")
+            self._cleanup_on_start_failure()
+            return {"success": False, "error": f"Failed to start recording: {e}"}
 
     def stop(self) -> dict[str, Any]:
         """Stop recording and save artifacts.
@@ -189,29 +199,45 @@ class Recorder:
         if not self._recording:
             return {"success": False, "error": "Not recording"}
 
-        # Get touch events before stopping
+        # Stop touch monitor BEFORE getting events to prevent race condition (Issue 1)
         events = []
         if self._touch_monitor:
-            events = self._touch_monitor.get_events()
-            self._touch_monitor.stop()
+            try:
+                self._touch_monitor.stop()
+                events = self._touch_monitor.get_events()
+            except Exception as e:
+                logger.warning(f"Error stopping touch monitor: {e}")
 
-        # Stop video recording
+        # Stop video recording with proper cleanup (Issue 2)
         stop_result = {}
         if self._scrcpy:
-            stop_result = self._scrcpy.stop_recording()
-            self._scrcpy.disconnect()
+            try:
+                stop_result = self._scrcpy.stop_recording()
+            except Exception as e:
+                logger.warning(f"Error stopping video recording: {e}")
+            try:
+                self._scrcpy.disconnect()
+            except Exception as e:
+                logger.warning(f"Error disconnecting scrcpy: {e}")
 
-        # Save touch events
+        # Save touch events with exception handling (Issue 4)
         recording_dir = self._output_dir / "recording"
         touch_events_path = recording_dir / "touch_events.json"
 
-        events_data = [event.to_dict() for event in events]
-        with open(touch_events_path, "w") as f:
-            json.dump(events_data, f, indent=2)
+        try:
+            events_data = [event.to_dict() for event in events]
+            with open(touch_events_path, "w") as f:
+                json.dump(events_data, f, indent=2)
+        except Exception as e:
+            logger.error(f"Failed to save touch events: {e}")
+            # Continue cleanup even if save fails
 
-        # Clean up state file
-        if self.STATE_FILE.exists():
-            self.STATE_FILE.unlink()
+        # Clean up state file with exception handling (Issue 4)
+        try:
+            if self.STATE_FILE.exists():
+                self.STATE_FILE.unlink()
+        except Exception as e:
+            logger.warning(f"Error cleaning up state file: {e}")
 
         self._recording = False
 
@@ -226,6 +252,31 @@ class Recorder:
             "video_path": stop_result.get("output_path"),
             "touch_events_path": str(touch_events_path),
         }
+
+    def _cleanup_scrcpy(self) -> None:
+        """Clean up ScrcpyService resources safely."""
+        if self._scrcpy:
+            try:
+                self._scrcpy.stop_recording()
+            except Exception as e:
+                logger.warning(f"Error stopping recording during cleanup: {e}")
+            try:
+                self._scrcpy.disconnect()
+            except Exception as e:
+                logger.warning(f"Error disconnecting scrcpy during cleanup: {e}")
+            self._scrcpy = None
+
+    def _cleanup_on_start_failure(self) -> None:
+        """Clean up all resources after a failed start attempt."""
+        if self._touch_monitor:
+            try:
+                self._touch_monitor.stop()
+            except Exception as e:
+                logger.warning(f"Error stopping touch monitor during cleanup: {e}")
+            self._touch_monitor = None
+
+        self._cleanup_scrcpy()
+        self._recording = False
 
     @classmethod
     def load_active(cls) -> "Recorder | None":
