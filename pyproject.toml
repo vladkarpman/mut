@@ -3,7 +3,7 @@ requires = ["hatchling"]
 build-backend = "hatchling.build"
 
 [project]
-name = "pymut"
+name = "muit"
 version = "0.1.0"
 description = "Mobile UI Testing CLI - Run YAML-based mobile tests anywhere"
 readme = "README.md"
@@ -47,16 +47,16 @@ dev = [
 ]
 
 [project.scripts]
-pymut = "pymut.cli:app"
+muit = "muit.cli:app"
 
 [project.urls]
-Homepage = "https://github.com/vladkarpman/mut"
-Documentation = "https://github.com/vladkarpman/mut#readme"
-Repository = "https://github.com/vladkarpman/mut"
-Issues = "https://github.com/vladkarpman/mut/issues"
+Homepage = "https://github.com/vladkarpman/muit"
+Documentation = "https://github.com/vladkarpman/muit#readme"
+Repository = "https://github.com/vladkarpman/muit"
+Issues = "https://github.com/vladkarpman/muit/issues"
 
 [tool.hatch.build.targets.wheel]
-packages = ["pymut"]
+packages = ["muit"]
 
 [tool.ruff]
 line-length = 100

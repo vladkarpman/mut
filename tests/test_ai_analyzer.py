@@ -3,7 +3,7 @@
 import os
 from unittest.mock import MagicMock, patch
 
-from pymut.core.ai_analyzer import AIAnalyzer
+from muit.core.ai_analyzer import AIAnalyzer
 
 
 class TestAIAnalyzerInit:
@@ -57,7 +57,7 @@ class TestVerifyScreen:
         assert result["skipped"] is True
         assert "skipped" in result["reason"].lower() or "no api key" in result["reason"].lower()
 
-    @patch("pymut.core.ai_analyzer.genai")
+    @patch("muit.core.ai_analyzer.genai")
     def test_calls_gemini_api_with_image(self, mock_genai):
         """Should call Gemini API with image and prompt."""
         # Setup mock
@@ -84,7 +84,7 @@ class TestVerifyScreen:
         assert result["reason"] == "Screen shows login form"
         mock_client.models.generate_content.assert_called_once()
 
-    @patch("pymut.core.ai_analyzer.genai")
+    @patch("muit.core.ai_analyzer.genai")
     def test_handles_json_in_markdown_code_block(self, mock_genai):
         """Should extract JSON from markdown code blocks."""
         mock_client = MagicMock()
@@ -107,7 +107,7 @@ class TestVerifyScreen:
         assert result["pass"] is False
         assert "Not a login screen" in result["reason"]
 
-    @patch("pymut.core.ai_analyzer.genai")
+    @patch("muit.core.ai_analyzer.genai")
     def test_handles_api_error_gracefully(self, mock_genai):
         """Should handle API errors gracefully."""
         mock_client = MagicMock()
@@ -148,7 +148,7 @@ class TestIfScreen:
         # When AI is unavailable, default to False (don't execute conditional branch)
         assert result is False
 
-    @patch("pymut.core.ai_analyzer.genai")
+    @patch("muit.core.ai_analyzer.genai")
     def test_returns_true_when_condition_met(self, mock_genai):
         """Should return True when condition is met."""
         mock_client = MagicMock()
@@ -170,7 +170,7 @@ class TestIfScreen:
 
         assert result is True
 
-    @patch("pymut.core.ai_analyzer.genai")
+    @patch("muit.core.ai_analyzer.genai")
     def test_returns_false_when_condition_not_met(self, mock_genai):
         """Should return False when condition is not met."""
         mock_client = MagicMock()
@@ -217,7 +217,7 @@ class TestAnalyzeStep:
         assert "action" in result
         assert "after" in result
 
-    @patch("pymut.core.ai_analyzer.genai")
+    @patch("muit.core.ai_analyzer.genai")
     def test_analyzes_before_after_frames(self, mock_genai):
         """Should analyze before/after frames and return descriptions."""
         mock_client = MagicMock()
