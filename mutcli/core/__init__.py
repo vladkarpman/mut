@@ -7,6 +7,7 @@ from mutcli.core.executor import StepResult, TestExecutor, TestResult
 from mutcli.core.parser import ParseError, TestParser
 from mutcli.core.report import ReportGenerator
 from mutcli.core.scrcpy_service import ScrcpyService
+from mutcli.core.touch_monitor import TouchEvent, TouchMonitor
 
 __all__ = [
     "AIAnalyzer",
@@ -22,4 +23,6 @@ __all__ = [
     "TestParser",
     "TestResult",
     "TimeoutConfig",
+    "TouchEvent",
+    "TouchMonitor",
 ]
