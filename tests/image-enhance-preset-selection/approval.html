@@ -677,7 +677,46 @@
             display: flex;
             align-items: center;
             gap: 8px;
-            min-width: 140px;
+            min-width: 160px;
+        }
+
+        /* Video Toggle Button - Pill style */
+        .video-toggle-btn {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            padding: 10px 20px;
+            background: var(--md-surface-container-high);
+            border: 1px solid var(--md-outline-variant);
+            border-radius: 100px;
+            color: var(--md-on-surface);
+            font-size: 0.875rem;
+            font-weight: 500;
+            cursor: pointer;
+            transition: all var(--md-duration-short3) var(--md-easing-standard);
+        }
+
+        .video-toggle-btn:hover {
+            background: var(--md-surface-container-highest);
+            border-color: var(--md-outline);
+        }
+
+        .video-toggle-btn:active {
+            transform: scale(0.98);
+        }
+
+        .video-toggle-icon {
+            font-size: 0.75rem;
+            transition: transform var(--md-duration-short3) var(--md-easing-standard);
+        }
+
+        .video-toggle-btn.collapsed .video-toggle-icon {
+            transform: rotate(180deg);
+        }
+
+        .video-toggle-label {
+            color: var(--md-primary);
+            font-weight: 600;
         }
 
         .header-center {
@@ -685,6 +724,13 @@
             align-items: center;
             justify-content: center;
             flex: 1;
+        }
+
+        .header-title-group {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            gap: 4px;
         }
 
         .header h1 {
@@ -695,11 +741,35 @@
             color: var(--md-on-surface);
         }
 
+        .header-meta {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            font-size: 0.75rem;
+            color: var(--md-on-surface-variant);
+        }
+
+        .header-meta-item {
+            display: flex;
+            align-items: center;
+            gap: 4px;
+        }
+
+        .header-meta-item .material-symbols-outlined {
+            font-size: 14px;
+            opacity: 0.7;
+        }
+
+        .header-meta-divider {
+            opacity: 0.4;
+            font-size: 0.625rem;
+        }
+
         .header-right {
             display: flex;
             align-items: center;
             gap: 12px;
-            min-width: 140px;
+            min-width: 200px;
             justify-content: flex-end;
         }
 
@@ -2840,9 +2910,27 @@
             grid-template-columns: repeat(2, minmax(0, 1fr));
             gap: 12px;
             padding: 16px;
-            padding-top: 20px;
+            padding-top: 24px;
             background: var(--md-surface-container);
             margin-top: auto; /* Push to bottom of column */
+            position: relative;
+        }
+
+        /* Horizontal divider above gesture controls */
+        .frame-gesture-info.gesture-grid::before {
+            content: '';
+            position: absolute;
+            top: 0;
+            left: 16px;
+            right: 16px;
+            height: 1px;
+            background: linear-gradient(
+                90deg,
+                transparent 0%,
+                var(--md-outline-variant) 15%,
+                var(--md-outline-variant) 85%,
+                transparent 100%
+            );
         }
 
         /* Stack vertically on narrow containers */
@@ -3000,13 +3088,18 @@
            Enhanced Gesture Indicators - Material Touch Feedback
            ═══════════════════════════════════════════════════════════ */
 
-        /* Tap indicator - Material ripple effect */
+        /* Tap indicator - High contrast with dark outline */
         .tap-indicator {
             position: absolute;
-            width: 28px;
-            height: 28px;
+            width: 36px;
+            height: 36px;
             border-radius: 50%;
-            background: radial-gradient(circle, rgba(208, 188, 255, 0.9) 0%, rgba(208, 188, 255, 0.7) 50%, transparent 70%);
+            background: var(--md-primary);
+            border: 3px solid #fff;
+            box-shadow:
+                0 0 0 2px rgba(0, 0, 0, 0.8),
+                0 4px 12px rgba(0, 0, 0, 0.5),
+                0 0 20px rgba(208, 188, 255, 0.6);
             transform: translate(-50%, -50%);
             pointer-events: none;
             animation: tapBounce 1.5s cubic-bezier(0.34, 1.56, 0.64, 1) infinite;
@@ -3018,23 +3111,24 @@
             position: absolute;
             top: 50%;
             left: 50%;
-            width: 10px;
-            height: 10px;
+            width: 14px;
+            height: 14px;
             background: #fff;
             border-radius: 50%;
             transform: translate(-50%, -50%);
-            box-shadow: 0 2px 8px rgba(0, 0, 0, 0.3);
+            box-shadow: 0 2px 8px rgba(0, 0, 0, 0.4);
         }
 
-        /* Ripple ring 1 */
+        /* Ripple ring */
         .tap-indicator::after {
             content: '';
             position: absolute;
             top: 50%;
             left: 50%;
-            width: 50px;
-            height: 50px;
-            border: 2px solid rgba(208, 188, 255, 0.6);
+            width: 60px;
+            height: 60px;
+            border: 3px solid #fff;
+            box-shadow: 0 0 0 2px rgba(0, 0, 0, 0.5);
             border-radius: 50%;
             transform: translate(-50%, -50%);
             animation: tapRipple1 1.5s ease-out infinite;
@@ -3043,75 +3137,84 @@
         @keyframes tapBounce {
             0%, 100% {
                 transform: translate(-50%, -50%) scale(1);
-                filter: drop-shadow(0 0 8px rgba(208, 188, 255, 0.8));
+                filter: drop-shadow(0 0 12px rgba(208, 188, 255, 1));
             }
             50% {
                 transform: translate(-50%, -50%) scale(0.85);
-                filter: drop-shadow(0 0 12px rgba(208, 188, 255, 1));
+                filter: drop-shadow(0 0 20px rgba(208, 188, 255, 1));
             }
         }
 
         @keyframes tapRipple1 {
             0% {
-                transform: translate(-50%, -50%) scale(0.5);
-                opacity: 0.8;
+                transform: translate(-50%, -50%) scale(0.6);
+                opacity: 1;
             }
             100% {
-                transform: translate(-50%, -50%) scale(1.5);
+                transform: translate(-50%, -50%) scale(1.6);
                 opacity: 0;
             }
         }
 
-        /* Long press indicator - Progress ring style */
+        /* Long press indicator - High contrast progress ring */
         .long-press-indicator {
             position: absolute;
-            width: 44px;
-            height: 44px;
+            width: 52px;
+            height: 52px;
             border-radius: 50%;
-            background: transparent;
+            background: rgba(0, 0, 0, 0.4);
+            border: 3px solid #fff;
+            box-shadow:
+                0 0 0 2px rgba(0, 0, 0, 0.8),
+                0 4px 16px rgba(0, 0, 0, 0.5),
+                0 0 20px rgba(208, 188, 255, 0.5);
             transform: translate(-50%, -50%);
             pointer-events: none;
         }
 
-        /* Outer progress ring */
+        /* Inner dot */
         .long-press-indicator::before {
             content: '';
             position: absolute;
-            top: 0;
-            left: 0;
-            width: 100%;
-            height: 100%;
+            top: 50%;
+            left: 50%;
+            width: 18px;
+            height: 18px;
+            background: var(--md-primary);
+            border: 2px solid #fff;
             border-radius: 50%;
-            border: 3px solid rgba(208, 188, 255, 0.2);
-            box-sizing: border-box;
+            transform: translate(-50%, -50%);
+            animation: longPressPulse 1s ease-in-out infinite;
         }
 
         /* Animated progress arc */
         .long-press-indicator::after {
             content: '';
             position: absolute;
-            top: 0;
-            left: 0;
-            width: 100%;
-            height: 100%;
+            top: -3px;
+            left: -3px;
+            width: calc(100% + 6px);
+            height: calc(100% + 6px);
             border-radius: 50%;
-            border: 3px solid transparent;
+            border: 4px solid transparent;
             border-top-color: var(--md-primary);
             border-right-color: var(--md-primary);
             box-sizing: border-box;
-            animation: longPressProgress 2s linear infinite;
+            animation: longPressProgress 1.5s linear infinite;
+            filter: drop-shadow(0 0 6px rgba(208, 188, 255, 0.8));
         }
 
-        /* Inner pulsing dot - created via extra element in HTML or JS */
+        @keyframes longPressPulse {
+            0%, 100% { transform: translate(-50%, -50%) scale(1); }
+            50% { transform: translate(-50%, -50%) scale(0.8); }
+        }
 
         @keyframes longPressProgress {
             0% {
                 transform: rotate(0deg);
-                filter: drop-shadow(0 0 4px rgba(208, 188, 255, 0.5));
             }
             100% {
                 transform: rotate(360deg);
-                filter: drop-shadow(0 0 8px rgba(208, 188, 255, 0.8));
             }
         }
 
@@ -4492,10 +4595,31 @@
 <body>
     <header class="header">
         <div class="header-left">
-            <button class="btn btn-secondary btn-small" onclick="toggleVideoPanel()" id="videoToggleBtn">◀ Video</button>
+            <button class="video-toggle-btn" onclick="toggleVideoPanel()" id="videoToggleBtn" title="Toggle video panel">
+                <span class="video-toggle-icon" id="videoToggleIcon">◀</span>
+                <span class="video-toggle-label">Video</span>
+            </button>
         </div>
         <div class="header-center">
-            <h1>Image Enhance Preset Selection</h1>
+            <div class="header-title-group">
+                <h1>Image Enhance Preset Selection</h1>
+                <div class="header-meta">
+                    <span class="header-meta-item" id="headerStepCount">
+                        <span class="material-symbols-outlined">touch_app</span>
+                        <span id="stepCountValue">0</span> steps
+                    </span>
+                    <span class="header-meta-divider">•</span>
+                    <span class="header-meta-item" id="headerDuration">
+                        <span class="material-symbols-outlined">schedule</span>
+                        <span id="durationValue">0:00</span>
+                    </span>
+                    <span class="header-meta-divider">•</span>
+                    <span class="header-meta-item" id="headerVerifications">
+                        <span class="material-symbols-outlined">verified</span>
+                        <span id="verificationCountValue">0</span> verifications
+                    </span>
+                </div>
+            </div>
         </div>
         <div class="header-right">
             <button class="btn btn-secondary" onclick="discardTest()">Discard</button>
@@ -5064,7 +5188,14 @@
             renderSteps();
             initVideo();
             updateHeaderStats();
+            updateHeaderMeta();
             setTimeout(startFrameAnimations, 200);
+
+            // Update header meta when video metadata loads
+            const video = document.getElementById('video');
+            if (video) {
+                video.addEventListener('loadedmetadata', updateHeaderMeta);
+            }
         });
 
         // Update header stats
@@ -5165,9 +5296,31 @@
         function toggleVideoPanel() {
             const panel = document.getElementById('videoPanel');
             const toggle = document.getElementById('videoToggleBtn');
+            const icon = document.getElementById('videoToggleIcon');
 
             panel.classList.toggle('collapsed');
-            toggle.textContent = panel.classList.contains('collapsed') ? '▶ Video' : '◀ Video';
+            toggle.classList.toggle('collapsed');
+            icon.textContent = panel.classList.contains('collapsed') ? '▶' : '◀';
+        }
+
+        function updateHeaderMeta() {
+            // Update step count
+            document.getElementById('stepCountValue').textContent = steps.length;
+
+            // Update duration from video
+            const video = document.getElementById('video');
+            if (video && video.duration && !isNaN(video.duration)) {
+                document.getElementById('durationValue').textContent = formatTime(video.duration);
+            }
+
+            // Count verifications
+            let verificationCount = 0;
+            steps.forEach(step => {
+                if (step.verifications) {
+                    verificationCount += step.verifications.length;
+                }
+            });
+            document.getElementById('verificationCountValue').textContent = verificationCount;
         }
 
         function seekToStep(stepId) {
@@ -5182,6 +5335,7 @@
         function renderSteps() {
             const panel = document.getElementById('stepsPanel');
             panel.innerHTML = steps.map((step, index) => renderStepCard(step, index)).join('');
+            updateHeaderMeta();
         }
 
         function renderStepCard(step, index) {

@@ -54,4 +54,4 @@ jobs:
           pip install -e ".[dev]"
 
       - name: Type check with mypy
-        run: mypy muit/ --ignore-missing-imports
+        run: mypy mobileuitest/ --ignore-missing-imports

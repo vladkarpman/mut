@@ -3,7 +3,7 @@ requires = ["hatchling"]
 build-backend = "hatchling.build"
 
 [project]
-name = "muit"
+name = "mobileuitest"
 version = "0.1.0"
 description = "Mobile UI Testing CLI - Run YAML-based mobile tests anywhere"
 readme = "README.md"
@@ -47,16 +47,16 @@ dev = [
 ]
 
 [project.scripts]
-muit = "muit.cli:app"
+mobileuitest = "mobileuitest.cli:app"
 
 [project.urls]
-Homepage = "https://github.com/vladkarpman/muit"
-Documentation = "https://github.com/vladkarpman/muit#readme"
-Repository = "https://github.com/vladkarpman/muit"
-Issues = "https://github.com/vladkarpman/muit/issues"
+Homepage = "https://github.com/vladkarpman/mobileuitest"
+Documentation = "https://github.com/vladkarpman/mobileuitest#readme"
+Repository = "https://github.com/vladkarpman/mobileuitest"
+Issues = "https://github.com/vladkarpman/mobileuitest/issues"
 
 [tool.hatch.build.targets.wheel]
-packages = ["muit"]
+packages = ["mobileuitest"]
 
 [tool.ruff]
 line-length = 100
