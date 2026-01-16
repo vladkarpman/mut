@@ -100,8 +100,24 @@ Respond with JSON only (no markdown, no code blocks):
             }
 
     def if_screen(self, screenshot: bytes, condition: str) -> bool:
-        """Check if screen matches condition."""
-        raise NotImplementedError("if_screen not yet implemented")
+        """Check if screen matches condition for branching.
+
+        This is a real-time check used for conditional execution.
+        When AI is unavailable, returns False (safe default - don't execute branch).
+
+        Args:
+            screenshot: PNG image bytes
+            condition: Condition to check
+
+        Returns:
+            True if condition is met, False otherwise
+        """
+        if not self.is_available or self._client is None:
+            logger.warning(f"if_screen skipped (no API key): {condition}")
+            return False
+
+        result = self.verify_screen(screenshot, condition)
+        return result.get("pass", False)
 
     def analyze_step(self, before: bytes, after: bytes) -> dict[str, Any]:
         """Analyze before/after frames to describe a step."""

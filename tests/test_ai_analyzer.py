@@ -124,3 +124,64 @@ class TestVerifyScreen:
 
         assert result["pass"] is False
         assert "error" in result["reason"].lower()
+
+
+class TestIfScreen:
+    """Test if_screen method."""
+
+    def test_returns_false_when_no_api_key(self):
+        """Should return False when no API key (safe default)."""
+        analyzer = AIAnalyzer(api_key=None)
+
+        from PIL import Image
+        import io
+        img = Image.new("RGB", (1, 1))
+        buffer = io.BytesIO()
+        img.save(buffer, format="PNG")
+
+        result = analyzer.if_screen(buffer.getvalue(), "some condition")
+
+        # When AI is unavailable, default to False (don't execute conditional branch)
+        assert result is False
+
+    @patch("mut.core.ai_analyzer.genai")
+    def test_returns_true_when_condition_met(self, mock_genai):
+        """Should return True when condition is met."""
+        mock_client = MagicMock()
+        mock_genai.Client.return_value = mock_client
+        mock_response = MagicMock()
+        mock_response.text = '{"pass": true, "reason": "Condition met"}'
+        mock_client.models.generate_content.return_value = mock_response
+
+        analyzer = AIAnalyzer(api_key="test-key")
+
+        from PIL import Image
+        import io
+        img = Image.new("RGB", (100, 100))
+        buffer = io.BytesIO()
+        img.save(buffer, format="PNG")
+
+        result = analyzer.if_screen(buffer.getvalue(), "login prompt visible")
+
+        assert result is True
+
+    @patch("mut.core.ai_analyzer.genai")
+    def test_returns_false_when_condition_not_met(self, mock_genai):
+        """Should return False when condition is not met."""
+        mock_client = MagicMock()
+        mock_genai.Client.return_value = mock_client
+        mock_response = MagicMock()
+        mock_response.text = '{"pass": false, "reason": "Condition not met"}'
+        mock_client.models.generate_content.return_value = mock_response
+
+        analyzer = AIAnalyzer(api_key="test-key")
+
+        from PIL import Image
+        import io
+        img = Image.new("RGB", (100, 100))
+        buffer = io.BytesIO()
+        img.save(buffer, format="PNG")
+
+        result = analyzer.if_screen(buffer.getvalue(), "error dialog visible")
+
+        assert result is False
