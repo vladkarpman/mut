@@ -3,7 +3,11 @@
 from pathlib import Path
 from typing import Optional
 
+from dotenv import load_dotenv
 import typer
+
+# Load .env file from current directory or parent directories
+load_dotenv()
 from rich.console import Console
 from rich.table import Table
 
