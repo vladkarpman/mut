@@ -11,6 +11,9 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
+      - name: Install system dependencies
+        run: sudo apt-get update && sudo apt-get install -y portaudio19-dev
+
       - name: Set up Python
         uses: actions/setup-python@v5
         with:
@@ -31,6 +34,9 @@ jobs:
       contents: write  # For creating GitHub release
     steps:
       - uses: actions/checkout@v4
+
+      - name: Install system dependencies
+        run: sudo apt-get update && sudo apt-get install -y portaudio19-dev
 
       - name: Set up Python
         uses: actions/setup-python@v5
