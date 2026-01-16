@@ -3,8 +3,8 @@ requires = ["hatchling"]
 build-backend = "hatchling.build"
 
 [project]
-name = "mobileuitest"
-version = "0.1.0"
+name = "mutcli"
+version = "0.1.1"
 description = "Mobile UI Testing CLI - Run YAML-based mobile tests anywhere"
 readme = "README.md"
 license = "MIT"
@@ -47,16 +47,16 @@ dev = [
 ]
 
 [project.scripts]
-mobileuitest = "mobileuitest.cli:app"
+mut = "mutcli.cli:app"
 
 [project.urls]
-Homepage = "https://github.com/vladkarpman/mobileuitest"
-Documentation = "https://github.com/vladkarpman/mobileuitest#readme"
-Repository = "https://github.com/vladkarpman/mobileuitest"
-Issues = "https://github.com/vladkarpman/mobileuitest/issues"
+Homepage = "https://github.com/vladkarpman/mut"
+Documentation = "https://github.com/vladkarpman/mut#readme"
+Repository = "https://github.com/vladkarpman/mut"
+Issues = "https://github.com/vladkarpman/mut/issues"
 
 [tool.hatch.build.targets.wheel]
-packages = ["mobileuitest"]
+packages = ["mutcli"]
 
 [tool.ruff]
 line-length = 100

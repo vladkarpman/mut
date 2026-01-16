@@ -677,46 +677,6 @@
             display: flex;
             align-items: center;
             gap: 8px;
-            min-width: 160px;
-        }
-
-        /* Video Toggle Button - Pill style */
-        .video-toggle-btn {
-            display: flex;
-            align-items: center;
-            gap: 8px;
-            padding: 10px 20px;
-            background: var(--md-surface-container-high);
-            border: 1px solid var(--md-outline-variant);
-            border-radius: 100px;
-            color: var(--md-on-surface);
-            font-size: 0.875rem;
-            font-weight: 500;
-            cursor: pointer;
-            transition: all var(--md-duration-short3) var(--md-easing-standard);
-        }
-
-        .video-toggle-btn:hover {
-            background: var(--md-surface-container-highest);
-            border-color: var(--md-outline);
-        }
-
-        .video-toggle-btn:active {
-            transform: scale(0.98);
-        }
-
-        .video-toggle-icon {
-            font-size: 0.75rem;
-            transition: transform var(--md-duration-short3) var(--md-easing-standard);
-        }
-
-        .video-toggle-btn.collapsed .video-toggle-icon {
-            transform: rotate(180deg);
-        }
-
-        .video-toggle-label {
-            color: var(--md-primary);
-            font-weight: 600;
         }
 
         .header-center {
@@ -726,51 +686,78 @@
             flex: 1;
         }
 
-        .header-title-group {
-            display: flex;
-            flex-direction: column;
-            align-items: center;
-            gap: 4px;
-        }
-
         .header h1 {
-            font-size: 1.125rem;
-            font-weight: 400;
+            font-size: 1rem;
+            font-weight: 500;
             margin: 0;
-            letter-spacing: 0;
+            letter-spacing: 0.02em;
             color: var(--md-on-surface);
+            white-space: nowrap;
         }
 
         .header-meta {
             display: flex;
             align-items: center;
-            gap: 8px;
-            font-size: 0.75rem;
+            gap: 12px;
+            font-size: 0.8125rem;
             color: var(--md-on-surface-variant);
+            background: var(--md-surface-container);
+            padding: 8px 16px;
+            border-radius: 100px;
+            border: 1px solid var(--md-outline-variant);
         }
 
         .header-meta-item {
             display: flex;
             align-items: center;
-            gap: 4px;
+            gap: 5px;
         }
 
         .header-meta-item .material-symbols-outlined {
-            font-size: 14px;
-            opacity: 0.7;
+            font-size: 15px;
+            opacity: 0.6;
         }
 
         .header-meta-divider {
-            opacity: 0.4;
-            font-size: 0.625rem;
+            opacity: 0.25;
+            font-size: 0.5rem;
         }
 
         .header-right {
             display: flex;
             align-items: center;
             gap: 12px;
-            min-width: 200px;
             justify-content: flex-end;
+        }
+
+        /* Export Button - Minimal */
+        .export-btn-minimal {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            padding: 10px 16px;
+            background: transparent;
+            border: 1px solid var(--md-outline-variant);
+            border-radius: 8px;
+            color: var(--md-on-surface);
+            font-size: 0.875rem;
+            font-weight: 500;
+            cursor: pointer;
+            transition: all 0.2s ease;
+        }
+
+        .export-btn-minimal .material-symbols-outlined {
+            font-size: 18px;
+            opacity: 0.7;
+        }
+
+        .export-btn-minimal:hover {
+            background: var(--md-surface-container-high);
+            border-color: var(--md-outline);
+        }
+
+        .export-btn-minimal:active {
+            background: var(--md-surface-container-highest);
         }
 
         .btn-small {
@@ -1146,21 +1133,55 @@
             display: flex;
             justify-content: space-between;
             align-items: center;
-            padding: var(--space-3) var(--space-5);
-            background: var(--bg-secondary);
-            border-bottom: 1px solid var(--border-subtle);
+            padding: 16px 32px;
+            background: var(--md-surface-container);
+            border-bottom: 1px solid var(--md-outline-variant);
         }
 
         .add-step-header h2 {
-            font-size: 0.9375rem;
-            font-weight: 600;
+            font-size: 1.25rem;
+            font-weight: 500;
             margin: 0;
-            letter-spacing: -0.02em;
+            color: var(--md-on-surface);
+            letter-spacing: -0.01em;
         }
 
         .add-step-header-actions {
             display: flex;
-            gap: var(--space-2);
+            gap: 12px;
+        }
+
+        .add-step-header-actions .btn {
+            padding: 10px 20px;
+            border-radius: 20px;
+            font-size: 0.875rem;
+            font-weight: 500;
+        }
+
+        .add-step-header-actions .btn-secondary {
+            background: transparent;
+            border: 1px solid var(--md-outline);
+            color: var(--md-on-surface);
+        }
+
+        .add-step-header-actions .btn-secondary:hover {
+            background: rgba(255, 255, 255, 0.08);
+        }
+
+        .add-step-header-actions .btn-primary {
+            background: var(--md-primary);
+            border: none;
+            color: var(--md-on-primary);
+        }
+
+        .add-step-header-actions .btn-primary:hover:not(:disabled) {
+            background: var(--primary-hover);
+        }
+
+        .add-step-header-actions .btn-primary:disabled {
+            background: var(--md-surface-container-highest);
+            color: var(--md-outline);
+            cursor: not-allowed;
         }
 
         .add-step-body {
@@ -1555,38 +1576,69 @@
         }
 
         /* ========================================
-           3-Column Add Step Layout (New)
+           3-Column Add Step Layout - MD3 Styled
+           Matches main step card layout
            ======================================== */
 
         .add-step-top-bar {
             display: flex;
             align-items: center;
-            gap: 24px;
-            padding: 12px 20px;
-            background: var(--bg-secondary);
-            border-bottom: 1px solid var(--border-color);
+            gap: 32px;
+            padding: 16px 32px;
+            background: var(--md-surface-container-low);
+            border-bottom: 1px solid var(--md-outline-variant);
         }
 
         .add-step-top-section {
             display: flex;
             align-items: center;
-            gap: 10px;
+            gap: 12px;
         }
 
         .add-step-top-section label {
-            font-size: 0.85rem;
-            color: var(--text-secondary);
+            font-size: 0.8125rem;
+            font-weight: 500;
+            color: var(--md-on-surface-variant);
             white-space: nowrap;
+            text-transform: uppercase;
+            letter-spacing: 0.05em;
         }
 
         .add-step-select {
-            padding: 6px 12px;
-            background: var(--bg-tertiary);
-            border: 1px solid var(--border-color);
-            border-radius: 6px;
-            color: var(--text-primary);
-            font-size: 0.85rem;
-            min-width: 160px;
+            padding: 12px 16px;
+            padding-right: 40px;
+            background: var(--md-surface-container-high);
+            border: 1px solid var(--md-outline);
+            border-radius: 8px;
+            color: var(--md-on-surface);
+            font-size: 0.9375rem;
+            min-width: 220px;
+            cursor: pointer;
+            transition: all var(--md-duration-short3) var(--md-easing-standard);
+            appearance: none;
+            background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='24' height='24' viewBox='0 0 24 24' fill='%23cac4d0'%3E%3Cpath d='M7 10l5 5 5-5z'/%3E%3C/svg%3E");
+            background-repeat: no-repeat;
+            background-position: right 8px center;
+        }
+
+        .add-step-select:hover {
+            border-color: var(--md-on-surface);
+            background-color: var(--md-surface-container-highest);
+        }
+
+        .add-step-select:focus {
+            outline: none;
+            border-color: var(--md-primary);
+            border-width: 2px;
+            padding: 11px 15px;
+            padding-right: 39px;
+        }
+
+        .add-step-select option {
+            background: var(--md-surface-container-high);
+            color: var(--md-on-surface);
+            padding: 12px 16px;
+            font-size: 0.9375rem;
         }
 
         .add-step-type-buttons {
@@ -1595,10 +1647,27 @@
         }
 
         .add-step-type-buttons .add-step-type-btn {
-            padding: 6px 14px;
-            font-size: 0.85rem;
+            padding: 10px 18px;
+            font-size: 0.875rem;
             flex-direction: row;
-            gap: 6px;
+            gap: 8px;
+            border-radius: 20px;
+            background: var(--md-surface-container-high);
+            border: 1px solid var(--md-outline-variant);
+            color: var(--md-on-surface);
+            cursor: pointer;
+            transition: all var(--md-duration-short3) var(--md-easing-standard);
+        }
+
+        .add-step-type-buttons .add-step-type-btn:hover {
+            background: var(--md-surface-container-highest);
+            border-color: var(--md-on-surface);
+        }
+
+        .add-step-type-buttons .add-step-type-btn.selected {
+            background: var(--md-primary-container);
+            border-color: var(--md-primary);
+            color: var(--md-on-primary-container);
         }
 
         /* Video area - centered above columns */
@@ -1627,12 +1696,13 @@
             width: 100%;
         }
 
-        /* 3-Column layout */
+        /* 3-Column layout - matches main step frames */
         .add-step-columns {
             display: flex;
             flex: 1;
-            gap: 1px;
-            background: var(--border-color);
+            gap: 20px;
+            padding: 24px 32px;
+            background: var(--md-surface);
             overflow: hidden;
         }
 
@@ -1640,219 +1710,433 @@
             flex: 1;
             display: flex;
             flex-direction: column;
-            padding: 16px;
-            background: var(--bg-primary);
+            background: var(--md-surface-container);
+            border-radius: 16px;
+            overflow: hidden;
             min-width: 0;
+            box-shadow: 0 1px 2px rgba(0, 0, 0, 0.2);
+            transition: all var(--md-duration-short3) var(--md-easing-standard);
         }
 
+        /* Column variants - matching main layout */
+        .add-step-column.before {
+            border: 1px solid var(--md-outline-variant);
+        }
+
+        .add-step-column.action {
+            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.4), 0 0 0 2px var(--md-primary-container);
+            z-index: 1;
+        }
+
+        .add-step-column.after {
+            border: 1px solid var(--md-outline-variant);
+        }
+
+        /* Column headers - matching main layout */
         .add-step-column-header {
-            font-size: 0.6875rem;
+            padding: 14px 16px;
+            text-align: center;
+            font-size: 0.75rem;
             font-weight: 600;
             text-transform: uppercase;
-            color: var(--text-tertiary);
-            letter-spacing: 0.08em;
-            margin-bottom: var(--space-3);
-            text-align: center;
+            letter-spacing: 0.1em;
+            border-radius: 16px 16px 0 0;
         }
 
-        .add-step-column.before .add-step-column-header,
-        .add-step-column.action .add-step-column-header,
-        .add-step-column.after .add-step-column-header {
-            color: var(--text-tertiary);
+        .add-step-column.before .add-step-column-header {
+            background: var(--md-surface-container-high);
+            color: var(--md-on-surface-variant);
+            border-bottom: 1px solid var(--md-outline-variant);
         }
 
         .add-step-column.action .add-step-column-header {
-            color: var(--text-secondary);
+            background: var(--md-primary-container);
+            color: var(--md-on-primary-container);
+            font-weight: 700;
+            letter-spacing: 0.12em;
         }
 
-        /* Frame preview box */
+        .add-step-column.after .add-step-column-header {
+            background: rgba(168, 213, 162, 0.25);
+            color: var(--pass-color);
+            border-bottom: 1px solid rgba(168, 213, 162, 0.3);
+        }
+
+        /* Frame preview box - LARGE images */
         .add-step-frame-preview {
             position: relative;
-            aspect-ratio: 9/16;
-            max-height: 300px;
-            background: var(--bg-tertiary);
-            border: 1px dashed var(--border-default);
-            border-radius: var(--radius-lg);
+            width: 100%;
+            min-height: 400px;
+            max-height: 550px;
+            background: var(--md-surface-dim);
             display: flex;
             align-items: center;
             justify-content: center;
             cursor: pointer;
             overflow: hidden;
-            transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+            transition: all var(--md-duration-short3) var(--md-easing-standard);
         }
 
         .add-step-frame-preview:hover {
-            border-color: var(--border-strong);
-            background: var(--bg-elevated);
-            border-style: solid;
+            background: var(--md-surface-container-low);
         }
 
         .add-step-frame-preview.captured {
-            border-style: solid;
-            border-color: var(--border-strong);
-            background: var(--bg-secondary);
+            background: var(--bg-primary);
         }
 
         .add-step-frame-preview img {
-            width: 100%;
-            height: 100%;
+            max-width: 100%;
+            max-height: 550px;
             object-fit: contain;
         }
 
         .add-step-frame-preview .capture-hint {
-            font-size: 0.8rem;
-            color: var(--text-secondary);
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            gap: 12px;
+            font-size: 0.875rem;
+            color: var(--md-on-surface-variant);
             text-align: center;
-            padding: 12px;
+            padding: 24px;
+        }
+
+        .add-step-frame-preview .capture-hint::before {
+            content: 'add_photo_alternate';
+            font-family: 'Material Symbols Outlined';
+            font-size: 48px;
+            color: var(--md-outline);
         }
 
         .add-step-frame-preview.captured .capture-hint {
             display: none;
         }
 
-        /* Tap indicator inside action frame preview */
+        /* Tap indicator inside action frame preview - high contrast */
         .add-step-frame-preview .add-step-tap-indicator {
             position: absolute;
-            width: 30px;
-            height: 30px;
-            border: 3px solid var(--action-tap);
+            width: 36px;
+            height: 36px;
+            background: var(--md-primary);
+            border: 3px solid #fff;
             border-radius: 50%;
             transform: translate(-50%, -50%);
             pointer-events: none;
-            box-shadow: 0 0 12px rgba(245, 158, 11, 0.5);
+            box-shadow:
+                0 0 0 2px rgba(0, 0, 0, 0.8),
+                0 4px 12px rgba(0, 0, 0, 0.5),
+                0 0 20px rgba(208, 188, 255, 0.6);
+            animation: tapBounce 1.5s cubic-bezier(0.34, 1.56, 0.64, 1) infinite;
         }
 
-        /* Description input */
-        .add-step-desc-input {
-            width: 100%;
+        /* Column content area */
+        .add-step-column-content {
             padding: 8px 10px;
-            margin-top: 10px;
-            background: var(--bg-secondary);
-            border: 1px solid var(--border-color);
-            border-radius: 6px;
-            color: var(--text-primary);
-            font-size: 0.8rem;
-        }
-
-        .add-step-desc-input:focus {
-            outline: none;
-            border-color: var(--accent-color);
-        }
-
-        .add-step-desc-input::placeholder {
-            color: var(--text-secondary);
-        }
-
-        /* Condition/Verification option sections */
-        .add-step-column-option {
-            margin-top: 12px;
-        }
-
-        .btn-add-option {
-            width: 100%;
-            padding: 8px 12px;
-            background: transparent;
-            border: 1px dashed var(--border-color);
-            border-radius: 6px;
-            color: var(--text-secondary);
-            font-size: 0.8rem;
-            cursor: pointer;
-            transition: all 0.15s;
-        }
-
-        .btn-add-option:hover {
-            background: var(--bg-tertiary);
-            border-color: var(--accent-color);
-            color: var(--text-primary);
-        }
-
-        .btn-add-option.active {
-            background: rgba(59, 130, 246, 0.1);
-            border-style: solid;
-            border-color: var(--accent-color);
-            color: var(--accent-color);
-        }
-
-        .add-step-option-fields {
-            margin-top: 8px;
+            padding-bottom: 12px;
             display: flex;
             flex-direction: column;
             gap: 8px;
         }
 
+        /* Description input - MD3 outlined style with floating label (matches main page) */
+        .add-step-desc-wrapper {
+            position: relative;
+            margin: 0;
+        }
+
+        .add-step-desc-input {
+            width: 100%;
+            padding: 12px 14px;
+            padding-top: 18px;
+            background: transparent;
+            border: 1px solid var(--md-outline);
+            border-radius: 8px;
+            color: var(--md-on-surface);
+            font-size: 0.875rem;
+            line-height: 1.5;
+            min-height: 48px;
+            transition: all var(--md-duration-short3) var(--md-easing-standard);
+            box-sizing: border-box;
+        }
+
+        .add-step-desc-wrapper::before {
+            content: 'Description';
+            position: absolute;
+            top: -8px;
+            left: 10px;
+            padding: 0 4px;
+            background: var(--md-surface-container);
+            font-size: 0.6875rem;
+            font-weight: 600;
+            text-transform: uppercase;
+            letter-spacing: 0.05em;
+            color: var(--md-on-surface-variant);
+            z-index: 1;
+        }
+
+        .add-step-desc-input:hover {
+            border-color: var(--md-on-surface);
+            background: rgba(255, 255, 255, 0.02);
+        }
+
+        .add-step-desc-input:focus {
+            outline: none;
+            border-color: var(--md-primary);
+            border-width: 2px;
+            padding: 11px 13px;
+            padding-top: 17px;
+        }
+
+        .add-step-desc-input::placeholder {
+            color: var(--md-on-surface-variant);
+            opacity: 0.6;
+            font-style: italic;
+        }
+
+        /* Condition/Verification option sections - matches main page btn-add-inline */
+        .add-step-column-option {
+            margin-top: 0;
+        }
+
+        .btn-add-option {
+            width: 100%;
+            padding: 12px 16px;
+            background: transparent;
+            border: 1px dashed var(--md-outline);
+            border-radius: 8px;
+            color: var(--md-on-surface-variant);
+            font-size: 0.8125rem;
+            font-weight: 500;
+            letter-spacing: 0.02em;
+            cursor: pointer;
+            transition: all var(--md-duration-short3) var(--md-easing-standard);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 8px;
+            position: relative;
+            overflow: hidden;
+        }
+
+        .btn-add-option .material-symbols-outlined {
+            font-size: 18px;
+        }
+
+        .btn-add-option::after {
+            content: '';
+            position: absolute;
+            inset: 0;
+            border-radius: inherit;
+            background-color: transparent;
+            transition: background-color var(--md-duration-short3) var(--md-easing-standard);
+            pointer-events: none;
+        }
+
+        .btn-add-option:hover {
+            border-style: solid;
+            border-color: var(--md-on-surface);
+            color: var(--md-on-surface);
+        }
+
+        .btn-add-option:hover::after {
+            background-color: rgba(255, 255, 255, 0.04);
+        }
+
+        .btn-add-option:active::after {
+            background-color: rgba(255, 255, 255, 0.08);
+        }
+
+        .btn-add-option.active {
+            border-style: solid;
+        }
+
+        /* Condition button - warning/amber color (matches main page) */
+        .add-step-column.before .btn-add-option {
+            border-color: rgba(255, 185, 87, 0.4);
+            color: var(--warning-color);
+        }
+
+        .add-step-column.before .btn-add-option:hover {
+            border-color: var(--warning-color);
+        }
+
+        .add-step-column.before .btn-add-option:hover::after {
+            background-color: rgba(255, 185, 87, 0.08);
+        }
+
+        .add-step-column.before .btn-add-option:active::after {
+            background-color: rgba(255, 185, 87, 0.12);
+        }
+
+        .add-step-column.before .btn-add-option.active {
+            border-color: var(--warning-color);
+            background: rgba(255, 185, 87, 0.12);
+        }
+
+        /* Verification button - success/green color (matches main page) */
+        .add-step-column.after .btn-add-option {
+            border-color: rgba(168, 213, 162, 0.4);
+            color: var(--pass-color);
+        }
+
+        .add-step-column.after .btn-add-option:hover {
+            border-color: var(--pass-color);
+        }
+
+        .add-step-column.after .btn-add-option:hover::after {
+            background-color: rgba(168, 213, 162, 0.08);
+        }
+
+        .add-step-column.after .btn-add-option:active::after {
+            background-color: rgba(168, 213, 162, 0.12);
+        }
+
+        .add-step-column.after .btn-add-option.active {
+            border-color: var(--pass-color);
+            background: rgba(168, 213, 162, 0.12);
+        }
+
+        .add-step-option-fields {
+            margin-top: 12px;
+            display: flex;
+            flex-direction: column;
+            gap: 12px;
+        }
+
         .add-step-mini-select {
             width: 100%;
-            padding: 8px 10px;
-            background: var(--bg-secondary);
-            border: 1px solid var(--border-color);
-            border-radius: 6px;
-            color: var(--text-primary);
-            font-size: 0.8rem;
+            padding: 12px 14px;
+            background: var(--md-surface-container-high);
+            border: 1px solid var(--md-outline);
+            border-radius: 8px;
+            color: var(--md-on-surface);
+            font-size: 0.875rem;
+            cursor: pointer;
+            transition: all var(--md-duration-short3) var(--md-easing-standard);
         }
 
         .add-step-mini-input {
             width: 100%;
-            padding: 8px 10px;
-            background: var(--bg-secondary);
-            border: 1px solid var(--border-color);
-            border-radius: 6px;
-            color: var(--text-primary);
-            font-size: 0.8rem;
+            padding: 12px 14px;
+            background: transparent;
+            border: 1px solid var(--md-outline);
+            border-radius: 8px;
+            color: var(--md-on-surface);
+            font-size: 0.875rem;
+            transition: all var(--md-duration-short3) var(--md-easing-standard);
+        }
+
+        .add-step-mini-input:hover,
+        .add-step-mini-select:hover {
+            border-color: var(--md-on-surface);
         }
 
         .add-step-mini-input:focus,
         .add-step-mini-select:focus {
             outline: none;
-            border-color: var(--accent-color);
+            border-color: var(--md-primary);
+            border-width: 2px;
+            padding: 11px 13px;
         }
 
         /* Action controls in middle column */
         .add-step-action-controls {
-            margin-top: 10px;
+            margin: 12px 10px 16px;
+            padding: 0;
+            display: flex;
+            flex-direction: column;
+            gap: 8px;
+        }
+
+        .add-step-action-controls .add-step-mini-input {
+            margin: 0;
         }
 
         .add-step-position-display {
             display: flex;
             align-items: center;
-            gap: 8px;
-            padding: 8px 10px;
-            background: var(--bg-secondary);
-            border-radius: 6px;
+            gap: 12px;
+            padding: 12px 14px;
+            background: var(--md-surface-container-high);
+            border-radius: 8px;
+            border: 1px solid var(--md-outline-variant);
         }
 
         .add-step-position-display .label {
             font-size: 0.75rem;
-            color: var(--text-secondary);
+            font-weight: 500;
+            color: var(--md-on-surface-variant);
+            text-transform: uppercase;
+            letter-spacing: 0.05em;
         }
 
         .add-step-position-display .value {
-            font-size: 0.85rem;
-            color: var(--text-primary);
-            font-family: monospace;
+            font-size: 0.9375rem;
+            color: var(--md-on-surface);
+            font-family: 'IBM Plex Mono', monospace;
+            font-weight: 500;
+        }
+
+        /* Checkbox label for type action */
+        .add-step-checkbox-label {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            margin: 0;
+            padding: 10px 14px;
+            background: var(--md-surface-container-high);
+            border-radius: 8px;
+            border: 1px solid var(--md-outline-variant);
+            cursor: pointer;
+            font-size: 0.875rem;
+            color: var(--md-on-surface-variant);
+            transition: all var(--md-duration-short3) var(--md-easing-standard);
+        }
+
+        .add-step-checkbox-label:hover {
+            background: var(--md-surface-container-highest);
+            color: var(--md-on-surface);
+        }
+
+        .add-step-checkbox-label input[type="checkbox"] {
+            width: 18px;
+            height: 18px;
+            accent-color: var(--md-primary);
+            cursor: pointer;
         }
 
         /* Direction buttons for swipe */
         .add-step-direction-buttons {
             display: flex;
-            gap: 6px;
-            margin-top: 8px;
+            gap: 8px;
+            margin: 0;
             justify-content: center;
         }
 
         .dir-btn {
-            width: 40px;
-            height: 40px;
-            background: var(--bg-tertiary);
-            border: 2px solid transparent;
-            border-radius: 6px;
-            font-size: 1rem;
+            width: 48px;
+            height: 48px;
+            background: var(--md-surface-container-high);
+            border: 1px solid var(--md-outline-variant);
+            border-radius: 12px;
+            color: var(--md-on-surface);
             cursor: pointer;
-            transition: all 0.15s;
+            transition: all var(--md-duration-short3) var(--md-easing-standard);
+            display: flex;
+            align-items: center;
+            justify-content: center;
         }
 
         .dir-btn:hover {
-            background: var(--bg-secondary);
-            border-color: var(--border-color);
+            background: var(--md-surface-container-highest);
+            border-color: var(--md-on-surface);
+        }
+
+        .dir-btn.selected {
+            background: var(--md-primary-container);
+            border-color: var(--md-primary);
+            color: var(--md-on-primary-container);
         }
 
         .dir-btn.selected {
@@ -1863,16 +2147,27 @@
         /* Instruction bar for Add Step */
         .add-step-instruction-bar {
             text-align: center;
-            padding: 12px 20px;
-            color: var(--text-secondary);
-            font-size: 0.9rem;
-            background: var(--bg-secondary);
-            border-bottom: 1px solid var(--border-color);
+            padding: 16px 32px;
+            color: var(--md-on-surface-variant);
+            font-size: 0.9375rem;
+            background: var(--md-surface-dim);
+            border-bottom: 1px solid var(--md-outline-variant);
             margin: 0;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 12px;
+        }
+
+        .add-step-instruction-bar::before {
+            content: 'info';
+            font-family: 'Material Symbols Outlined';
+            font-size: 20px;
+            color: var(--md-primary);
         }
 
         /* ========================================
-           Frame Picker Modal
+           Frame Picker Modal - Redesigned
            ======================================== */
 
         .frame-picker-modal {
@@ -1882,7 +2177,8 @@
             left: 0;
             right: 0;
             bottom: 0;
-            background: rgba(0, 0, 0, 0.8);
+            background: rgba(0, 0, 0, 0.7);
+            backdrop-filter: blur(12px);
             z-index: 3000;
             align-items: center;
             justify-content: center;
@@ -1893,61 +2189,111 @@
         }
 
         .frame-picker-content {
-            background: var(--bg-secondary);
-            border-radius: 12px;
-            max-width: 500px;
-            width: 90%;
-            max-height: 90vh;
+            background: var(--md-surface-container);
+            border-radius: 28px;
+            max-width: 700px;
+            width: 95%;
+            max-height: 92vh;
             display: flex;
             flex-direction: column;
             overflow: hidden;
-            box-shadow: 0 20px 60px rgba(0, 0, 0, 0.5);
+            box-shadow:
+                0 8px 32px rgba(0, 0, 0, 0.4),
+                0 0 0 1px rgba(255, 255, 255, 0.05);
+            animation: fadeInScale var(--md-duration-medium3) var(--md-easing-emphasized-decelerate);
         }
 
+        /* Header */
         .frame-picker-header {
             display: flex;
             justify-content: space-between;
             align-items: center;
-            padding: 16px 20px;
-            border-bottom: 1px solid var(--border-color);
+            padding: 20px 24px;
+            background: var(--md-surface-container-high);
+            border-bottom: 1px solid var(--md-outline-variant);
+        }
+
+        .frame-picker-header-left {
+            display: flex;
+            flex-direction: column;
+            gap: 4px;
         }
 
         .frame-picker-header h3 {
             margin: 0;
-            font-size: 1.1rem;
-            font-weight: 600;
+            font-size: 1.375rem;
+            font-weight: 500;
+            color: var(--md-on-surface);
+        }
+
+        .frame-picker-subtitle {
+            font-size: 0.8125rem;
+            color: var(--md-on-surface-variant);
         }
 
         .frame-picker-close {
-            background: none;
+            width: 40px;
+            height: 40px;
+            background: transparent;
             border: none;
-            color: var(--text-secondary);
-            font-size: 1.5rem;
+            border-radius: 20px;
+            color: var(--md-on-surface-variant);
             cursor: pointer;
-            padding: 0;
-            line-height: 1;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            transition: all var(--md-duration-short3) var(--md-easing-standard);
         }
 
         .frame-picker-close:hover {
-            color: var(--text-primary);
+            background: rgba(255, 255, 255, 0.08);
+            color: var(--md-on-surface);
         }
 
+        /* Body */
         .frame-picker-body {
-            padding: 20px;
+            padding: 20px 24px;
             flex: 1;
             overflow-y: auto;
+            display: flex;
+            flex-direction: column;
+            gap: 16px;
         }
 
-        .frame-picker-video-wrapper {
+        /* Instruction hint for action frames */
+        .frame-picker-hint {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            padding: 12px 16px;
+            background: var(--md-surface-container-high);
+            border-radius: 12px;
+            border: 1px solid var(--md-outline-variant);
+            font-size: 0.875rem;
+            color: var(--md-on-surface-variant);
+        }
+
+        .frame-picker-hint .material-symbols-outlined {
+            color: var(--md-primary);
+            font-size: 20px;
+        }
+
+        /* Preview wrapper */
+        .frame-picker-preview-wrapper {
             position: relative;
-            background: #000;
-            border-radius: 8px;
+            background: var(--md-surface-dim);
+            border-radius: 16px;
             overflow: hidden;
+            border: 1px solid var(--md-outline-variant);
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            min-height: 400px;
         }
 
-        .frame-picker-video-wrapper video {
-            width: 100%;
-            max-height: 400px;
+        .frame-picker-canvas {
+            max-width: 100%;
+            max-height: 450px;
             object-fit: contain;
             display: block;
         }
@@ -1970,56 +2316,247 @@
             position: absolute;
             width: 36px;
             height: 36px;
-            border: 3px solid var(--action-tap);
+            background: var(--md-primary);
+            border: 3px solid #fff;
             border-radius: 50%;
             transform: translate(-50%, -50%);
             pointer-events: none;
-            box-shadow: 0 0 15px rgba(245, 158, 11, 0.6);
-            animation: pulse-tap 1.5s ease-in-out infinite;
+            box-shadow:
+                0 0 0 2px rgba(0, 0, 0, 0.8),
+                0 4px 12px rgba(0, 0, 0, 0.5),
+                0 0 20px rgba(208, 188, 255, 0.6);
+            animation: tapBounce 1.5s cubic-bezier(0.34, 1.56, 0.64, 1) infinite;
         }
 
-        .frame-picker-controls {
+        /* Frame info badge */
+        .frame-info-badge {
+            position: absolute;
+            top: 12px;
+            left: 12px;
             display: flex;
             align-items: center;
-            gap: 12px;
-            padding: 12px 0;
+            gap: 6px;
+            padding: 8px 14px;
+            background: rgba(0, 0, 0, 0.75);
+            backdrop-filter: blur(8px);
+            border-radius: 8px;
+            font-size: 0.875rem;
+            font-family: 'IBM Plex Mono', monospace;
+            font-weight: 500;
+            color: var(--md-on-surface);
         }
 
-        .frame-picker-instruction {
+        /* Filmstrip container */
+        .frame-picker-filmstrip-container {
+            display: flex;
+            flex-direction: column;
+            gap: 8px;
+        }
+
+        .filmstrip-label {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            font-size: 0.8125rem;
+            color: var(--md-on-surface-variant);
+            padding: 0 4px;
+        }
+
+        .filmstrip-label .material-symbols-outlined {
+            font-size: 18px;
+        }
+
+        .frame-picker-filmstrip {
+            display: flex;
+            gap: 8px;
+            padding: 12px;
+            background: var(--md-surface-container-high);
+            border-radius: 12px;
+            border: 1px solid var(--md-outline-variant);
+            overflow-x: auto;
+            scroll-snap-type: x mandatory;
+            scrollbar-width: thin;
+            scrollbar-color: var(--md-outline-variant) transparent;
+        }
+
+        .frame-picker-filmstrip::-webkit-scrollbar {
+            height: 6px;
+        }
+
+        .frame-picker-filmstrip::-webkit-scrollbar-track {
+            background: transparent;
+        }
+
+        .frame-picker-filmstrip::-webkit-scrollbar-thumb {
+            background: var(--md-outline-variant);
+            border-radius: 3px;
+        }
+
+        .filmstrip-frame {
+            flex-shrink: 0;
+            width: 80px;
+            cursor: pointer;
+            scroll-snap-align: start;
+            border-radius: 8px;
+            overflow: hidden;
+            border: 2px solid transparent;
+            transition: all var(--md-duration-short3) var(--md-easing-standard);
+            position: relative;
+        }
+
+        .filmstrip-frame:hover {
+            border-color: var(--md-outline);
+            transform: scale(1.05);
+        }
+
+        .filmstrip-frame.selected {
+            border-color: var(--md-primary);
+            box-shadow: 0 0 0 2px rgba(208, 188, 255, 0.3);
+        }
+
+        .filmstrip-frame img,
+        .filmstrip-frame canvas {
+            width: 100%;
+            height: auto;
+            display: block;
+        }
+
+        .filmstrip-frame .frame-timestamp {
+            position: absolute;
+            bottom: 0;
+            left: 0;
+            right: 0;
+            padding: 2px 4px;
+            background: rgba(0, 0, 0, 0.7);
+            font-size: 0.625rem;
+            font-family: 'IBM Plex Mono', monospace;
+            color: #fff;
             text-align: center;
-            color: var(--accent-color);
-            font-size: 0.9rem;
-            margin: 8px 0 0 0;
         }
 
+        .filmstrip-loading {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 8px;
+            padding: 24px;
+            color: var(--md-on-surface-variant);
+            font-size: 0.875rem;
+            width: 100%;
+        }
+
+        @keyframes spin {
+            from { transform: rotate(0deg); }
+            to { transform: rotate(360deg); }
+        }
+
+        .spinning {
+            animation: spin 1s linear infinite;
+        }
+
+        /* Position info */
         .frame-picker-position-info {
             display: flex;
             align-items: center;
+            justify-content: space-between;
+            padding: 12px 16px;
+            background: rgba(208, 188, 255, 0.1);
+            border-radius: 12px;
+            border: 1px solid var(--md-primary-container);
+        }
+
+        .position-info-content {
+            display: flex;
+            align-items: center;
             gap: 12px;
-            padding: 12px;
-            margin-top: 12px;
-            background: var(--bg-tertiary);
-            border-radius: 8px;
         }
 
-        .frame-picker-position-info .label {
-            font-size: 0.85rem;
-            color: var(--text-secondary);
+        .position-info-content .material-symbols-outlined {
+            color: var(--md-primary);
+            font-size: 20px;
         }
 
-        .frame-picker-position-info .value {
-            font-size: 0.9rem;
-            font-family: monospace;
-            color: var(--action-tap);
+        .position-label {
+            font-size: 0.75rem;
+            font-weight: 500;
+            text-transform: uppercase;
+            letter-spacing: 0.05em;
+            color: var(--md-on-surface-variant);
+        }
+
+        .position-value {
+            font-size: 1rem;
+            font-family: 'IBM Plex Mono', monospace;
+            color: var(--md-primary);
             font-weight: 600;
         }
 
+        .position-clear-btn {
+            display: flex;
+            align-items: center;
+            gap: 6px;
+            padding: 8px 12px;
+            background: transparent;
+            border: 1px solid var(--md-outline-variant);
+            border-radius: 8px;
+            color: var(--md-on-surface-variant);
+            font-size: 0.8125rem;
+            cursor: pointer;
+            transition: all var(--md-duration-short3) var(--md-easing-standard);
+        }
+
+        .position-clear-btn .material-symbols-outlined {
+            font-size: 16px;
+        }
+
+        .position-clear-btn:hover {
+            background: rgba(255, 255, 255, 0.08);
+            border-color: var(--md-on-surface);
+            color: var(--md-on-surface);
+        }
+
+        /* Footer */
         .frame-picker-footer {
             display: flex;
             justify-content: flex-end;
-            gap: 10px;
-            padding: 16px 20px;
-            border-top: 1px solid var(--border-color);
+            gap: 12px;
+            padding: 16px 24px;
+            background: var(--md-surface-container-high);
+            border-top: 1px solid var(--md-outline-variant);
+        }
+
+        .frame-picker-footer .btn {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            padding: 12px 24px;
+            border-radius: 20px;
+            font-size: 0.875rem;
+            font-weight: 500;
+        }
+
+        .frame-picker-footer .btn .material-symbols-outlined {
+            font-size: 18px;
+        }
+
+        .frame-picker-footer .btn-primary {
+            background: var(--md-primary);
+            color: var(--md-on-primary);
+            border: none;
+        }
+
+        .frame-picker-footer .btn-primary:hover {
+            background: var(--primary-hover);
+        }
+
+        .frame-picker-footer .btn-secondary {
+            background: transparent;
+            border: 1px solid var(--md-outline);
+            color: var(--md-on-surface);
+        }
+
+        .frame-picker-footer .btn-secondary:hover {
+            background: rgba(255, 255, 255, 0.08);
         }
 
         /* ═══════════════════════════════════════════════════════════
@@ -4595,35 +5132,31 @@
 <body>
     <header class="header">
         <div class="header-left">
-            <button class="video-toggle-btn" onclick="toggleVideoPanel()" id="videoToggleBtn" title="Toggle video panel">
-                <span class="video-toggle-icon" id="videoToggleIcon">◀</span>
-                <span class="video-toggle-label">Video</span>
-            </button>
-        </div>
-        <div class="header-center">
-            <div class="header-title-group">
-                <h1>Image Enhance Preset Selection</h1>
-                <div class="header-meta">
-                    <span class="header-meta-item" id="headerStepCount">
-                        <span class="material-symbols-outlined">touch_app</span>
-                        <span id="stepCountValue">0</span> steps
-                    </span>
-                    <span class="header-meta-divider">•</span>
-                    <span class="header-meta-item" id="headerDuration">
-                        <span class="material-symbols-outlined">schedule</span>
-                        <span id="durationValue">0:00</span>
-                    </span>
-                    <span class="header-meta-divider">•</span>
-                    <span class="header-meta-item" id="headerVerifications">
-                        <span class="material-symbols-outlined">verified</span>
-                        <span id="verificationCountValue">0</span> verifications
-                    </span>
-                </div>
+            <div class="header-meta">
+                <span class="header-meta-item" id="headerStepCount">
+                    <span class="material-symbols-outlined">touch_app</span>
+                    <span id="stepCountValue">0</span> steps
+                </span>
+                <span class="header-meta-divider">•</span>
+                <span class="header-meta-item" id="headerDuration">
+                    <span class="material-symbols-outlined">schedule</span>
+                    <span id="durationValue">0:00</span>
+                </span>
+                <span class="header-meta-divider">•</span>
+                <span class="header-meta-item" id="headerVerifications">
+                    <span class="material-symbols-outlined">verified</span>
+                    <span id="verificationCountValue">0</span> verifications
+                </span>
             </div>
         </div>
+        <div class="header-center">
+            <h1>Image Enhance Preset Selection</h1>
+        </div>
         <div class="header-right">
-            <button class="btn btn-secondary" onclick="discardTest()">Discard</button>
-            <button class="btn btn-primary" onclick="exportYAML()">Export YAML</button>
+            <button class="export-btn-minimal" onclick="exportYAML()">
+                <span class="material-symbols-outlined">download</span>
+                Export YAML
+            </button>
         </div>
     </header>
 
@@ -4674,7 +5207,7 @@
         <!-- Instruction text (video is in modal) -->
         <p id="addStepInstruction" class="add-step-instruction-bar">Select a step type, then click on frame slots below to capture from video</p>
 
-        <!-- 3-Column Frame Layout -->
+        <!-- 3-Column Frame Layout - MD3 Styled -->
         <div class="add-step-columns" id="addStepColumns" style="display: none;">
             <!-- BEFORE Column -->
             <div class="add-step-column before">
@@ -4682,18 +5215,24 @@
                 <div class="add-step-frame-preview" id="addStepBeforePreview" onclick="openFramePickerModal('before')">
                     <span class="capture-hint">Click to capture frame</span>
                 </div>
-                <input type="text" class="add-step-desc-input" id="addStepBeforeDesc" placeholder="Description (optional)">
-
-                <!-- Condition section -->
-                <div class="add-step-column-option">
-                    <button class="btn-add-option" id="addStepConditionBtn" onclick="toggleAddStepCondition()">+ Condition</button>
-                    <div class="add-step-option-fields" id="addStepConditionFields" style="display: none;">
-                        <select id="addStepConditionType" class="add-step-mini-select">
-                            <option value="if_present">if_present</option>
-                            <option value="if_absent">if_absent</option>
-                            <option value="if_screen">if_screen</option>
-                        </select>
-                        <input type="text" id="addStepConditionValue" class="add-step-mini-input" placeholder="Element or description...">
+                <div class="add-step-column-content">
+                    <div class="add-step-desc-wrapper">
+                        <input type="text" class="add-step-desc-input" id="addStepBeforeDesc" placeholder="Describe the before state...">
+                    </div>
+                    <!-- Condition section -->
+                    <div class="add-step-column-option">
+                        <button class="btn-add-option" id="addStepConditionBtn" onclick="toggleAddStepCondition()">
+                            <span class="material-symbols-outlined">rule</span>
+                            + Condition
+                        </button>
+                        <div class="add-step-option-fields" id="addStepConditionFields" style="display: none;">
+                            <select id="addStepConditionType" class="add-step-mini-select">
+                                <option value="if_present">if_present</option>
+                                <option value="if_absent">if_absent</option>
+                                <option value="if_screen">if_screen</option>
+                            </select>
+                            <input type="text" id="addStepConditionValue" class="add-step-mini-input" placeholder="Element or description...">
+                        </div>
                     </div>
                 </div>
             </div>
@@ -4702,7 +5241,7 @@
             <div class="add-step-column action" id="addStepActionColumn">
                 <div class="add-step-column-header">Action</div>
                 <div class="add-step-frame-preview has-overlay" id="addStepActionPreview" onclick="openFramePickerModal('action')">
-                    <span class="capture-hint">Click to capture &amp; place tap</span>
+                    <span class="capture-hint">Click to capture &amp; set position</span>
                     <div class="add-step-tap-indicator" id="addStepTapIndicator" style="display: none;"></div>
                 </div>
 
@@ -4726,10 +5265,20 @@
                     </div>
                 </div>
                 <div class="add-step-action-controls" id="addStepWaitForControls" style="display: none;">
+                    <div class="add-step-position-display">
+                        <span class="label">Wait for:</span>
+                    </div>
                     <input type="text" class="add-step-mini-input" id="addStepWaitForInput" placeholder="Element text to wait for..." oninput="updateAddStepReady()">
                 </div>
                 <div class="add-step-action-controls" id="addStepTypeControls" style="display: none;">
-                    <input type="text" class="add-step-mini-input" id="addStepTypeInput" placeholder="Text to type..." oninput="updateAddStepReady()">
+                    <div class="add-step-position-display">
+                        <span class="label">Text:</span>
+                    </div>
+                    <input type="text" class="add-step-mini-input" id="addStepTypeInput" placeholder="Enter text to type..." oninput="updateAddStepReady()">
+                    <label class="add-step-checkbox-label">
+                        <input type="checkbox" id="addStepTypeSubmit">
+                        <span>Press Enter after typing</span>
+                    </label>
                 </div>
             </div>
 
@@ -4739,47 +5288,93 @@
                 <div class="add-step-frame-preview" id="addStepAfterPreview" onclick="openFramePickerModal('after')">
                     <span class="capture-hint">Click to capture frame</span>
                 </div>
-                <input type="text" class="add-step-desc-input" id="addStepAfterDesc" placeholder="Description (optional)">
-
-                <!-- Verification section -->
-                <div class="add-step-column-option">
-                    <button class="btn-add-option" id="addStepVerificationBtn" onclick="toggleAddStepVerification()">+ Verification</button>
-                    <div class="add-step-option-fields" id="addStepVerificationFields" style="display: none;">
-                        <input type="text" id="addStepVerificationValue" class="add-step-mini-input" placeholder="Describe expected screen state...">
+                <div class="add-step-column-content">
+                    <div class="add-step-desc-wrapper">
+                        <input type="text" class="add-step-desc-input" id="addStepAfterDesc" placeholder="Describe the after state...">
+                    </div>
+                    <!-- Verification section -->
+                    <div class="add-step-column-option">
+                        <button class="btn-add-option" id="addStepVerificationBtn" onclick="toggleAddStepVerification()">
+                            <span class="material-symbols-outlined">verified</span>
+                            + Verification
+                        </button>
+                        <div class="add-step-option-fields" id="addStepVerificationFields" style="display: none;">
+                            <input type="text" id="addStepVerificationValue" class="add-step-mini-input" placeholder="Describe expected screen state...">
+                        </div>
                     </div>
                 </div>
             </div>
         </div>
 
-        <!-- Frame Picker Modal -->
+        <!-- Frame Picker Modal - Redesigned -->
         <div id="framePickerModal" class="frame-picker-modal">
             <div class="frame-picker-content">
                 <div class="frame-picker-header">
-                    <h3 id="framePickerTitle">Capture Frame</h3>
-                    <button class="frame-picker-close" onclick="closeFramePickerModal()">&times;</button>
+                    <div class="frame-picker-header-left">
+                        <h3 id="framePickerTitle">Select Frame</h3>
+                        <span class="frame-picker-subtitle" id="framePickerSubtitle">Choose the moment to capture</span>
+                    </div>
+                    <button class="frame-picker-close" onclick="closeFramePickerModal()">
+                        <span class="material-symbols-outlined">close</span>
+                    </button>
                 </div>
+
                 <div class="frame-picker-body">
-                    <div class="frame-picker-video-wrapper">
-                        <video id="framePickerVideo" src="recording/recording.mp4"></video>
+                    <!-- Instruction hint (shown for action frames with tap/swipe) -->
+                    <div class="frame-picker-hint" id="framePickerHint" style="display: none;">
+                        <span class="material-symbols-outlined">touch_app</span>
+                        <span id="framePickerHintText">Click on the preview to set tap position</span>
+                    </div>
+
+                    <!-- Main preview area -->
+                    <div class="frame-picker-preview-wrapper">
+                        <canvas id="framePickerCanvas" class="frame-picker-canvas"></canvas>
                         <div id="framePickerOverlay" class="frame-picker-overlay" onclick="handleFramePickerClick(event)">
                             <div class="frame-picker-tap-indicator" id="framePickerTapIndicator" style="display: none;"></div>
                         </div>
+                        <!-- Frame info badge -->
+                        <div class="frame-info-badge" id="frameInfoBadge">
+                            <span class="frame-time" id="frameTimeDisplay">0:00</span>
+                        </div>
                     </div>
-                    <div class="frame-picker-controls">
-                        <button class="video-play-btn" id="framePickerPlayBtn" onclick="toggleFramePickerVideo()">▶</button>
-                        <input type="range" class="video-scrubber" id="framePickerScrubber" min="0" max="100" value="0" step="0.1">
-                        <span class="video-time" id="framePickerTime">0:00 / 0:00</span>
-                    </div>
-                    <p id="framePickerInstruction" class="frame-picker-instruction">Scrub to desired moment and click Capture</p>
+
+                    <!-- Position info (for tap/swipe actions) -->
                     <div id="framePickerPositionInfo" class="frame-picker-position-info" style="display: none;">
-                        <span class="label">Tap position:</span>
-                        <span class="value" id="framePickerPositionValue">(0, 0)</span>
-                        <button class="btn-small btn-secondary" onclick="clearFramePickerPosition()">Clear</button>
+                        <div class="position-info-content">
+                            <span class="material-symbols-outlined">location_on</span>
+                            <span class="position-label">Tap Position:</span>
+                            <span class="position-value" id="framePickerPositionValue">(0, 0)</span>
+                        </div>
+                        <button class="position-clear-btn" onclick="clearFramePickerPosition()">
+                            <span class="material-symbols-outlined">close</span>
+                            Clear
+                        </button>
                     </div>
+
+                    <!-- Filmstrip with frame thumbnails -->
+                    <div class="frame-picker-filmstrip-container">
+                        <div class="filmstrip-label">
+                            <span class="material-symbols-outlined">movie</span>
+                            Select a frame
+                        </div>
+                        <div class="frame-picker-filmstrip" id="framePickerFilmstrip">
+                            <div class="filmstrip-loading" id="filmstripLoading">
+                                <span class="material-symbols-outlined spinning">progress_activity</span>
+                                Extracting frames...
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Hidden video for frame extraction -->
+                    <video id="framePickerVideo" src="recording/recording.mp4" preload="auto" muted style="display: none;"></video>
                 </div>
+
                 <div class="frame-picker-footer">
                     <button class="btn btn-secondary" onclick="closeFramePickerModal()">Cancel</button>
-                    <button class="btn btn-primary" id="framePickerCaptureBtn" onclick="captureFromFramePicker()">Capture</button>
+                    <button class="btn btn-primary" id="framePickerCaptureBtn" onclick="captureFromFramePicker()">
+                        <span class="material-symbols-outlined">photo_camera</span>
+                        Capture Frame
+                    </button>
                 </div>
             </div>
         </div>
@@ -5187,7 +5782,6 @@
         document.addEventListener('DOMContentLoaded', () => {
             renderSteps();
             initVideo();
-            updateHeaderStats();
             updateHeaderMeta();
             setTimeout(startFrameAnimations, 200);
 
@@ -5198,89 +5792,7 @@
             }
         });
 
-        // Update header stats
-        function updateHeaderStats() {
-            // App package
-            document.getElementById('headerApp').textContent = testData.appPackage || 'Unknown app';
-
-            // Device info
-            const device = testData.device || {};
-            const deviceEl = document.getElementById('headerDevice');
-            if (device.name || device.id) {
-                const isAndroid = (device.platform || '').toLowerCase() === 'android';
-                const icon = isAndroid ? '📱' : '📱';
-                const resolution = device.width && device.height ? `${device.width}×${device.height}` : '';
-                deviceEl.innerHTML = `
-                    <span class="device-icon">${icon}</span>
-                    <span class="device-name">${escapeHtml(device.name || device.id || 'Unknown device')}</span>
-                    ${resolution ? `<span class="device-resolution">${resolution}</span>` : ''}
-                `;
-            } else {
-                deviceEl.style.display = 'none';
-            }
-
-            // Count by action type
-            const counts = {
-                taps: 0,
-                swipes: 0,
-                verifies: 0,
-                types: 0,
-                waits: 0
-            };
-
-            steps.forEach(step => {
-                switch (step.action) {
-                    case 'tap':
-                    case 'long_press':
-                    case 'double_tap':
-                        counts.taps++;
-                        break;
-                    case 'swipe':
-                        counts.swipes++;
-                        break;
-                    case 'verify_screen':
-                        counts.verifies++;
-                        break;
-                    case 'type':
-                        counts.types++;
-                        break;
-                    case 'wait':
-                    case 'wait_for':
-                        counts.waits++;
-                        break;
-                }
-            });
-
-            // Build stats HTML
-            const statsHtml = `
-                <div class="stat-item">
-                    <span class="stat-value">${steps.length}</span>
-                    <span class="stat-label">Total</span>
-                </div>
-                <div class="stat-item taps">
-                    <span class="stat-value">${counts.taps}</span>
-                    <span class="stat-label">Taps</span>
-                </div>
-                <div class="stat-item swipes">
-                    <span class="stat-value">${counts.swipes}</span>
-                    <span class="stat-label">Swipes</span>
-                </div>
-                ${counts.verifies > 0 ? `
-                    <div class="stat-item verifies">
-                        <span class="stat-value">${counts.verifies}</span>
-                        <span class="stat-label">Verifies</span>
-                    </div>
-                ` : ''}
-                ${counts.types > 0 ? `
-                    <div class="stat-item">
-                        <span class="stat-value">${counts.types}</span>
-                        <span class="stat-label">Types</span>
-                    </div>
-                ` : ''}
-            `;
-
-            document.getElementById('headerStats').innerHTML = statsHtml;
-        }
+        // Header stats are now handled by updateHeaderMeta()
 
         // Video Control
         function initVideo() {
@@ -6022,7 +6534,7 @@
             stopFrameAnimations();
             const panel = document.getElementById('stepsPanel');
             panel.innerHTML = steps.map((step, index) => renderStepCard(step, index)).join('');
-            updateHeaderStats();
+            updateHeaderMeta();
             setTimeout(startFrameAnimations, 100);
         };
 
@@ -7121,107 +7633,270 @@
         let framePickerState = {
             frameType: null,      // 'before', 'action', 'after'
             tapPosition: null,    // {x, y, xPct, yPct} for action frames
-            initialized: false
+            initialized: false,
+            frames: [],           // Array of {time, dataUrl}
+            selectedFrameIndex: 0,
+            videoWidth: 0,
+            videoHeight: 0
         };
 
         function openFramePickerModal(frameType) {
             framePickerState.frameType = frameType;
             framePickerState.tapPosition = null;
 
-            // Set modal title based on frame type
+            // Set modal title and subtitle
             const titles = {
-                before: 'Capture Before Frame',
-                action: 'Capture Action Frame',
-                after: 'Capture After Frame'
+                before: 'Select Before Frame',
+                action: 'Select Action Frame',
+                after: 'Select After Frame'
             };
-            document.getElementById('framePickerTitle').textContent = titles[frameType] || 'Capture Frame';
+            const subtitles = {
+                before: 'Choose the screen state before the action',
+                action: 'Choose the moment of action and set tap position',
+                after: 'Choose the screen state after the action'
+            };
+            document.getElementById('framePickerTitle').textContent = titles[frameType] || 'Select Frame';
+            document.getElementById('framePickerSubtitle').textContent = subtitles[frameType] || 'Choose the moment to capture';
 
             // Configure overlay for tap placement (only for action frames with tap/swipe)
             const overlay = document.getElementById('framePickerOverlay');
             const positionInfo = document.getElementById('framePickerPositionInfo');
+            const hint = document.getElementById('framePickerHint');
+            const hintText = document.getElementById('framePickerHintText');
             const isActionFrame = frameType === 'action' && (addStepState.type === 'tap' || addStepState.type === 'swipe');
 
             if (isActionFrame) {
                 overlay.classList.remove('inactive');
-                document.getElementById('framePickerInstruction').textContent = 'Click on video to place tap position, then click Capture';
+                hint.style.display = 'flex';
+                hintText.textContent = addStepState.type === 'swipe'
+                    ? 'Click on the preview to set swipe start position'
+                    : 'Click on the preview to set tap position';
             } else {
                 overlay.classList.add('inactive');
-                document.getElementById('framePickerInstruction').textContent = 'Scrub to desired moment and click Capture';
+                hint.style.display = 'none';
             }
             positionInfo.style.display = 'none';
 
             // Clear any existing tap indicator
             document.getElementById('framePickerTapIndicator').style.display = 'none';
 
-            // Initialize video controls if needed
-            if (!framePickerState.initialized) {
-                initFramePickerVideoControls();
-                framePickerState.initialized = true;
-            }
-
-            // Sync video time from main video
-            const mainVideo = document.getElementById('video');
-            const pickerVideo = document.getElementById('framePickerVideo');
-            if (mainVideo && pickerVideo) {
-                pickerVideo.currentTime = mainVideo.currentTime;
-            }
-
             // Show modal
             document.getElementById('framePickerModal').classList.add('active');
+
+            // Extract frames if not already done
+            if (!framePickerState.initialized) {
+                extractFramesFromVideo();
+            } else if (framePickerState.frames.length > 0) {
+                // Select first frame by default
+                selectFilmstripFrame(0);
+            }
         }
 
         function closeFramePickerModal() {
             document.getElementById('framePickerModal').classList.remove('active');
-            document.getElementById('framePickerVideo').pause();
         }
 
-        function initFramePickerVideoControls() {
+        function extractFramesFromVideo() {
             const video = document.getElementById('framePickerVideo');
-            const scrubber = document.getElementById('framePickerScrubber');
-            const timeDisplay = document.getElementById('framePickerTime');
-            const playBtn = document.getElementById('framePickerPlayBtn');
+            const filmstrip = document.getElementById('framePickerFilmstrip');
 
-            video.addEventListener('loadedmetadata', () => {
-                scrubber.max = video.duration;
-                updateFramePickerTime();
-            });
+            // Show loading state
+            filmstrip.innerHTML = `
+                <div class="filmstrip-loading">
+                    <span class="material-symbols-outlined spinning">progress_activity</span>
+                    Extracting frames...
+                </div>
+            `;
 
-            video.addEventListener('timeupdate', () => {
-                scrubber.value = video.currentTime;
-                updateFramePickerTime();
-            });
+            function startExtraction() {
+                console.log('Starting frame extraction, video:', video.videoWidth, 'x', video.videoHeight, 'duration:', video.duration);
 
-            video.addEventListener('play', () => playBtn.textContent = '⏸');
-            video.addEventListener('pause', () => playBtn.textContent = '▶');
+                if (!video.videoWidth || !video.videoHeight || !video.duration) {
+                    console.error('Video not properly loaded');
+                    filmstrip.innerHTML = `
+                        <div class="filmstrip-loading" style="color: var(--md-error);">
+                            <span class="material-symbols-outlined">error</span>
+                            Video failed to load
+                        </div>
+                    `;
+                    return;
+                }
 
-            scrubber.addEventListener('input', () => {
-                video.currentTime = scrubber.value;
-                updateFramePickerTime();
-            });
-        }
+                framePickerState.videoWidth = video.videoWidth;
+                framePickerState.videoHeight = video.videoHeight;
 
-        function toggleFramePickerVideo() {
-            const video = document.getElementById('framePickerVideo');
-            if (video.paused) {
-                video.play();
+                const duration = video.duration;
+                const frameInterval = 0.5; // Extract frame every 0.5 seconds
+                const frameCount = Math.min(Math.ceil(duration / frameInterval), 200); // Max 200 frames
+                const framesToExtract = [];
+
+                for (let i = 0; i < frameCount; i++) {
+                    framesToExtract.push(i * frameInterval);
+                }
+
+                console.log('Extracting', framesToExtract.length, 'frames');
+
+                // Extract frames sequentially
+                extractFramesSequentially(video, framesToExtract, 0, []);
+            }
+
+            // Check if video is already loaded
+            if (video.readyState >= 1 && video.duration > 0) {
+                startExtraction();
             } else {
-                video.pause();
+                video.addEventListener('loadedmetadata', function onMeta() {
+                    video.removeEventListener('loadedmetadata', onMeta);
+                    startExtraction();
+                });
+                // Force video to load
+                video.load();
             }
         }
 
-        function updateFramePickerTime() {
-            const video = document.getElementById('framePickerVideo');
-            const timeDisplay = document.getElementById('framePickerTime');
+        function extractFramesSequentially(video, times, index, results) {
+            if (index >= times.length) {
+                // All frames extracted
+                console.log('Frame extraction complete:', results.length, 'frames');
+                framePickerState.frames = results;
+                framePickerState.initialized = true;
+                renderFilmstrip();
+                return;
+            }
 
-            const formatTime = (seconds) => {
-                const mins = Math.floor(seconds / 60);
-                const secs = Math.floor(seconds % 60);
-                return `${mins}:${secs.toString().padStart(2, '0')}`;
+            const time = times[index];
+
+            // Timeout in case seeked event doesn't fire
+            let seekTimeout;
+            let handled = false;
+
+            function onSeeked() {
+                if (handled) return;
+                handled = true;
+                clearTimeout(seekTimeout);
+                video.removeEventListener('seeked', onSeeked);
+
+                try {
+                    // Create thumbnail canvas
+                    const thumbCanvas = document.createElement('canvas');
+                    const thumbWidth = 80;
+                    const thumbHeight = Math.round((video.videoHeight / video.videoWidth) * thumbWidth);
+                    thumbCanvas.width = thumbWidth;
+                    thumbCanvas.height = thumbHeight;
+
+                    const ctx = thumbCanvas.getContext('2d');
+                    ctx.drawImage(video, 0, 0, thumbWidth, thumbHeight);
+
+                    // Create full-size frame canvas
+                    const fullCanvas = document.createElement('canvas');
+                    fullCanvas.width = video.videoWidth;
+                    fullCanvas.height = video.videoHeight;
+                    const fullCtx = fullCanvas.getContext('2d');
+                    fullCtx.drawImage(video, 0, 0);
+
+                    results.push({
+                        time: time,
+                        thumbDataUrl: thumbCanvas.toDataURL('image/jpeg', 0.7),
+                        fullDataUrl: fullCanvas.toDataURL('image/jpeg', 0.9)
+                    });
+                } catch (e) {
+                    console.error('Frame extraction error at time ' + time + ':', e);
+                }
+
+                // Continue to next frame
+                setTimeout(() => extractFramesSequentially(video, times, index + 1, results), 0);
+            }
+
+            video.addEventListener('seeked', onSeeked);
+            video.currentTime = time;
+
+            // Timeout fallback - skip frame if seeked doesn't fire within 500ms
+            seekTimeout = setTimeout(() => {
+                if (!handled) {
+                    console.warn('Seeked event timeout at time', time);
+                    handled = true;
+                    video.removeEventListener('seeked', onSeeked);
+                    extractFramesSequentially(video, times, index + 1, results);
+                }
+            }, 500);
+        }
+
+        function renderFilmstrip() {
+            const filmstrip = document.getElementById('framePickerFilmstrip');
+            filmstrip.innerHTML = '';
+
+            if (framePickerState.frames.length === 0) {
+                filmstrip.innerHTML = `
+                    <div class="filmstrip-loading" style="color: var(--md-error);">
+                        <span class="material-symbols-outlined">error</span>
+                        Could not extract frames. Try running from a local server.
+                    </div>
+                `;
+                return;
+            }
+
+            framePickerState.frames.forEach((frame, index) => {
+                const frameEl = document.createElement('div');
+                frameEl.className = 'filmstrip-frame' + (index === 0 ? ' selected' : '');
+                frameEl.onclick = () => selectFilmstripFrame(index);
+
+                const img = document.createElement('img');
+                img.src = frame.thumbDataUrl;
+                img.alt = `Frame at ${formatTime(frame.time)}`;
+
+                const timestamp = document.createElement('div');
+                timestamp.className = 'frame-timestamp';
+                timestamp.textContent = formatTime(frame.time);
+
+                frameEl.appendChild(img);
+                frameEl.appendChild(timestamp);
+                filmstrip.appendChild(frameEl);
+            });
+
+            // Select first frame
+            selectFilmstripFrame(0);
+        }
+
+        function selectFilmstripFrame(index) {
+            framePickerState.selectedFrameIndex = index;
+            const frame = framePickerState.frames[index];
+            if (!frame) return;
+
+            // Update selection in filmstrip
+            document.querySelectorAll('.filmstrip-frame').forEach((el, i) => {
+                el.classList.toggle('selected', i === index);
+            });
+
+            // Scroll selected frame into view
+            const filmstrip = document.getElementById('framePickerFilmstrip');
+            const selectedEl = filmstrip.children[index];
+            if (selectedEl) {
+                selectedEl.scrollIntoView({ behavior: 'smooth', block: 'nearest', inline: 'center' });
+            }
+
+            // Update main preview canvas
+            const canvas = document.getElementById('framePickerCanvas');
+            const ctx = canvas.getContext('2d');
+            const img = new Image();
+            img.onload = () => {
+                canvas.width = img.width;
+                canvas.height = img.height;
+                ctx.drawImage(img, 0, 0);
             };
+            img.src = frame.fullDataUrl;
 
-            const current = formatTime(video.currentTime || 0);
-            const duration = formatTime(video.duration || 0);
-            timeDisplay.textContent = `${current} / ${duration}`;
+            // Update time display
+            document.getElementById('frameTimeDisplay').textContent = formatTime(frame.time);
+
+            // Clear tap indicator when changing frames
+            document.getElementById('framePickerTapIndicator').style.display = 'none';
+            document.getElementById('framePickerPositionInfo').style.display = 'none';
+            framePickerState.tapPosition = null;
+        }
+
+        function formatTime(seconds) {
+            const mins = Math.floor(seconds / 60);
+            const secs = Math.floor(seconds % 60);
+            return `${mins}:${secs.toString().padStart(2, '0')}`;
         }
 
         function handleFramePickerClick(event) {
@@ -7229,24 +7904,21 @@
             if (framePickerState.frameType !== 'action') return;
             if (!addStepState.type || (addStepState.type !== 'tap' && addStepState.type !== 'swipe')) return;
 
-            const video = document.getElementById('framePickerVideo');
-            const overlay = document.getElementById('framePickerOverlay');
+            const canvas = document.getElementById('framePickerCanvas');
+            const rect = canvas.getBoundingClientRect();
 
-            // Get video content rect (accounting for letterboxing)
-            const contentRect = getVideoContentRect(video);
+            // Calculate click position relative to canvas
+            const clickX = event.clientX - rect.left;
+            const clickY = event.clientY - rect.top;
 
-            // Calculate click position relative to video content
-            const clickX = event.clientX - contentRect.left;
-            const clickY = event.clientY - contentRect.top;
-
-            // Check if click is within video content
-            if (clickX < 0 || clickX > contentRect.width || clickY < 0 || clickY > contentRect.height) {
+            // Check if click is within canvas
+            if (clickX < 0 || clickX > rect.width || clickY < 0 || clickY > rect.height) {
                 return;
             }
 
             // Calculate percentage coordinates
-            const xPct = Math.max(0, Math.min(100, (clickX / contentRect.width) * 100));
-            const yPct = Math.max(0, Math.min(100, (clickY / contentRect.height) * 100));
+            const xPct = Math.max(0, Math.min(100, (clickX / rect.width) * 100));
+            const yPct = Math.max(0, Math.min(100, (clickY / rect.height) * 100));
 
             // Convert to screen coordinates
             const x = Math.round((xPct / 100) * SCREEN_WIDTH);
@@ -7254,88 +7926,76 @@
 
             framePickerState.tapPosition = { x, y, xPct, yPct };
 
-            // Show tap indicator
+            // Show tap indicator - position relative to preview wrapper
+            const wrapper = document.querySelector('.frame-picker-preview-wrapper');
+            const wrapperRect = wrapper.getBoundingClientRect();
             const indicator = document.getElementById('framePickerTapIndicator');
             indicator.style.display = '';
-            indicator.style.left = (contentRect.offsetX + (xPct / 100) * contentRect.width) + 'px';
-            indicator.style.top = (contentRect.offsetY + (yPct / 100) * contentRect.height) + 'px';
+            indicator.style.left = (rect.left - wrapperRect.left + (xPct / 100) * rect.width) + 'px';
+            indicator.style.top = (rect.top - wrapperRect.top + (yPct / 100) * rect.height) + 'px';
 
             // Show position info
             document.getElementById('framePickerPositionInfo').style.display = 'flex';
-            document.getElementById('framePickerPositionValue').textContent = `(${x}, ${y})`;
-
-            document.getElementById('framePickerInstruction').textContent = 'Position set! Click Capture to save frame';
+            document.getElementById('framePickerPositionValue').textContent = `(${xPct.toFixed(1)}%, ${yPct.toFixed(1)}%)`;
         }
 
         function clearFramePickerPosition() {
             framePickerState.tapPosition = null;
             document.getElementById('framePickerTapIndicator').style.display = 'none';
             document.getElementById('framePickerPositionInfo').style.display = 'none';
-            document.getElementById('framePickerInstruction').textContent = 'Click on video to place tap position, then click Capture';
         }
 
         function captureFromFramePicker() {
-            const video = document.getElementById('framePickerVideo');
-            if (!video || video.videoWidth === 0 || video.videoHeight === 0) {
+            const frame = framePickerState.frames[framePickerState.selectedFrameIndex];
+            if (!frame) {
                 return;
             }
 
-            // Capture frame
-            try {
-                const canvas = document.createElement('canvas');
-                canvas.width = video.videoWidth;
-                canvas.height = video.videoHeight;
-                const ctx = canvas.getContext('2d');
-                ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
-                const dataUrl = canvas.toDataURL('image/png');
+            // Use the already captured frame data
+            const dataUrl = frame.fullDataUrl;
+            const frameType = framePickerState.frameType;
 
-                const frameType = framePickerState.frameType;
+            // Store in addStepState
+            addStepState.frames[frameType] = dataUrl;
 
-                // Store in addStepState
-                addStepState.frames[frameType] = dataUrl;
+            // Update preview in Add Step
+            const previewId = `addStep${frameType.charAt(0).toUpperCase() + frameType.slice(1)}Preview`;
+            const preview = document.getElementById(previewId);
+            if (preview) {
+                preview.classList.add('captured');
+                preview.innerHTML = `<img src="${dataUrl}" alt="${frameType} frame">`;
 
-                // Update preview in Add Step
-                const previewId = `addStep${frameType.charAt(0).toUpperCase() + frameType.slice(1)}Preview`;
-                const preview = document.getElementById(previewId);
-                if (preview) {
-                    preview.classList.add('captured');
-                    preview.innerHTML = `<img src="${dataUrl}" alt="${frameType} frame">`;
+                // For action frame, add tap indicator if position was set
+                if (frameType === 'action') {
+                    const indicator = document.createElement('div');
+                    indicator.className = 'add-step-tap-indicator';
+                    indicator.id = 'addStepTapIndicator';
 
-                    // For action frame, add tap indicator if position was set
-                    if (frameType === 'action') {
-                        const indicator = document.createElement('div');
-                        indicator.className = 'add-step-tap-indicator';
-                        indicator.id = 'addStepTapIndicator';
+                    if (framePickerState.tapPosition) {
+                        addStepState.tapPosition = framePickerState.tapPosition;
+                        indicator.style.display = '';
+                        indicator.style.left = framePickerState.tapPosition.xPct + '%';
+                        indicator.style.top = framePickerState.tapPosition.yPct + '%';
 
-                        if (framePickerState.tapPosition) {
-                            addStepState.tapPosition = framePickerState.tapPosition;
-                            indicator.style.display = '';
-                            indicator.style.left = framePickerState.tapPosition.xPct + '%';
-                            indicator.style.top = framePickerState.tapPosition.yPct + '%';
-
-                            // Update position display in action column
-                            if (addStepState.type === 'tap') {
-                                document.getElementById('addStepTapPosition').textContent =
-                                    `(${framePickerState.tapPosition.x}, ${framePickerState.tapPosition.y})`;
-                            } else if (addStepState.type === 'swipe') {
-                                document.getElementById('addStepSwipeStart').textContent =
-                                    `(${framePickerState.tapPosition.x}, ${framePickerState.tapPosition.y})`;
-                            }
-                        } else {
-                            indicator.style.display = 'none';
+                        // Update position display in action column (show percentages)
+                        const pctDisplay = `(${framePickerState.tapPosition.xPct.toFixed(1)}%, ${framePickerState.tapPosition.yPct.toFixed(1)}%)`;
+                        if (addStepState.type === 'tap') {
+                            document.getElementById('addStepTapPosition').textContent = pctDisplay;
+                        } else if (addStepState.type === 'swipe') {
+                            document.getElementById('addStepSwipeStart').textContent = pctDisplay;
                         }
-                        preview.appendChild(indicator);
+                    } else {
+                        indicator.style.display = 'none';
                     }
+                    preview.appendChild(indicator);
                 }
-
-                // Update ready state
-                updateAddStepReady();
-
-                // Close modal
-                closeFramePickerModal();
-            } catch (e) {
-                console.error('Failed to capture frame:', e);
             }
+
+            // Update ready state
+            updateAddStepReady();
+
+            // Close modal
+            closeFramePickerModal();
         }
 
         function captureVideoFrame() {

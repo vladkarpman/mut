@@ -9,8 +9,8 @@ from unittest.mock import patch
 import pytest
 from PIL import Image
 
-from mobileuitest.core.device_controller import DeviceController
-from mobileuitest.core.scrcpy_service import ScrcpyService
+from mutcli.core.device_controller import DeviceController
+from mutcli.core.scrcpy_service import ScrcpyService
 
 
 @pytest.fixture
@@ -60,7 +60,7 @@ class TestScrcpyServiceUnit:
 
     def test_connect_returns_false_when_device_not_found(self):
         """Should return False when device not in adb list."""
-        with patch("mobileuitest.core.scrcpy_service.adb") as mock_adb:
+        with patch("mutcli.core.scrcpy_service.adb") as mock_adb:
             mock_adb.device_list.return_value = []
 
             service = ScrcpyService("nonexistent-device")

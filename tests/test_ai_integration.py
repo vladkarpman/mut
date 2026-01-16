@@ -8,9 +8,9 @@ import os
 
 import pytest
 
-from mobileuitest.core.ai_analyzer import AIAnalyzer
-from mobileuitest.core.device_controller import DeviceController
-from mobileuitest.core.scrcpy_service import ScrcpyService
+from mutcli.core.ai_analyzer import AIAnalyzer
+from mutcli.core.device_controller import DeviceController
+from mutcli.core.scrcpy_service import ScrcpyService
 
 
 @pytest.fixture

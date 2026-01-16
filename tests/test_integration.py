@@ -8,8 +8,8 @@ from pathlib import Path
 import pytest
 from PIL import Image
 
-from mobileuitest.core.device_controller import DeviceController
-from mobileuitest.core.scrcpy_service import ScrcpyService
+from mutcli.core.device_controller import DeviceController
+from mutcli.core.scrcpy_service import ScrcpyService
 
 
 @pytest.fixture
