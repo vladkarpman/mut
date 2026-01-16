@@ -50,16 +50,18 @@ class ScrcpyService:
     @property
     def is_connected(self) -> bool:
         """Check if scrcpy is connected and receiving frames."""
+        session = self._session
         return (
-            self._session is not None
+            session is not None
             and self._running
-            and self._session.va is not None
+            and session.va is not None
         )
 
     @property
     def is_recording(self) -> bool:
         """Check if recording is active."""
-        return self._recording and self._video_writer is not None
+        with self._lock:
+            return self._recording and self._video_writer is not None
 
     def connect(self) -> bool:
         """Connect to device via MYScrcpy.
@@ -159,8 +161,11 @@ class ScrcpyService:
                         if self._height == 0:
                             self._height, self._width = frame.shape[:2]
 
+                        # Check recording state under lock
+                        recording = self._recording
+
                     # Write to video if recording
-                    if self._recording:
+                    if recording:
                         self._write_frame(frame)
 
                 time.sleep(0.016)  # ~60 fps polling
@@ -184,9 +189,9 @@ class ScrcpyService:
         with self._lock:
             if not self._frame_buffer:
                 raise RuntimeError("No frames available in buffer")
-
-            frame_data = self._frame_buffer[-1]
-            frame = frame_data["frame"]
+            # Copy the frame array while holding the lock to prevent
+            # the original from being garbage collected
+            frame = self._frame_buffer[-1]["frame"].copy()
 
         # Convert numpy array to PNG bytes
         img = Image.fromarray(frame)
@@ -212,16 +217,25 @@ class ScrcpyService:
         # Ensure output directory exists
         Path(output_path).parent.mkdir(parents=True, exist_ok=True)
 
+        # Read dimensions under lock to avoid race condition
+        with self._lock:
+            width = self._width
+            height = self._height
+
+        if width == 0 or height == 0:
+            return {"success": False, "error": "No frame dimensions available yet"}
+
         try:
             import av
 
             self._video_writer = av.open(output_path, "w")
             self._video_stream = self._video_writer.add_stream("h264", rate=30)
-            self._video_stream.width = self._width
-            self._video_stream.height = self._height
+            self._video_stream.width = width
+            self._video_stream.height = height
             self._video_stream.pix_fmt = "yuv420p"
 
-            self._recording = True
+            with self._lock:
+                self._recording = True
             self._recording_output_path = output_path
             self._recording_start_time = time.time()
 
@@ -250,7 +264,14 @@ class ScrcpyService:
         output_path = self._recording_output_path
 
         try:
-            self._recording = False
+            with self._lock:
+                self._recording = False
+
+            # Flush remaining packets before closing
+            if self._video_stream:
+                for packet in self._video_stream.encode(None):
+                    if self._video_writer:
+                        self._video_writer.mux(packet)
 
             # Finalize video
             if self._video_writer:
@@ -301,12 +322,14 @@ class ScrcpyService:
             count = len(self._frame_buffer)
             oldest_ts = self._frame_buffer[0]["timestamp"] if count > 0 else None
             newest_ts = self._frame_buffer[-1]["timestamp"] if count > 0 else None
+            width = self._width
+            height = self._height
 
         return {
             "frame_count": count,
             "buffer_size": self.FRAME_BUFFER_SIZE,
-            "width": self._width,
-            "height": self._height,
+            "width": width,
+            "height": height,
             "oldest_frame_age_ms": int((time.time() - oldest_ts) * 1000) if oldest_ts else None,
             "newest_frame_age_ms": int((time.time() - newest_ts) * 1000) if newest_ts else None,
         }
