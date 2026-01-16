@@ -72,6 +72,7 @@ class TestExecutor:
             TestResult with all step results
         """
         start = time.time()
+        self._step_number = 0  # Reset for each test
         results: list[StepResult] = []
         status = "passed"
         error = None

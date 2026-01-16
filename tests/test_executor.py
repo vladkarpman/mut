@@ -4,8 +4,8 @@ from unittest.mock import MagicMock, patch
 
 import pytest
 
-from mutcli.core.executor import StepResult, TestExecutor
-from mutcli.models.test import Step
+from mutcli.core.executor import StepResult, TestExecutor, TestResult
+from mutcli.models.test import Step, TestConfig, TestFile
 
 
 class TestExecutorBasicActions:
@@ -416,3 +416,122 @@ class TestStepResult:
 
         assert result.status == "failed"
         assert result.error == "Element not found"
+
+
+class TestExecuteTestMethod:
+    """Test execute_test orchestration."""
+
+    @pytest.fixture
+    def mock_device(self):
+        """Mock DeviceController."""
+        device = MagicMock()
+        device.get_screen_size.return_value = (1080, 2340)
+        device.find_element.return_value = (540, 1200)
+        return device
+
+    @pytest.fixture
+    def executor(self, mock_device):
+        """Create executor with mocked device."""
+        with patch("mutcli.core.executor.DeviceController", return_value=mock_device):
+            return TestExecutor(device_id="test-device")
+
+    def test_execute_test_runs_setup_before_steps(self, executor, mock_device):
+        """Setup steps run before main steps."""
+        call_order = []
+
+        def track_launch(*args):
+            call_order.append("launch")
+
+        def track_tap(*args):
+            call_order.append("tap")
+
+        mock_device.launch_app.side_effect = track_launch
+        mock_device.tap.side_effect = track_tap
+
+        test = TestFile(
+            config=TestConfig(app="com.example.app"),
+            setup=[Step(action="launch_app", target="com.example.app")],
+            steps=[Step(action="tap", target="Button")],
+            teardown=[],
+        )
+
+        result = executor.execute_test(test)
+
+        assert result.status == "passed"
+        assert call_order == ["launch", "tap"]
+
+    def test_execute_test_stops_on_setup_failure(self, executor, mock_device):
+        """Setup failure prevents main steps from running."""
+        mock_device.find_element.return_value = None
+
+        test = TestFile(
+            config=TestConfig(app="com.example.app"),
+            setup=[Step(action="tap", target="NonExistent")],
+            steps=[Step(action="tap", target="Button")],
+            teardown=[],
+        )
+
+        result = executor.execute_test(test)
+
+        assert result.status == "failed"
+        assert "setup failed" in result.error.lower()
+        # Only setup step should be in results (main steps not executed)
+        assert len(result.steps) == 1
+        assert result.steps[0].action == "tap"
+        assert result.steps[0].status == "failed"
+
+    def test_execute_test_runs_teardown_after_failure(self, executor, mock_device):
+        """Teardown runs even when main steps fail."""
+        call_order = []
+
+        def track_launch(*args):
+            call_order.append("launch")
+
+        def track_terminate(*args):
+            call_order.append("terminate")
+
+        mock_device.launch_app.side_effect = track_launch
+        mock_device.terminate_app.side_effect = track_terminate
+        mock_device.find_element.return_value = None
+
+        test = TestFile(
+            config=TestConfig(app="com.example.app"),
+            setup=[Step(action="launch_app", target="com.example.app")],
+            steps=[Step(action="tap", target="NonExistent")],
+            teardown=[Step(action="terminate_app", target="com.example.app")],
+        )
+
+        result = executor.execute_test(test)
+
+        assert result.status == "failed"
+        # Teardown should still run after main step failure
+        assert call_order == ["launch", "terminate"]
+        # All steps should be in results: 1 setup + 1 main + 1 teardown
+        assert len(result.steps) == 3
+
+    def test_execute_test_resets_step_number(self, executor, mock_device):
+        """Step number resets for each test execution."""
+        test1 = TestFile(
+            config=TestConfig(app="com.example.app"),
+            setup=[],
+            steps=[
+                Step(action="tap", target="Button1"),
+                Step(action="tap", target="Button2"),
+            ],
+            teardown=[],
+        )
+        test2 = TestFile(
+            config=TestConfig(app="com.example.app"),
+            setup=[],
+            steps=[Step(action="tap", target="Button3")],
+            teardown=[],
+        )
+
+        result1 = executor.execute_test(test1)
+        result2 = executor.execute_test(test2)
+
+        # First test: steps numbered 1, 2
+        assert result1.steps[0].step_number == 1
+        assert result1.steps[1].step_number == 2
+        # Second test: step should be numbered 1 (reset), not 3
+        assert result2.steps[0].step_number == 1
