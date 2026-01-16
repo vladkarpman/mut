@@ -85,7 +85,7 @@ Respond with JSON only (no markdown, no code blocks):
 
             response = self._client.models.generate_content(
                 model=self._model,
-                contents=[image_part, prompt],
+                contents=[image_part, prompt],  # type: ignore[arg-type]
             )
 
             # Parse response
@@ -173,7 +173,7 @@ Respond with JSON only (no markdown, no code blocks):
 
             response = self._client.models.generate_content(
                 model=self._model,
-                contents=[before_part, after_part, prompt],
+                contents=[before_part, after_part, prompt],  # type: ignore[arg-type]
             )
 
             response_text = response.text or ""
