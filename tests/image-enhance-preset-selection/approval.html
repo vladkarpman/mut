@@ -2387,15 +2387,15 @@
             font-style: normal;
         }
 
-        /* MD3 Text Button style for + Condition / + Verification */
+        /* MD3 Outlined Button style for + Condition / + Verification */
         .btn-add-inline {
-            width: calc(100% - 16px);
-            margin: 8px;
-            padding: 10px 16px;
+            width: calc(100% - 20px);
+            margin: 8px 10px;
+            padding: 12px 16px;
             background: transparent;
-            border: none;
-            border-radius: 100px;
-            color: var(--md-primary);
+            border: 1px dashed var(--md-outline);
+            border-radius: 8px;
+            color: var(--md-on-surface-variant);
             font-size: 0.8125rem;
             font-weight: 500;
             letter-spacing: 0.02em;
@@ -2422,38 +2422,54 @@
             transition: background-color var(--md-duration-short3) var(--md-easing-standard);
         }
 
+        .btn-add-inline:hover {
+            border-style: solid;
+            border-color: var(--md-on-surface);
+            color: var(--md-on-surface);
+        }
+
         .btn-add-inline:hover::before {
-            background-color: rgba(208, 188, 255, 0.08);
+            background-color: rgba(255, 255, 255, 0.04);
         }
 
         .btn-add-inline:active::before {
-            background-color: rgba(208, 188, 255, 0.12);
+            background-color: rgba(255, 255, 255, 0.08);
         }
 
         /* Condition button - warning/amber color */
         .frame-column.before .btn-add-inline {
+            border-color: rgba(255, 185, 87, 0.4);
             color: var(--warning-color);
         }
 
+        .frame-column.before .btn-add-inline:hover {
+            border-color: var(--warning-color);
+        }
+
         .frame-column.before .btn-add-inline:hover::before {
-            background-color: rgba(255, 185, 87, 0.12);
+            background-color: rgba(255, 185, 87, 0.08);
         }
 
         .frame-column.before .btn-add-inline:active::before {
-            background-color: rgba(255, 185, 87, 0.16);
+            background-color: rgba(255, 185, 87, 0.12);
         }
 
         /* Verification button - success/green color */
         .frame-column.after .btn-add-inline {
+            border-color: rgba(168, 213, 162, 0.4);
             color: var(--pass-color);
         }
 
+        .frame-column.after .btn-add-inline:hover {
+            border-color: var(--pass-color);
+        }
+
         .frame-column.after .btn-add-inline:hover::before {
-            background-color: rgba(168, 213, 162, 0.12);
+            background-color: rgba(168, 213, 162, 0.08);
         }
 
         .frame-column.after .btn-add-inline:active::before {
-            background-color: rgba(168, 213, 162, 0.16);
+            background-color: rgba(168, 213, 162, 0.12);
         }
 
         /* Inline add form (shown when clicking + Condition or + Verification) */
@@ -2570,41 +2586,62 @@
             color: var(--fail-color);
         }
 
-        /* Verifications list (multiple verifications) */
+        /* Verifications list - styled like text fields */
         .verifications-list {
-            border-top: 1px solid var(--border-color);
+            display: flex;
+            flex-direction: column;
+            gap: 8px;
+            padding: 0 10px;
+            margin-top: 8px;
         }
 
         .verification-item {
             display: flex;
             justify-content: space-between;
             align-items: center;
-            padding: 8px 10px;
-            font-size: 0.75rem;
-            border-bottom: 1px solid var(--border-color);
-            background: rgba(16, 185, 129, 0.05);
+            padding: 10px 12px;
+            padding-top: 16px;
+            font-size: 0.875rem;
+            border: 1px solid rgba(168, 213, 162, 0.5);
+            border-radius: 8px;
+            background: transparent;
+            position: relative;
         }
 
-        .verification-item:last-child {
-            border-bottom: none;
+        .verification-item::before {
+            content: 'Verify';
+            position: absolute;
+            top: -8px;
+            left: 10px;
+            padding: 0 4px;
+            background: var(--md-surface-container);
+            font-size: 0.6875rem;
+            font-weight: 600;
+            text-transform: uppercase;
+            letter-spacing: 0.05em;
+            color: var(--pass-color);
         }
 
         .verification-item:hover {
-            background: rgba(16, 185, 129, 0.1);
+            border-color: var(--pass-color);
         }
 
         .verification-item-text {
-            color: var(--pass-color);
+            color: var(--md-on-surface);
             display: flex;
             align-items: center;
-            gap: 6px;
+            gap: 8px;
             flex: 1;
             min-width: 0;
         }
 
+        .verification-item-text .material-symbols-outlined {
+            color: var(--pass-color);
+            font-size: 18px;
+        }
+
         .verification-item-value {
-            color: var(--text-primary);
-            font-style: italic;
+            color: var(--md-on-surface);
             overflow: hidden;
             text-overflow: ellipsis;
             white-space: nowrap;
@@ -2613,12 +2650,14 @@
         .verification-item-remove {
             background: none;
             border: none;
-            color: var(--text-secondary);
+            color: var(--md-on-surface-variant);
             cursor: pointer;
-            padding: 2px 6px;
+            padding: 4px;
             font-size: 1rem;
             line-height: 1;
-            opacity: 0.5;
+            opacity: 0.6;
+            border-radius: 4px;
+            transition: all var(--md-duration-short2) var(--md-easing-standard);
             flex-shrink: 0;
         }
 

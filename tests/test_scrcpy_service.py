@@ -60,7 +60,7 @@ class TestScrcpyServiceUnit:
 
     def test_connect_returns_false_when_device_not_found(self):
         """Should return False when device not in adb list."""
-        with patch("mut.core.scrcpy_service.adb") as mock_adb:
+        with patch("pymut.core.scrcpy_service.adb") as mock_adb:
             mock_adb.device_list.return_value = []
 
             service = ScrcpyService("nonexistent-device")
