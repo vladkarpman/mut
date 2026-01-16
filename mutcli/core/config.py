@@ -21,6 +21,44 @@ GLOBAL_CONFIG = Path.home() / ".mut.yaml"
 PROJECT_CONFIG = Path.cwd() / ".mut.yaml"
 
 
+def _safe_float(value: Any, default: float) -> float:
+    """Convert value to float, returning default if None or invalid."""
+    if value is None:
+        return default
+    try:
+        return float(value)
+    except (TypeError, ValueError):
+        return default
+
+
+def _safe_int(value: Any, default: int) -> int:
+    """Convert value to int, returning default if None or invalid."""
+    if value is None:
+        return default
+    try:
+        return int(value)
+    except (TypeError, ValueError):
+        return default
+
+
+def _parse_bool(value: Any, default: bool = False) -> bool:
+    """Parse boolean value from various formats.
+
+    Handles:
+    - None -> default
+    - bool -> as-is
+    - str -> "true", "1", "yes", "on" are True
+    - other -> bool(value)
+    """
+    if value is None:
+        return default
+    if isinstance(value, bool):
+        return value
+    if isinstance(value, str):
+        return value.lower() in ("true", "1", "yes", "on")
+    return bool(value)
+
+
 @dataclass
 class TimeoutConfig:
     """Timeout settings for various operations."""
@@ -124,8 +162,7 @@ class ConfigLoader:
 
         # Boolean parsing for verbose
         if "MUT_VERBOSE" in os.environ:
-            verbose_str = os.environ["MUT_VERBOSE"].lower()
-            overrides["verbose"] = verbose_str in ("true", "1", "yes", "on")
+            overrides["verbose"] = _parse_bool(os.environ["MUT_VERBOSE"])
 
         return overrides
 
@@ -151,17 +188,17 @@ class ConfigLoader:
 
         # Build TimeoutConfig
         timeouts = TimeoutConfig(
-            tap=float(timeouts_dict.get("tap", 5.0)),
-            wait_for=float(timeouts_dict.get("wait_for", 10.0)),
-            verify_screen=float(timeouts_dict.get("verify_screen", 10.0)),
-            type=float(timeouts_dict.get("type", 3.0)),
-            swipe=float(timeouts_dict.get("swipe", 3.0)),
+            tap=_safe_float(timeouts_dict.get("tap"), 5.0),
+            wait_for=_safe_float(timeouts_dict.get("wait_for"), 10.0),
+            verify_screen=_safe_float(timeouts_dict.get("verify_screen"), 10.0),
+            type=_safe_float(timeouts_dict.get("type"), 3.0),
+            swipe=_safe_float(timeouts_dict.get("swipe"), 3.0),
         )
 
         # Build RetryConfig
         retry = RetryConfig(
-            count=int(retry_dict.get("count", 2)),
-            delay=float(retry_dict.get("delay", 1.0)),
+            count=_safe_int(retry_dict.get("count"), 2),
+            delay=_safe_float(retry_dict.get("delay"), 1.0),
         )
 
         # Build main config
@@ -169,7 +206,7 @@ class ConfigLoader:
             app=config_dict.get("app"),
             device=config_dict.get("device"),
             google_api_key=config_dict.get("google_api_key"),
-            verbose=bool(config_dict.get("verbose", False)),
+            verbose=_parse_bool(config_dict.get("verbose"), False),
             timeouts=timeouts,
             retry=retry,
         )

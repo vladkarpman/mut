@@ -180,3 +180,117 @@ class TestConfigValidation:
                 config = ConfigLoader.load()
 
         assert config.verbose is True
+
+
+class TestConfigErrorHandling:
+    """Test configuration error handling for edge cases."""
+
+    def test_malformed_yaml_returns_defaults(self, tmp_path):
+        """Malformed YAML should be ignored, returning defaults."""
+        config_file = tmp_path / ".mut.yaml"
+        config_file.write_text("""
+this is not valid yaml:
+  - [unclosed bracket
+  indentation: wrong
+""")
+
+        with patch("mutcli.core.config.PROJECT_CONFIG", config_file):
+            with patch("mutcli.core.config.GLOBAL_CONFIG", Path("/nonexistent")):
+                config = ConfigLoader.load()
+
+        # Should get all defaults
+        assert config.timeouts.tap == 5.0
+        assert config.retry.count == 2
+        assert config.app is None
+
+    def test_null_values_use_defaults(self, tmp_path):
+        """YAML with null values should use defaults instead of crashing."""
+        config_file = tmp_path / ".mut.yaml"
+        config_file.write_text("""
+app: com.example.app
+timeouts:
+  tap: null
+  wait_for: ~
+  verify_screen: null
+retry:
+  count: null
+  delay: ~
+verbose: null
+""")
+
+        with patch("mutcli.core.config.PROJECT_CONFIG", config_file):
+            with patch("mutcli.core.config.GLOBAL_CONFIG", Path("/nonexistent")):
+                config = ConfigLoader.load()
+
+        # Non-null values should be preserved
+        assert config.app == "com.example.app"
+        # Null values should fall back to defaults
+        assert config.timeouts.tap == 5.0
+        assert config.timeouts.wait_for == 10.0
+        assert config.timeouts.verify_screen == 10.0
+        assert config.retry.count == 2
+        assert config.retry.delay == 1.0
+        assert config.verbose is False
+
+    def test_wrong_types_use_defaults(self, tmp_path):
+        """YAML with wrong types should use defaults instead of crashing."""
+        config_file = tmp_path / ".mut.yaml"
+        config_file.write_text("""
+timeouts:
+  tap: "not a number"
+  wait_for: [1, 2, 3]
+  verify_screen: {key: value}
+retry:
+  count: "three"
+  delay: invalid
+verbose: "maybe"
+""")
+
+        with patch("mutcli.core.config.PROJECT_CONFIG", config_file):
+            with patch("mutcli.core.config.GLOBAL_CONFIG", Path("/nonexistent")):
+                config = ConfigLoader.load()
+
+        # Invalid types should fall back to defaults
+        assert config.timeouts.tap == 5.0
+        assert config.timeouts.wait_for == 10.0
+        assert config.timeouts.verify_screen == 10.0
+        assert config.retry.count == 2
+        assert config.retry.delay == 1.0
+        # "maybe" is a string, _parse_bool returns False for non-truthy strings
+        assert config.verbose is False
+
+    def test_verbose_string_parsing_from_yaml(self, tmp_path):
+        """YAML verbose as string should be parsed correctly."""
+        for truthy_value in ["true", "True", "TRUE", "1", "yes", "on"]:
+            config_file = tmp_path / ".mut.yaml"
+            config_file.write_text(f"verbose: {truthy_value}")
+
+            with patch("mutcli.core.config.PROJECT_CONFIG", config_file):
+                with patch("mutcli.core.config.GLOBAL_CONFIG", Path("/nonexistent")):
+                    config = ConfigLoader.load()
+
+            assert config.verbose is True, f"Failed for value: {truthy_value}"
+
+    def test_verbose_false_string_parsing_from_yaml(self, tmp_path):
+        """YAML verbose as false string should be parsed correctly."""
+        for falsy_value in ["false", "False", "0", "no", "off", "random"]:
+            config_file = tmp_path / ".mut.yaml"
+            config_file.write_text(f"verbose: {falsy_value}")
+
+            with patch("mutcli.core.config.PROJECT_CONFIG", config_file):
+                with patch("mutcli.core.config.GLOBAL_CONFIG", Path("/nonexistent")):
+                    config = ConfigLoader.load()
+
+            assert config.verbose is False, f"Failed for value: {falsy_value}"
+
+    def test_empty_yaml_file_returns_defaults(self, tmp_path):
+        """Empty YAML file should return defaults."""
+        config_file = tmp_path / ".mut.yaml"
+        config_file.write_text("")
+
+        with patch("mutcli.core.config.PROJECT_CONFIG", config_file):
+            with patch("mutcli.core.config.GLOBAL_CONFIG", Path("/nonexistent")):
+                config = ConfigLoader.load()
+
+        assert config.timeouts.tap == 5.0
+        assert config.retry.count == 2
