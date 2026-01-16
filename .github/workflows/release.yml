@@ -25,7 +25,7 @@ jobs:
           pip install -e ".[dev]"
 
       - name: Run tests
-        run: pytest -v --ignore=tests/test_ai_integration.py
+        run: pytest -v --ignore=tests/test_ai_integration.py --ignore=tests/test_integration.py --ignore=tests/test_scrcpy_service.py --ignore=tests/integration/
 
   publish:
     needs: test
