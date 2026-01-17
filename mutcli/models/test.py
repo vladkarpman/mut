@@ -45,7 +45,8 @@ class Step:
     description: str | None = None
 
     # For conditionals
-    condition: str | None = None
+    condition_type: str | None = None  # "if_present", "if_absent", "if_screen", etc.
+    condition_target: str | None = None  # Element name or screen description
     then_steps: list[Step] = field(default_factory=list)
     else_steps: list[Step] = field(default_factory=list)
 

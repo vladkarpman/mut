@@ -197,11 +197,12 @@ class TestParser:
     @classmethod
     def _parse_conditional(cls, cond_type: str, data: dict[str, Any]) -> Step:
         """Parse conditional step."""
-        condition = data[cond_type]
+        condition_target = data[cond_type]
 
         step = Step(
             action=cond_type,
-            condition=condition,
+            condition_type=cond_type,
+            condition_target=condition_target,
             then_steps=cls._parse_steps(data.get("then", [])),
             else_steps=cls._parse_steps(data.get("else", [])),
             raw=data,

@@ -68,7 +68,8 @@ steps:
 
         step = result.steps[0]
         assert step.action == "if_present"
-        assert step.condition == "Cookie banner"
+        assert step.condition_type == "if_present"
+        assert step.condition_target == "Cookie banner"
         assert len(step.then_steps) == 1
         assert len(step.else_steps) == 1
 
@@ -299,7 +300,8 @@ steps:
 
         step = result.steps[0]
         assert step.action == "if_absent"
-        assert step.condition == "Welcome message"
+        assert step.condition_type == "if_absent"
+        assert step.condition_target == "Welcome message"
         assert len(step.then_steps) == 1
         assert len(step.else_steps) == 0
 
@@ -320,7 +322,8 @@ steps:
 
         step = result.steps[0]
         assert step.action == "if_screen"
-        assert step.condition == "Login form is visible"
+        assert step.condition_type == "if_screen"
+        assert step.condition_target == "Login form is visible"
 
     def test_parses_nested_conditionals(self, tmp_path):
         """Parses nested conditional steps."""
@@ -346,7 +349,8 @@ steps:
 
         inner = outer.then_steps[1]
         assert inner.action == "if_present"
-        assert inner.condition == "Newsletter popup"
+        assert inner.condition_type == "if_present"
+        assert inner.condition_target == "Newsletter popup"
 
 
 class TestParserRepeat:
