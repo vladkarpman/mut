@@ -10,6 +10,7 @@ from mutcli.core.step_analyzer import (
     AnalyzedStep,
     StepAnalyzer,
 )
+from mutcli.core.step_collapsing import CollapsedStep
 
 
 class TestAnalyzedStep:
@@ -929,3 +930,504 @@ class TestPlaceholderResult:
 
         assert result.original_tap == event
         assert result.original_tap["custom_field"] == "value"
+
+
+class TestAnalyzeTypeStep:
+    """Test _analyze_type_step method."""
+
+    @pytest.mark.asyncio
+    async def test_analyzes_type_action(self, tmp_path):
+        """Should analyze type action using before/after frames."""
+        mock_ai = MagicMock()
+        mock_ai.is_available = True
+        mock_ai.analyze_type = AsyncMock(return_value={
+            "element_text": "Search field",
+            "element_type": "search_box",
+            "before_description": "Search screen with keyboard",
+            "after_description": "Search field contains text",
+            "suggested_verification": "search text visible",
+        })
+
+        analyzer = StepAnalyzer(ai_analyzer=mock_ai)
+
+        screenshots_dir = tmp_path / "screenshots"
+        screenshots_dir.mkdir()
+        (screenshots_dir / "step_001_before.png").write_bytes(b"png_before")
+        (screenshots_dir / "step_001_after.png").write_bytes(b"png_after")
+
+        step = CollapsedStep(
+            index=1,
+            action="type",
+            timestamp=1.5,
+            original_indices=(0, 5),
+            tap_count=6,
+            text="hello",
+        )
+
+        result = await analyzer._analyze_type_step(0, step, screenshots_dir)
+
+        mock_ai.analyze_type.assert_called_once()
+        assert result.element_text == "Search field"
+        assert result.before_description == "Search screen with keyboard"
+        assert result.after_description == "Search field contains text"
+        assert result.original_tap["action"] == "type"
+        assert result.original_tap["tap_count"] == 6
+        assert result.original_tap["text"] == "hello"
+
+    @pytest.mark.asyncio
+    async def test_raises_on_missing_before_frame(self, tmp_path):
+        """Should raise FileNotFoundError when before frame is missing."""
+        mock_ai = MagicMock()
+        analyzer = StepAnalyzer(ai_analyzer=mock_ai)
+
+        screenshots_dir = tmp_path / "screenshots"
+        screenshots_dir.mkdir()
+        # Only create after frame
+        (screenshots_dir / "step_001_after.png").write_bytes(b"png_after")
+
+        step = CollapsedStep(
+            index=1,
+            action="type",
+            timestamp=1.5,
+            original_indices=(0, 5),
+        )
+
+        with pytest.raises(FileNotFoundError, match="before"):
+            await analyzer._analyze_type_step(0, step, screenshots_dir)
+
+    @pytest.mark.asyncio
+    async def test_raises_on_missing_after_frame(self, tmp_path):
+        """Should raise FileNotFoundError when after frame is missing."""
+        mock_ai = MagicMock()
+        analyzer = StepAnalyzer(ai_analyzer=mock_ai)
+
+        screenshots_dir = tmp_path / "screenshots"
+        screenshots_dir.mkdir()
+        # Only create before frame
+        (screenshots_dir / "step_001_before.png").write_bytes(b"png_before")
+
+        step = CollapsedStep(
+            index=1,
+            action="type",
+            timestamp=1.5,
+            original_indices=(0, 5),
+        )
+
+        with pytest.raises(FileNotFoundError, match="after"):
+            await analyzer._analyze_type_step(0, step, screenshots_dir)
+
+
+class TestAnalyzeCollapsedStepsParallel:
+    """Test analyze_collapsed_steps_parallel method."""
+
+    @pytest.mark.asyncio
+    async def test_processes_mixed_actions_in_parallel(self, tmp_path):
+        """Should analyze all collapsed step types concurrently."""
+        mock_ai = MagicMock()
+        mock_ai.is_available = True
+        mock_ai.analyze_tap = AsyncMock(return_value={
+            "element_text": "Submit",
+            "element_type": "button",
+            "before_description": "Form",
+            "after_description": "Loading",
+            "suggested_verification": None,
+        })
+        mock_ai.analyze_type = AsyncMock(return_value={
+            "element_text": "Email field",
+            "element_type": "text_field",
+            "before_description": "Login form",
+            "after_description": "Email entered",
+            "suggested_verification": None,
+        })
+        mock_ai.analyze_swipe = AsyncMock(return_value={
+            "direction": "up",
+            "content_changed": "New items",
+            "before_description": "Top of list",
+            "after_description": "More items",
+            "suggested_verification": None,
+        })
+
+        analyzer = StepAnalyzer(ai_analyzer=mock_ai)
+
+        screenshots_dir = tmp_path / "screenshots"
+        screenshots_dir.mkdir()
+
+        # Step 1: tap
+        (screenshots_dir / "step_001_before.png").write_bytes(b"png")
+        (screenshots_dir / "step_001_touch.png").write_bytes(b"png")
+        (screenshots_dir / "step_001_after.png").write_bytes(b"png")
+
+        # Step 2: type
+        (screenshots_dir / "step_002_before.png").write_bytes(b"png")
+        (screenshots_dir / "step_002_after.png").write_bytes(b"png")
+
+        # Step 3: swipe
+        (screenshots_dir / "step_003_before.png").write_bytes(b"png")
+        (screenshots_dir / "step_003_swipe_start.png").write_bytes(b"png")
+        (screenshots_dir / "step_003_swipe_end.png").write_bytes(b"png")
+        (screenshots_dir / "step_003_after.png").write_bytes(b"png")
+
+        collapsed_steps = [
+            CollapsedStep(
+                index=1,
+                action="tap",
+                timestamp=1.0,
+                original_indices=(0, 0),
+                coordinates={"x": 100, "y": 200},
+            ),
+            CollapsedStep(
+                index=2,
+                action="type",
+                timestamp=2.0,
+                original_indices=(1, 6),
+                tap_count=6,
+                text="test@email.com",
+            ),
+            CollapsedStep(
+                index=3,
+                action="swipe",
+                timestamp=3.0,
+                original_indices=(7, 7),
+                start={"x": 200, "y": 500},
+                end={"x": 200, "y": 200},
+                direction="up",
+            ),
+        ]
+
+        results = await analyzer.analyze_collapsed_steps_parallel(
+            collapsed_steps=collapsed_steps,
+            screenshots_dir=screenshots_dir,
+        )
+
+        assert len(results) == 3
+        # Results should be in order
+        assert results[0].index == 0
+        assert results[0].element_text == "Submit"
+        assert results[1].index == 1
+        assert results[1].element_text == "Email field"
+        assert results[2].index == 2
+        assert results[2].element_text == "swipe up"
+
+    @pytest.mark.asyncio
+    async def test_calls_progress_callback(self, tmp_path):
+        """Should call progress callback as each step completes."""
+        mock_ai = MagicMock()
+        mock_ai.is_available = True
+        mock_ai.analyze_type = AsyncMock(return_value={
+            "element_text": "Field",
+            "element_type": "text_field",
+            "before_description": "Before",
+            "after_description": "After",
+            "suggested_verification": None,
+        })
+
+        analyzer = StepAnalyzer(ai_analyzer=mock_ai)
+
+        screenshots_dir = tmp_path / "screenshots"
+        screenshots_dir.mkdir()
+
+        for i in range(1, 3):
+            (screenshots_dir / f"step_{i:03d}_before.png").write_bytes(b"png")
+            (screenshots_dir / f"step_{i:03d}_after.png").write_bytes(b"png")
+
+        collapsed_steps = [
+            CollapsedStep(index=1, action="type", timestamp=1.0, original_indices=(0, 3)),
+            CollapsedStep(index=2, action="type", timestamp=2.0, original_indices=(4, 7)),
+        ]
+
+        progress_calls: list[tuple[int, int]] = []
+
+        def on_progress(completed: int, total: int) -> None:
+            progress_calls.append((completed, total))
+
+        await analyzer.analyze_collapsed_steps_parallel(
+            collapsed_steps=collapsed_steps,
+            screenshots_dir=screenshots_dir,
+            on_progress=on_progress,
+        )
+
+        assert len(progress_calls) == 2
+        assert all(total == 2 for _, total in progress_calls)
+        completed_values = {c for c, _ in progress_calls}
+        assert completed_values == {1, 2}
+
+    @pytest.mark.asyncio
+    async def test_returns_empty_list_for_no_steps(self, tmp_path):
+        """Should return empty list when no collapsed steps."""
+        mock_ai = MagicMock()
+        analyzer = StepAnalyzer(ai_analyzer=mock_ai)
+
+        screenshots_dir = tmp_path / "screenshots"
+        screenshots_dir.mkdir()
+
+        results = await analyzer.analyze_collapsed_steps_parallel(
+            collapsed_steps=[],
+            screenshots_dir=screenshots_dir,
+        )
+
+        assert results == []
+
+
+class TestCollapsedStepRouting:
+    """Test routing of collapsed steps to correct handlers."""
+
+    @pytest.mark.asyncio
+    async def test_routes_type_to_analyze_type(self, tmp_path):
+        """Should route type action to analyze_type handler."""
+        mock_ai = MagicMock()
+        mock_ai.is_available = True
+        mock_ai.analyze_type = AsyncMock(return_value={
+            "element_text": "Search",
+            "element_type": "search_box",
+            "before_description": "Before",
+            "after_description": "After",
+            "suggested_verification": None,
+        })
+        mock_ai.analyze_tap = AsyncMock()
+
+        analyzer = StepAnalyzer(ai_analyzer=mock_ai)
+
+        screenshots_dir = tmp_path / "screenshots"
+        screenshots_dir.mkdir()
+        (screenshots_dir / "step_001_before.png").write_bytes(b"png")
+        (screenshots_dir / "step_001_after.png").write_bytes(b"png")
+
+        step = CollapsedStep(
+            index=1,
+            action="type",
+            timestamp=1.0,
+            original_indices=(0, 5),
+            tap_count=6,
+        )
+
+        result = await analyzer._analyze_single_collapsed_step(0, step, screenshots_dir)
+
+        mock_ai.analyze_type.assert_called_once()
+        mock_ai.analyze_tap.assert_not_called()
+        assert result.element_text == "Search"
+
+    @pytest.mark.asyncio
+    async def test_routes_tap_to_analyze_tap(self, tmp_path):
+        """Should route tap action to analyze_tap handler."""
+        mock_ai = MagicMock()
+        mock_ai.is_available = True
+        mock_ai.analyze_tap = AsyncMock(return_value={
+            "element_text": "Button",
+            "element_type": "button",
+            "before_description": "Before",
+            "after_description": "After",
+            "suggested_verification": None,
+        })
+        mock_ai.analyze_type = AsyncMock()
+
+        analyzer = StepAnalyzer(ai_analyzer=mock_ai)
+
+        screenshots_dir = tmp_path / "screenshots"
+        screenshots_dir.mkdir()
+        (screenshots_dir / "step_001_before.png").write_bytes(b"png")
+        (screenshots_dir / "step_001_touch.png").write_bytes(b"png")
+        (screenshots_dir / "step_001_after.png").write_bytes(b"png")
+
+        step = CollapsedStep(
+            index=1,
+            action="tap",
+            timestamp=1.0,
+            original_indices=(0, 0),
+            coordinates={"x": 100, "y": 200},
+        )
+
+        result = await analyzer._analyze_single_collapsed_step(0, step, screenshots_dir)
+
+        mock_ai.analyze_tap.assert_called_once()
+        mock_ai.analyze_type.assert_not_called()
+        assert result.element_text == "Button"
+
+
+class TestCollapsedStepToEvent:
+    """Test _collapsed_step_to_event conversion method."""
+
+    def test_converts_tap_step(self):
+        """Should convert tap CollapsedStep to event dict."""
+        mock_ai = MagicMock()
+        analyzer = StepAnalyzer(ai_analyzer=mock_ai)
+
+        step = CollapsedStep(
+            index=1,
+            action="tap",
+            timestamp=1.5,
+            original_indices=(0, 0),
+            coordinates={"x": 100, "y": 200},
+        )
+
+        event = analyzer._collapsed_step_to_event(step)
+
+        assert event["gesture"] == "tap"
+        assert event["action"] == "tap"
+        assert event["timestamp"] == 1.5
+        assert event["x"] == 100
+        assert event["y"] == 200
+
+    def test_converts_type_step(self):
+        """Should convert type CollapsedStep to event dict."""
+        mock_ai = MagicMock()
+        analyzer = StepAnalyzer(ai_analyzer=mock_ai)
+
+        step = CollapsedStep(
+            index=2,
+            action="type",
+            timestamp=2.0,
+            original_indices=(1, 6),
+            tap_count=6,
+            text="hello",
+        )
+
+        event = analyzer._collapsed_step_to_event(step)
+
+        # Type action should map to "tap" gesture for compatibility
+        assert event["gesture"] == "tap"
+        assert event["action"] == "type"
+        assert event["timestamp"] == 2.0
+        assert event["tap_count"] == 6
+        assert event["text"] == "hello"
+
+    def test_converts_swipe_step(self):
+        """Should convert swipe CollapsedStep to event dict."""
+        mock_ai = MagicMock()
+        analyzer = StepAnalyzer(ai_analyzer=mock_ai)
+
+        step = CollapsedStep(
+            index=3,
+            action="swipe",
+            timestamp=3.0,
+            original_indices=(7, 7),
+            start={"x": 200, "y": 500},
+            end={"x": 200, "y": 200},
+            direction="up",
+        )
+
+        event = analyzer._collapsed_step_to_event(step)
+
+        assert event["gesture"] == "swipe"
+        assert event["action"] == "swipe"
+        assert event["timestamp"] == 3.0
+        assert event["x"] == 200
+        assert event["y"] == 500
+        assert event["end_x"] == 200
+        assert event["end_y"] == 200
+
+    def test_converts_long_press_step(self):
+        """Should convert long_press CollapsedStep to event dict."""
+        mock_ai = MagicMock()
+        analyzer = StepAnalyzer(ai_analyzer=mock_ai)
+
+        step = CollapsedStep(
+            index=4,
+            action="long_press",
+            timestamp=4.0,
+            original_indices=(8, 8),
+            coordinates={"x": 150, "y": 300},
+            duration_ms=800,
+        )
+
+        event = analyzer._collapsed_step_to_event(step)
+
+        assert event["gesture"] == "long_press"
+        assert event["action"] == "long_press"
+        assert event["timestamp"] == 4.0
+        assert event["x"] == 150
+        assert event["y"] == 300
+        assert event["duration_ms"] == 800
+
+
+class TestCollapsedStepRetry:
+    """Test _analyze_collapsed_step_with_retry method."""
+
+    @pytest.mark.asyncio
+    async def test_retries_on_rate_limit(self, tmp_path):
+        """Should retry collapsed step analysis on rate limit."""
+        mock_ai = MagicMock()
+        mock_ai.is_available = True
+
+        call_count = 0
+
+        async def mock_analyze_type(*args, **kwargs):
+            nonlocal call_count
+            call_count += 1
+            if call_count < 2:
+                raise google_exceptions.TooManyRequests("Rate limited")
+            return {
+                "element_text": "Field",
+                "element_type": "text_field",
+                "before_description": "Before",
+                "after_description": "After",
+                "suggested_verification": None,
+            }
+
+        mock_ai.analyze_type = mock_analyze_type
+
+        analyzer = StepAnalyzer(ai_analyzer=mock_ai)
+
+        screenshots_dir = tmp_path / "screenshots"
+        screenshots_dir.mkdir()
+        (screenshots_dir / "step_001_before.png").write_bytes(b"png")
+        (screenshots_dir / "step_001_after.png").write_bytes(b"png")
+
+        step = CollapsedStep(
+            index=1,
+            action="type",
+            timestamp=1.0,
+            original_indices=(0, 5),
+        )
+
+        index, result = await analyzer._analyze_collapsed_step_with_retry(
+            index=0,
+            step=step,
+            screenshots_dir=screenshots_dir,
+            max_retries=2,
+        )
+
+        assert call_count == 2
+        assert index == 0
+        assert result.element_text == "Field"
+
+    @pytest.mark.asyncio
+    async def test_no_retry_on_client_error(self, tmp_path):
+        """Should NOT retry on client errors."""
+        mock_ai = MagicMock()
+        mock_ai.is_available = True
+
+        call_count = 0
+
+        async def mock_analyze_type(*args, **kwargs):
+            nonlocal call_count
+            call_count += 1
+            raise google_exceptions.InvalidArgument("Bad request")
+
+        mock_ai.analyze_type = mock_analyze_type
+
+        analyzer = StepAnalyzer(ai_analyzer=mock_ai)
+
+        screenshots_dir = tmp_path / "screenshots"
+        screenshots_dir.mkdir()
+        (screenshots_dir / "step_001_before.png").write_bytes(b"png")
+        (screenshots_dir / "step_001_after.png").write_bytes(b"png")
+
+        step = CollapsedStep(
+            index=1,
+            action="type",
+            timestamp=1.0,
+            original_indices=(0, 5),
+        )
+
+        index, result = await analyzer._analyze_collapsed_step_with_retry(
+            index=0,
+            step=step,
+            screenshots_dir=screenshots_dir,
+            max_retries=2,
+        )
+
+        # Should only be called once - no retry
+        assert call_count == 1
+        assert index == 0
+        assert result.element_text is None
+        assert "Bad request" in result.before_description

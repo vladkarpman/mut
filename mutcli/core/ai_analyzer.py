@@ -45,6 +45,16 @@ class LongPressAnalysisResult(TypedDict):
     suggested_verification: str | None
 
 
+class TypeAnalysisResult(TypedDict):
+    """Result from analyze_type() method."""
+
+    element_text: str | None  # e.g., "Search field", "Email input"
+    element_type: str  # text_field|search_box|password_field|textarea|other
+    before_description: str
+    after_description: str
+    suggested_verification: str | None
+
+
 class AIAnalyzer:
     """AI vision analysis using Gemini 2.5 Flash.
 
@@ -607,6 +617,78 @@ Respond with JSON only (no markdown, no code blocks):
                 element_text=None,
                 element_type="other",
                 result_type="other",
+                before_description=f"Analysis failed: {e}",
+                after_description=f"Analysis failed: {e}",
+                suggested_verification=None,
+            )
+
+    async def analyze_type(
+        self,
+        before: bytes,
+        after: bytes,
+    ) -> TypeAnalysisResult:
+        """Analyze a typing action using before and after frames.
+
+        Args:
+            before: PNG image bytes - screen state before typing (with keyboard)
+            after: PNG image bytes - screen state after typing completed
+
+        Returns:
+            TypeAnalysisResult with element info and descriptions
+        """
+        if not self.is_available or self._client is None:
+            return TypeAnalysisResult(
+                element_text=None,
+                element_type="other",
+                before_description="Unknown (AI unavailable)",
+                after_description="Unknown (AI unavailable)",
+                suggested_verification=None,
+            )
+
+        prompt = """Analyze this TYPING interaction on a mobile app.
+
+Screenshots:
+1. BEFORE - screen state before/during typing (may show keyboard)
+2. AFTER - screen state after typing completed
+
+Focus on:
+1. What text field or input element was focused for typing?
+2. What does the screen look like after typing?
+
+Respond with JSON only (no markdown, no code blocks):
+{
+  "element_text": "field name like 'Search field', 'Email input', 'Password field', or null",
+  "element_type": "text_field|search_box|password_field|textarea|other",
+  "before_description": "brief UI state before/during typing",
+  "after_description": "brief UI state after typing",
+  "suggested_verification": "verification phrase or null"
+}"""
+
+        try:
+            before_part = types.Part.from_bytes(data=before, mime_type="image/png")
+            after_part = types.Part.from_bytes(data=after, mime_type="image/png")
+
+            response = await self._client.aio.models.generate_content(
+                model=self._model,
+                contents=[before_part, after_part, prompt],  # type: ignore[arg-type]
+            )
+
+            response_text = response.text or ""
+            result = self._parse_json_response(response_text)
+
+            return TypeAnalysisResult(
+                element_text=result.get("element_text"),
+                element_type=result.get("element_type", "other"),
+                before_description=result.get("before_description", ""),
+                after_description=result.get("after_description", ""),
+                suggested_verification=result.get("suggested_verification"),
+            )
+
+        except Exception as e:
+            logger.error(f"analyze_type failed: {e}")
+            return TypeAnalysisResult(
+                element_text=None,
+                element_type="other",
                 before_description=f"Analysis failed: {e}",
                 after_description=f"Analysis failed: {e}",
                 suggested_verification=None,

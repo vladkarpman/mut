@@ -1,16 +1,21 @@
 """Step analyzer for AI-powered element extraction from screenshots."""
 
+from __future__ import annotations
+
 import asyncio
 import json
 import logging
 from collections.abc import Callable
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
 from google.api_core import exceptions as google_exceptions
 
 from mutcli.core.ai_analyzer import AIAnalyzer
+
+if TYPE_CHECKING:
+    from mutcli.core.step_collapsing import CollapsedStep
 
 logger = logging.getLogger("mut.step_analyzer")
 
@@ -544,6 +549,57 @@ class StepAnalyzer:
             suggested_verification=result.get("suggested_verification"),
         )
 
+    async def _analyze_type_step(
+        self,
+        index: int,
+        step: CollapsedStep,
+        screenshots_dir: Path,
+    ) -> AnalyzedStep:
+        """Analyze a type action step using before and after frames.
+
+        Args:
+            index: Step index (0-based)
+            step: CollapsedStep for the type action
+            screenshots_dir: Directory with extracted frames
+
+        Returns:
+            AnalyzedStep with type analysis results
+        """
+        step_str = f"{step.index:03d}"
+
+        before_path = screenshots_dir / f"step_{step_str}_before.png"
+        after_path = screenshots_dir / f"step_{step_str}_after.png"
+
+        if not before_path.exists():
+            raise FileNotFoundError(f"Missing before screenshot: {before_path}")
+        if not after_path.exists():
+            raise FileNotFoundError(f"Missing after screenshot: {after_path}")
+
+        before_data = before_path.read_bytes()
+        after_data = after_path.read_bytes()
+
+        result = await self._ai_analyzer.analyze_type(
+            before=before_data,
+            after=after_data,
+        )
+
+        # Convert CollapsedStep to event dict for original_tap field
+        original_event = {
+            "action": step.action,
+            "timestamp": step.timestamp,
+            "tap_count": step.tap_count,
+            "text": step.text,
+        }
+
+        return AnalyzedStep(
+            index=index,
+            original_tap=original_event,
+            element_text=result.get("element_text"),
+            before_description=result.get("before_description", ""),
+            after_description=result.get("after_description", ""),
+            suggested_verification=result.get("suggested_verification"),
+        )
+
     def _placeholder_result(
         self,
         index: int,
@@ -568,3 +624,203 @@ class StepAnalyzer:
             after_description=f"Analysis failed: {error_message}",
             suggested_verification=None,
         )
+
+    # -------------------------------------------------------------------------
+    # Collapsed steps analysis methods
+    # -------------------------------------------------------------------------
+
+    async def analyze_collapsed_steps_parallel(
+        self,
+        collapsed_steps: list[CollapsedStep],
+        screenshots_dir: Path,
+        on_progress: Callable[[int, int], None] | None = None,
+    ) -> list[AnalyzedStep]:
+        """Analyze all collapsed steps in parallel with progress callback.
+
+        Handles CollapsedStep objects, routing each action type to the
+        appropriate analyzer:
+        - type: Uses analyze_type (2 frames: before, after)
+        - tap: Uses analyze_tap (3 frames: before, touch, after)
+        - swipe: Uses analyze_swipe (4 frames)
+        - long_press: Uses analyze_long_press (4 frames)
+
+        Args:
+            collapsed_steps: List of CollapsedStep objects
+            screenshots_dir: Directory with extracted frames
+            on_progress: Callback(completed, total) called as each finishes
+
+        Returns:
+            List of AnalyzedStep in original order
+        """
+        if not collapsed_steps:
+            return []
+
+        # Create tasks for all steps
+        tasks = []
+        for i, step in enumerate(collapsed_steps):
+            task = self._analyze_collapsed_step_with_retry(i, step, screenshots_dir)
+            tasks.append(task)
+
+        # Execute in parallel, collecting results as they complete
+        results: list[AnalyzedStep | None] = [None] * len(tasks)
+        completed = 0
+
+        for coro in asyncio.as_completed(tasks):
+            index, result = await coro
+            results[index] = result
+            completed += 1
+            if on_progress:
+                on_progress(completed, len(tasks))
+
+        # Filter out None values (should not happen, but for type safety)
+        return [r for r in results if r is not None]
+
+    async def _analyze_collapsed_step_with_retry(
+        self,
+        index: int,
+        step: CollapsedStep,
+        screenshots_dir: Path,
+        max_retries: int = 2,
+    ) -> tuple[int, AnalyzedStep]:
+        """Analyze single collapsed step with exponential backoff retry.
+
+        Routes to appropriate handler based on step.action.
+
+        Args:
+            index: Step index (0-based)
+            step: CollapsedStep object
+            screenshots_dir: Directory with extracted frames
+            max_retries: Maximum number of retries (default: 2)
+
+        Returns:
+            Tuple of (index, AnalyzedStep) to preserve ordering
+        """
+        delay = 0.5
+        last_error: Exception | None = None
+        step_num = step.index
+
+        # Create event dict from CollapsedStep for placeholder
+        event_dict = self._collapsed_step_to_event(step)
+
+        for attempt in range(max_retries + 1):
+            try:
+                result = await self._analyze_single_collapsed_step(index, step, screenshots_dir)
+                return (index, result)
+            except RETRYABLE_EXCEPTIONS as e:
+                # Transient error - retry with backoff
+                last_error = e
+                attempt_num = attempt + 1
+                total_attempts = max_retries + 1
+                logger.warning(
+                    f"Step {step_num} analysis failed (attempt {attempt_num}/{total_attempts}): {e}"
+                )
+                if attempt < max_retries:
+                    await asyncio.sleep(delay)
+                    delay *= 2  # Exponential backoff
+            except Exception as e:
+                # Non-retryable error - fail immediately
+                logger.error(f"Step {step_num} analysis failed with non-retryable error: {e}")
+                return (index, self._placeholder_result(index, event_dict, str(e)))
+
+        # All retries exhausted - return placeholder
+        return (index, self._placeholder_result(index, event_dict, str(last_error)))
+
+    async def _analyze_single_collapsed_step(
+        self,
+        index: int,
+        step: CollapsedStep,
+        screenshots_dir: Path,
+    ) -> AnalyzedStep:
+        """Analyze a single collapsed step by routing to the correct analyzer.
+
+        Args:
+            index: Step index (0-based)
+            step: CollapsedStep object
+            screenshots_dir: Directory with extracted frames
+
+        Returns:
+            AnalyzedStep with analysis results
+
+        Raises:
+            FileNotFoundError: If required screenshot files are missing
+            Exception: If AI analysis fails
+        """
+        action = step.action
+
+        if action == "type":
+            return await self._analyze_type_step(index, step, screenshots_dir)
+
+        # For gesture actions, convert to event dict and use existing methods
+        step_str = f"{step.index:03d}"
+
+        # Load common frames (before, after)
+        before_path = screenshots_dir / f"step_{step_str}_before.png"
+        after_path = screenshots_dir / f"step_{step_str}_after.png"
+
+        if not before_path.exists():
+            raise FileNotFoundError(f"Missing before screenshot: {before_path}")
+        if not after_path.exists():
+            raise FileNotFoundError(f"Missing after screenshot: {after_path}")
+
+        before_data = before_path.read_bytes()
+        after_data = after_path.read_bytes()
+
+        # Convert CollapsedStep to event dict for the gesture handlers
+        event = self._collapsed_step_to_event(step)
+
+        if action == "tap":
+            return await self._analyze_tap_step(
+                index, event, screenshots_dir, before_data, after_data, step_str
+            )
+        elif action == "swipe":
+            return await self._analyze_swipe_step(
+                index, event, screenshots_dir, before_data, after_data, step_str
+            )
+        elif action == "long_press":
+            return await self._analyze_long_press_step(
+                index, event, screenshots_dir, before_data, after_data, step_str
+            )
+        else:
+            # Unknown action - treat as tap
+            logger.warning(f"Unknown action type '{action}' for step {step.index}, treating as tap")
+            return await self._analyze_tap_step(
+                index, event, screenshots_dir, before_data, after_data, step_str
+            )
+
+    def _collapsed_step_to_event(self, step: CollapsedStep) -> dict[str, Any]:
+        """Convert CollapsedStep to event dict for compatibility.
+
+        Args:
+            step: CollapsedStep object
+
+        Returns:
+            Dict compatible with touch event format
+        """
+        event: dict[str, Any] = {
+            "gesture": step.action if step.action != "type" else "tap",
+            "action": step.action,
+            "timestamp": step.timestamp,
+        }
+
+        if step.coordinates:
+            event["x"] = step.coordinates["x"]
+            event["y"] = step.coordinates["y"]
+
+        if step.start:
+            event["x"] = step.start["x"]
+            event["y"] = step.start["y"]
+
+        if step.end:
+            event["end_x"] = step.end["x"]
+            event["end_y"] = step.end["y"]
+
+        if step.duration_ms is not None:
+            event["duration_ms"] = step.duration_ms
+
+        if step.tap_count is not None:
+            event["tap_count"] = step.tap_count
+
+        if step.text is not None:
+            event["text"] = step.text
+
+        return event
