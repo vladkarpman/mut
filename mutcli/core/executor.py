@@ -61,6 +61,7 @@ class TestExecutor:
         self._ai = ai_analyzer or AIAnalyzer()
         self._screen_size: tuple[int, int] | None = None
         self._step_number = 0
+        self._test_start: float = 0.0  # Track test start time for timestamps
 
     def execute_test(self, test: TestFile) -> TestResult:
         """Execute a complete test file.
@@ -72,6 +73,7 @@ class TestExecutor:
             TestResult with all step results
         """
         start = time.time()
+        self._test_start = start  # Store for step timestamps
         self._step_number = 0  # Reset for each test
         results: list[StepResult] = []
         status = "passed"
@@ -131,6 +133,9 @@ class TestExecutor:
         self._step_number += 1
         start = time.time()
 
+        # Capture before screenshot
+        screenshot_before = self._capture_screenshot()
+
         try:
             # Dispatch to action handler
             handler = getattr(self, f"_action_{step.action}", None)
@@ -140,9 +145,13 @@ class TestExecutor:
                     action=step.action,
                     status="failed",
                     error=f"Unknown action: {step.action}",
+                    screenshot_before=screenshot_before,
                 )
 
             error = handler(step)
+
+            # Capture after screenshot
+            screenshot_after = self._capture_screenshot()
 
             return StepResult(
                 step_number=self._step_number,
@@ -150,6 +159,9 @@ class TestExecutor:
                 status="failed" if error else "passed",
                 duration=time.time() - start,
                 error=error,
+                screenshot_before=screenshot_before,
+                screenshot_after=screenshot_after,
+                details={"timestamp": time.time() - self._test_start},
             )
 
         except Exception as e:
@@ -159,7 +171,19 @@ class TestExecutor:
                 status="failed",
                 duration=time.time() - start,
                 error=str(e),
+                screenshot_before=screenshot_before,
             )
+
+    def _capture_screenshot(self) -> bytes | None:
+        """Capture screenshot from device if available.
+
+        Returns:
+            Screenshot bytes or None if capture fails
+        """
+        try:
+            return self._device.take_screenshot()
+        except Exception:
+            return None
 
     def _get_screen_size(self) -> tuple[int, int]:
         """Get cached screen size."""

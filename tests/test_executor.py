@@ -686,7 +686,8 @@ class TestExecutorConditionalActions:
         result = executor.execute_step(step)
 
         assert result.status == "passed"
-        mock_device.take_screenshot.assert_called_once()
+        # take_screenshot is called for: before (outer), if_screen action, before (nested), after (nested), after (outer)
+        assert mock_device.take_screenshot.call_count >= 1
         mock_ai.verify_screen.assert_called_once_with(
             b"fake_screenshot_data", "Login page with email field visible"
         )
@@ -815,6 +816,103 @@ class TestStepResult:
 
         assert result.status == "failed"
         assert result.error == "Element not found"
+
+
+class TestExecutorScreenshots:
+    """Tests for screenshot capture during execution."""
+
+    @pytest.fixture
+    def mock_device(self):
+        """Mock DeviceController."""
+        device = MagicMock()
+        device.get_screen_size.return_value = (1080, 2340)
+        device.find_element.return_value = (540, 1200)
+        device.take_screenshot.return_value = b"fake_screenshot_bytes"
+        return device
+
+    @pytest.fixture
+    def executor(self, mock_device):
+        """Create executor with mocked device."""
+        with patch("mutcli.core.executor.DeviceController", return_value=mock_device):
+            return TestExecutor(device_id="test-device")
+
+    def test_captures_before_screenshot(self, executor, mock_device):
+        """Should capture screenshot before executing step."""
+        step = Step(action="tap", target="Button")
+
+        result = executor.execute_step(step)
+
+        assert result.screenshot_before == b"fake_screenshot_bytes"
+        # take_screenshot should be called at least once for before
+        assert mock_device.take_screenshot.call_count >= 1
+
+    def test_captures_after_screenshot(self, executor, mock_device):
+        """Should capture screenshot after executing step."""
+        step = Step(action="tap", target="Button")
+
+        result = executor.execute_step(step)
+
+        assert result.screenshot_after == b"fake_screenshot_bytes"
+        # take_screenshot should be called twice (before and after)
+        assert mock_device.take_screenshot.call_count == 2
+
+    def test_screenshot_failure_does_not_fail_step(self, executor, mock_device):
+        """Screenshot capture failure should not fail the step."""
+        mock_device.take_screenshot.side_effect = RuntimeError("Screenshot failed")
+        step = Step(action="tap", target="Button")
+
+        result = executor.execute_step(step)
+
+        assert result.status == "passed"
+        assert result.screenshot_before is None
+        assert result.screenshot_after is None
+
+    def test_step_includes_timestamp_in_details(self, executor, mock_device):
+        """Step result should include timestamp relative to test start."""
+        from mutcli.models.test import TestConfig, TestFile
+
+        test = TestFile(
+            config=TestConfig(app="com.example.app"),
+            setup=[],
+            steps=[
+                Step(action="tap", target="Button1"),
+                Step(action="tap", target="Button2"),
+            ],
+            teardown=[],
+        )
+
+        result = executor.execute_test(test)
+
+        # All steps should have timestamps
+        for step_result in result.steps:
+            assert "timestamp" in step_result.details
+            assert step_result.details["timestamp"] >= 0
+
+        # Second step timestamp should be greater than first
+        assert result.steps[1].details["timestamp"] >= result.steps[0].details["timestamp"]
+
+    def test_before_screenshot_captured_on_unknown_action(self, executor, mock_device):
+        """Before screenshot should be captured even for unknown actions."""
+        step = Step(action="unknown_action_xyz")
+
+        result = executor.execute_step(step)
+
+        assert result.status == "failed"
+        assert result.screenshot_before == b"fake_screenshot_bytes"
+        # Only before screenshot captured for unknown action (fails early)
+        assert mock_device.take_screenshot.call_count == 1
+
+    def test_before_screenshot_captured_on_exception(self, executor, mock_device):
+        """Before screenshot should be captured even when action raises exception."""
+        mock_device.tap.side_effect = RuntimeError("Device disconnected")
+        step = Step(action="tap", target="Button")
+
+        result = executor.execute_step(step)
+
+        assert result.status == "failed"
+        assert result.screenshot_before == b"fake_screenshot_bytes"
+        # Before captured, but after not captured due to exception
+        assert mock_device.take_screenshot.call_count == 1
 
 
 class TestExecuteTestMethod:
