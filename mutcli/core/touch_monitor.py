@@ -42,6 +42,7 @@ class TouchMonitor:
 
     Captures touch events from an Android device using `adb getevent -lt`.
     Runs in a background thread and stores events in a thread-safe list.
+    Coordinates are automatically scaled from touch panel to screen pixels.
 
     Usage:
         monitor = TouchMonitor("device-id")
@@ -70,19 +71,97 @@ class TouchMonitor:
         self._current_y: int | None = None
         self._touch_down: bool = False
 
+        # Coordinate scaling (touch panel -> screen pixels)
+        # Will be detected from device in _get_device_info()
+        self._touch_max_x: int | None = None
+        self._touch_max_y: int | None = None
+        self._screen_width: int | None = None
+        self._screen_height: int | None = None
+
     @property
     def is_running(self) -> bool:
         """Check if monitoring is active."""
         return self._running
 
-    def start(self) -> bool:
+    def _get_device_info(self) -> bool:
+        """Query device for screen size and touch coordinate bounds.
+
+        Returns:
+            True if device info was retrieved successfully.
+        """
+        # Get screen size
+        result = subprocess.run(
+            ["adb", "-s", self._device_id, "shell", "wm", "size"],
+            capture_output=True,
+            text=True,
+        )
+        match = re.search(r"(\d+)x(\d+)", result.stdout)
+        if match:
+            self._screen_width = int(match.group(1))
+            self._screen_height = int(match.group(2))
+        else:
+            logger.error("Failed to get screen size from device")
+            return False
+
+        # Get touch coordinate bounds from getevent -lp
+        result = subprocess.run(
+            ["adb", "-s", self._device_id, "shell", "getevent", "-lp"],
+            capture_output=True,
+            text=True,
+        )
+
+        for line in result.stdout.split("\n"):
+            if "ABS_MT_POSITION_X" in line:
+                match = re.search(r"max (\d+)", line)
+                if match:
+                    self._touch_max_x = int(match.group(1))
+            elif "ABS_MT_POSITION_Y" in line:
+                match = re.search(r"max (\d+)", line)
+                if match:
+                    self._touch_max_y = int(match.group(1))
+
+        if self._touch_max_x is None or self._touch_max_y is None:
+            logger.error("Failed to get touch bounds from device")
+            return False
+
+        logger.info(
+            f"Device info: screen={self._screen_width}x{self._screen_height}, "
+            f"touch_max={self._touch_max_x}x{self._touch_max_y}"
+        )
+        return True
+
+    def _raw_to_screen(self, raw_x: int, raw_y: int) -> tuple[int, int]:
+        """Convert raw touch coordinates to screen pixels."""
+        max_x = self._touch_max_x
+        max_y = self._touch_max_y
+        width = self._screen_width
+        height = self._screen_height
+
+        if max_x is None or max_y is None or width is None or height is None:
+            return raw_x, raw_y
+
+        screen_x = int((raw_x / max_x) * width)
+        screen_y = int((raw_y / max_y) * height)
+        return screen_x, screen_y
+
+    def start(self, reference_time: float | None = None) -> bool:
         """Start monitoring touch events.
+
+        Args:
+            reference_time: Optional reference timestamp (time.time()).
+                           If provided, touch timestamps are relative to this.
+                           Use video start time for synchronization.
 
         Returns:
             True if started successfully, False on error.
         """
         if self._running:
             return True
+
+        # Get device info (screen size and touch bounds)
+        if not self._get_device_info():
+            logger.error("Failed to get device info, cannot start monitoring")
+            return False
 
         try:
             # Launch adb getevent
@@ -99,7 +178,8 @@ class TouchMonitor:
             )
 
             self._running = True
-            self._start_time = time.time()
+            # Use provided reference time or current time
+            self._start_time = reference_time if reference_time is not None else time.time()
 
             # Start processing thread
             self._thread = threading.Thread(
@@ -231,10 +311,13 @@ class TouchMonitor:
 
         timestamp = time.time() - self._start_time
 
+        # Convert raw touch coordinates to screen pixels
+        screen_x, screen_y = self._raw_to_screen(self._current_x, self._current_y)
+
         event = TouchEvent(
             timestamp=timestamp,
-            x=self._current_x,
-            y=self._current_y,
+            x=screen_x,
+            y=screen_y,
             event_type="tap",
         )
 
