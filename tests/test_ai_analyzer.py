@@ -264,3 +264,310 @@ class TestAnalyzeStep:
         contents = call_args.kwargs.get("contents") or call_args[1].get("contents")
         # Should have 2 image parts + 1 text prompt
         assert len(contents) == 3
+
+
+# Helper function to create test images
+def _make_test_image(color: str = "white") -> bytes:
+    """Create a minimal test PNG image."""
+    import io
+
+    from PIL import Image
+    img = Image.new("RGB", (100, 100), color=color)
+    buffer = io.BytesIO()
+    img.save(buffer, format="PNG")
+    return buffer.getvalue()
+
+
+class TestAnalyzeTap:
+    """Test async analyze_tap method."""
+
+    import pytest
+
+    @pytest.mark.asyncio
+    async def test_returns_default_when_no_api_key(self):
+        """Should return default TapAnalysisResult when no API key."""
+        with patch.dict(os.environ, {}, clear=True):
+            os.environ.pop("GOOGLE_API_KEY", None)
+            analyzer = AIAnalyzer(api_key=None)
+
+            result = await analyzer.analyze_tap(
+                before=_make_test_image(),
+                touch=_make_test_image("blue"),
+                after=_make_test_image("green"),
+                x=540,
+                y=1200,
+            )
+
+            assert result["element_text"] is None
+            assert result["element_type"] == "other"
+            assert "unavailable" in result["before_description"].lower()
+            assert "unavailable" in result["after_description"].lower()
+            assert result["suggested_verification"] is None
+
+    @pytest.mark.asyncio
+    @patch("mutcli.core.ai_analyzer.genai")
+    async def test_successful_api_call(self, mock_genai):
+        """Should parse successful API response correctly."""
+        mock_client = MagicMock()
+        mock_genai.Client.return_value = mock_client
+
+        # Mock the async response
+        mock_response = MagicMock()
+        mock_response.text = '''{
+            "element_text": "Login",
+            "element_type": "button",
+            "before_description": "Login screen with form",
+            "after_description": "Loading indicator shown",
+            "suggested_verification": "loading indicator visible"
+        }'''
+
+        # Create async mock for aio.models.generate_content
+        async def mock_generate(*args, **kwargs):
+            return mock_response
+
+        mock_client.aio.models.generate_content = mock_generate
+
+        analyzer = AIAnalyzer(api_key="test-key")
+
+        result = await analyzer.analyze_tap(
+            before=_make_test_image(),
+            touch=_make_test_image("blue"),
+            after=_make_test_image("green"),
+            x=540,
+            y=1200,
+        )
+
+        assert result["element_text"] == "Login"
+        assert result["element_type"] == "button"
+        assert result["before_description"] == "Login screen with form"
+        assert result["after_description"] == "Loading indicator shown"
+        assert result["suggested_verification"] == "loading indicator visible"
+
+    @pytest.mark.asyncio
+    @patch("mutcli.core.ai_analyzer.genai")
+    async def test_handles_api_error(self, mock_genai):
+        """Should return error state when API call fails."""
+        mock_client = MagicMock()
+        mock_genai.Client.return_value = mock_client
+
+        # Create async mock that raises an exception
+        async def mock_generate_error(*args, **kwargs):
+            raise Exception("API connection failed")
+
+        mock_client.aio.models.generate_content = mock_generate_error
+
+        analyzer = AIAnalyzer(api_key="test-key")
+
+        result = await analyzer.analyze_tap(
+            before=_make_test_image(),
+            touch=_make_test_image("blue"),
+            after=_make_test_image("green"),
+            x=540,
+            y=1200,
+        )
+
+        assert result["element_text"] is None
+        assert result["element_type"] == "other"
+        assert "failed" in result["before_description"].lower()
+        assert "failed" in result["after_description"].lower()
+
+
+class TestAnalyzeSwipe:
+    """Test async analyze_swipe method."""
+
+    import pytest
+
+    @pytest.mark.asyncio
+    async def test_returns_default_when_no_api_key(self):
+        """Should return default SwipeAnalysisResult when no API key."""
+        with patch.dict(os.environ, {}, clear=True):
+            os.environ.pop("GOOGLE_API_KEY", None)
+            analyzer = AIAnalyzer(api_key=None)
+
+            result = await analyzer.analyze_swipe(
+                before=_make_test_image(),
+                swipe_start=_make_test_image("blue"),
+                swipe_end=_make_test_image("green"),
+                after=_make_test_image("red"),
+                start_x=540,
+                start_y=1500,
+                end_x=540,
+                end_y=500,
+            )
+
+            assert result["direction"] == "unknown"
+            assert "unavailable" in result["content_changed"].lower()
+            assert "unavailable" in result["before_description"].lower()
+            assert "unavailable" in result["after_description"].lower()
+            assert result["suggested_verification"] is None
+
+    @pytest.mark.asyncio
+    @patch("mutcli.core.ai_analyzer.genai")
+    async def test_successful_api_call(self, mock_genai):
+        """Should parse successful API response correctly."""
+        mock_client = MagicMock()
+        mock_genai.Client.return_value = mock_client
+
+        mock_response = MagicMock()
+        mock_response.text = '''{
+            "direction": "up",
+            "content_changed": "More items scrolled into view",
+            "before_description": "List showing items 1-5",
+            "after_description": "List showing items 6-10",
+            "suggested_verification": "item 6 visible"
+        }'''
+
+        async def mock_generate(*args, **kwargs):
+            return mock_response
+
+        mock_client.aio.models.generate_content = mock_generate
+
+        analyzer = AIAnalyzer(api_key="test-key")
+
+        result = await analyzer.analyze_swipe(
+            before=_make_test_image(),
+            swipe_start=_make_test_image("blue"),
+            swipe_end=_make_test_image("green"),
+            after=_make_test_image("red"),
+            start_x=540,
+            start_y=1500,
+            end_x=540,
+            end_y=500,
+        )
+
+        assert result["direction"] == "up"
+        assert result["content_changed"] == "More items scrolled into view"
+        assert result["before_description"] == "List showing items 1-5"
+        assert result["after_description"] == "List showing items 6-10"
+        assert result["suggested_verification"] == "item 6 visible"
+
+    @pytest.mark.asyncio
+    @patch("mutcli.core.ai_analyzer.genai")
+    async def test_handles_api_error(self, mock_genai):
+        """Should return error state when API call fails."""
+        mock_client = MagicMock()
+        mock_genai.Client.return_value = mock_client
+
+        async def mock_generate_error(*args, **kwargs):
+            raise Exception("Network timeout")
+
+        mock_client.aio.models.generate_content = mock_generate_error
+
+        analyzer = AIAnalyzer(api_key="test-key")
+
+        result = await analyzer.analyze_swipe(
+            before=_make_test_image(),
+            swipe_start=_make_test_image("blue"),
+            swipe_end=_make_test_image("green"),
+            after=_make_test_image("red"),
+            start_x=540,
+            start_y=1500,
+            end_x=540,
+            end_y=500,
+        )
+
+        assert result["direction"] == "unknown"
+        assert "failed" in result["content_changed"].lower()
+        assert "failed" in result["before_description"].lower()
+        assert "failed" in result["after_description"].lower()
+
+
+class TestAnalyzeLongPress:
+    """Test async analyze_long_press method."""
+
+    import pytest
+
+    @pytest.mark.asyncio
+    async def test_returns_default_when_no_api_key(self):
+        """Should return default LongPressAnalysisResult when no API key."""
+        with patch.dict(os.environ, {}, clear=True):
+            os.environ.pop("GOOGLE_API_KEY", None)
+            analyzer = AIAnalyzer(api_key=None)
+
+            result = await analyzer.analyze_long_press(
+                before=_make_test_image(),
+                press_start=_make_test_image("blue"),
+                press_held=_make_test_image("green"),
+                after=_make_test_image("red"),
+                x=540,
+                y=800,
+                duration_ms=1000,
+            )
+
+            assert result["element_text"] is None
+            assert result["element_type"] == "other"
+            assert result["result_type"] == "other"
+            assert "unavailable" in result["before_description"].lower()
+            assert "unavailable" in result["after_description"].lower()
+            assert result["suggested_verification"] is None
+
+    @pytest.mark.asyncio
+    @patch("mutcli.core.ai_analyzer.genai")
+    async def test_successful_api_call(self, mock_genai):
+        """Should parse successful API response correctly."""
+        mock_client = MagicMock()
+        mock_genai.Client.return_value = mock_client
+
+        mock_response = MagicMock()
+        mock_response.text = '''{
+            "element_text": "Photo 1",
+            "element_type": "image",
+            "result_type": "context_menu",
+            "before_description": "Photo gallery grid",
+            "after_description": "Context menu with options: Share, Delete, Edit",
+            "suggested_verification": "context menu visible"
+        }'''
+
+        async def mock_generate(*args, **kwargs):
+            return mock_response
+
+        mock_client.aio.models.generate_content = mock_generate
+
+        analyzer = AIAnalyzer(api_key="test-key")
+
+        result = await analyzer.analyze_long_press(
+            before=_make_test_image(),
+            press_start=_make_test_image("blue"),
+            press_held=_make_test_image("green"),
+            after=_make_test_image("red"),
+            x=540,
+            y=800,
+            duration_ms=1000,
+        )
+
+        assert result["element_text"] == "Photo 1"
+        assert result["element_type"] == "image"
+        assert result["result_type"] == "context_menu"
+        assert result["before_description"] == "Photo gallery grid"
+        assert result["after_description"] == "Context menu with options: Share, Delete, Edit"
+        assert result["suggested_verification"] == "context menu visible"
+
+    @pytest.mark.asyncio
+    @patch("mutcli.core.ai_analyzer.genai")
+    async def test_handles_api_error(self, mock_genai):
+        """Should return error state when API call fails."""
+        mock_client = MagicMock()
+        mock_genai.Client.return_value = mock_client
+
+        async def mock_generate_error(*args, **kwargs):
+            raise Exception("Service unavailable")
+
+        mock_client.aio.models.generate_content = mock_generate_error
+
+        analyzer = AIAnalyzer(api_key="test-key")
+
+        result = await analyzer.analyze_long_press(
+            before=_make_test_image(),
+            press_start=_make_test_image("blue"),
+            press_held=_make_test_image("green"),
+            after=_make_test_image("red"),
+            x=540,
+            y=800,
+            duration_ms=1000,
+        )
+
+        assert result["element_text"] is None
+        assert result["element_type"] == "other"
+        assert result["result_type"] == "other"
+        assert "failed" in result["before_description"].lower()
+        assert "failed" in result["after_description"].lower()
