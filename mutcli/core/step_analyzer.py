@@ -8,9 +8,26 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
 
+from google.api_core import exceptions as google_exceptions
+
 from mutcli.core.ai_analyzer import AIAnalyzer
 
 logger = logging.getLogger("mut.step_analyzer")
+
+
+# Exceptions that indicate transient errors and should trigger retry
+RETRYABLE_EXCEPTIONS: tuple[type[Exception], ...] = (
+    # Google API exceptions (rate limit, server errors)
+    google_exceptions.TooManyRequests,        # 429
+    google_exceptions.ResourceExhausted,      # 429 (gRPC variant)
+    google_exceptions.InternalServerError,    # 500
+    google_exceptions.BadGateway,             # 502
+    google_exceptions.ServiceUnavailable,     # 503
+    google_exceptions.DeadlineExceeded,       # Timeout
+    # Python built-in network errors
+    TimeoutError,
+    ConnectionError,
+)
 
 
 ELEMENT_EXTRACTION_PROMPT = '''Analyze this mobile app screenshot.
@@ -266,6 +283,9 @@ class StepAnalyzer:
     ) -> tuple[int, AnalyzedStep]:
         """Analyze single step with exponential backoff retry.
 
+        Only retries on transient errors (rate limits, timeouts, server errors).
+        Client errors (4xx like invalid API key) fail immediately without retry.
+
         Args:
             index: Step index (0-based)
             event: Touch event dict with gesture type and coordinates
@@ -277,14 +297,15 @@ class StepAnalyzer:
         """
         delay = 0.5
         last_error: Exception | None = None
+        step_num = index + 1
 
         for attempt in range(max_retries + 1):
             try:
                 result = await self._analyze_single_step(index, event, screenshots_dir)
                 return (index, result)
-            except Exception as e:
+            except RETRYABLE_EXCEPTIONS as e:
+                # Transient error - retry with backoff
                 last_error = e
-                step_num = index + 1
                 attempt_num = attempt + 1
                 total_attempts = max_retries + 1
                 logger.warning(
@@ -293,6 +314,10 @@ class StepAnalyzer:
                 if attempt < max_retries:
                     await asyncio.sleep(delay)
                     delay *= 2  # Exponential backoff
+            except Exception as e:
+                # Non-retryable error (client error, invalid API key, etc.) - fail immediately
+                logger.error(f"Step {step_num} analysis failed with non-retryable error: {e}")
+                return (index, self._placeholder_result(index, event, str(e)))
 
         # All retries exhausted - return placeholder
         return (index, self._placeholder_result(index, event, str(last_error)))

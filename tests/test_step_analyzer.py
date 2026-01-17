@@ -1,8 +1,15 @@
 """Tests for StepAnalyzer."""
 
-from unittest.mock import MagicMock, patch
+from unittest.mock import AsyncMock, MagicMock, patch
 
-from mutcli.core.step_analyzer import AnalyzedStep, StepAnalyzer
+import pytest
+from google.api_core import exceptions as google_exceptions
+
+from mutcli.core.step_analyzer import (
+    RETRYABLE_EXCEPTIONS,
+    AnalyzedStep,
+    StepAnalyzer,
+)
 
 
 class TestAnalyzedStep:
@@ -356,3 +363,569 @@ class TestExtractElement:
         )
 
         assert result["element_text"] is None
+
+
+class TestRetryableExceptions:
+    """Test RETRYABLE_EXCEPTIONS configuration."""
+
+    def test_includes_google_rate_limit_exceptions(self):
+        """Should include TooManyRequests and ResourceExhausted."""
+        assert google_exceptions.TooManyRequests in RETRYABLE_EXCEPTIONS
+        assert google_exceptions.ResourceExhausted in RETRYABLE_EXCEPTIONS
+
+    def test_includes_google_server_errors(self):
+        """Should include 5xx server errors."""
+        assert google_exceptions.InternalServerError in RETRYABLE_EXCEPTIONS
+        assert google_exceptions.BadGateway in RETRYABLE_EXCEPTIONS
+        assert google_exceptions.ServiceUnavailable in RETRYABLE_EXCEPTIONS
+
+    def test_includes_timeout_errors(self):
+        """Should include timeout-related exceptions."""
+        assert google_exceptions.DeadlineExceeded in RETRYABLE_EXCEPTIONS
+        assert TimeoutError in RETRYABLE_EXCEPTIONS
+
+    def test_includes_connection_errors(self):
+        """Should include ConnectionError."""
+        assert ConnectionError in RETRYABLE_EXCEPTIONS
+
+    def test_does_not_include_client_errors(self):
+        """Should NOT include 4xx client errors that shouldn't be retried."""
+        # These are client errors that indicate a problem with the request
+        # and should not be retried
+        assert google_exceptions.InvalidArgument not in RETRYABLE_EXCEPTIONS
+        assert google_exceptions.Unauthenticated not in RETRYABLE_EXCEPTIONS
+        assert google_exceptions.PermissionDenied not in RETRYABLE_EXCEPTIONS
+        assert google_exceptions.NotFound not in RETRYABLE_EXCEPTIONS
+
+
+class TestAnalyzeAllParallel:
+    """Test analyze_all_parallel async method."""
+
+    @pytest.mark.asyncio
+    async def test_processes_steps_in_parallel(self, tmp_path):
+        """Should analyze all steps concurrently."""
+        mock_ai = MagicMock()
+        mock_ai.is_available = True
+        mock_ai.analyze_tap = AsyncMock(return_value={
+            "element_text": "Button",
+            "element_type": "button",
+            "before_description": "Before state",
+            "after_description": "After state",
+            "suggested_verification": None,
+        })
+
+        analyzer = StepAnalyzer(ai_analyzer=mock_ai)
+
+        # Create test screenshots directory
+        screenshots_dir = tmp_path / "screenshots"
+        screenshots_dir.mkdir()
+
+        # Create mock screenshot files for 3 tap steps
+        for i in range(1, 4):
+            (screenshots_dir / f"step_{i:03d}_before.png").write_bytes(b"png_before")
+            (screenshots_dir / f"step_{i:03d}_touch.png").write_bytes(b"png_touch")
+            (screenshots_dir / f"step_{i:03d}_after.png").write_bytes(b"png_after")
+
+        touch_events = [
+            {"gesture": "tap", "x": 100, "y": 200},
+            {"gesture": "tap", "x": 150, "y": 250},
+            {"gesture": "tap", "x": 200, "y": 300},
+        ]
+
+        results = await analyzer.analyze_all_parallel(
+            touch_events=touch_events,
+            screenshots_dir=screenshots_dir,
+        )
+
+        assert len(results) == 3
+        assert all(isinstance(r, AnalyzedStep) for r in results)
+        # Results should be in original order
+        assert results[0].index == 0
+        assert results[1].index == 1
+        assert results[2].index == 2
+
+    @pytest.mark.asyncio
+    async def test_calls_progress_callback(self, tmp_path):
+        """Should call progress callback as each step completes."""
+        mock_ai = MagicMock()
+        mock_ai.is_available = True
+        mock_ai.analyze_tap = AsyncMock(return_value={
+            "element_text": "Button",
+            "element_type": "button",
+            "before_description": "Before",
+            "after_description": "After",
+            "suggested_verification": None,
+        })
+
+        analyzer = StepAnalyzer(ai_analyzer=mock_ai)
+
+        screenshots_dir = tmp_path / "screenshots"
+        screenshots_dir.mkdir()
+
+        for i in range(1, 3):
+            (screenshots_dir / f"step_{i:03d}_before.png").write_bytes(b"png")
+            (screenshots_dir / f"step_{i:03d}_touch.png").write_bytes(b"png")
+            (screenshots_dir / f"step_{i:03d}_after.png").write_bytes(b"png")
+
+        touch_events = [
+            {"gesture": "tap", "x": 100, "y": 200},
+            {"gesture": "tap", "x": 150, "y": 250},
+        ]
+
+        progress_calls: list[tuple[int, int]] = []
+
+        def on_progress(completed: int, total: int) -> None:
+            progress_calls.append((completed, total))
+
+        await analyzer.analyze_all_parallel(
+            touch_events=touch_events,
+            screenshots_dir=screenshots_dir,
+            on_progress=on_progress,
+        )
+
+        # Should have been called twice (once for each completed step)
+        assert len(progress_calls) == 2
+        # Total should always be 2
+        assert all(total == 2 for _, total in progress_calls)
+        # Completed should include 1 and 2
+        completed_values = {c for c, _ in progress_calls}
+        assert completed_values == {1, 2}
+
+    @pytest.mark.asyncio
+    async def test_returns_empty_list_for_no_events(self, tmp_path):
+        """Should return empty list when no touch events."""
+        mock_ai = MagicMock()
+        analyzer = StepAnalyzer(ai_analyzer=mock_ai)
+
+        screenshots_dir = tmp_path / "screenshots"
+        screenshots_dir.mkdir()
+
+        results = await analyzer.analyze_all_parallel(
+            touch_events=[],
+            screenshots_dir=screenshots_dir,
+        )
+
+        assert results == []
+
+
+class TestAnalyzeWithRetry:
+    """Test _analyze_with_retry method."""
+
+    @pytest.mark.asyncio
+    async def test_retries_on_rate_limit_error(self, tmp_path):
+        """Should retry when TooManyRequests is raised."""
+        mock_ai = MagicMock()
+        mock_ai.is_available = True
+
+        call_count = 0
+
+        async def mock_analyze_tap(*args, **kwargs):
+            nonlocal call_count
+            call_count += 1
+            if call_count < 2:
+                raise google_exceptions.TooManyRequests("Rate limited")
+            return {
+                "element_text": "Button",
+                "element_type": "button",
+                "before_description": "Before",
+                "after_description": "After",
+                "suggested_verification": None,
+            }
+
+        mock_ai.analyze_tap = mock_analyze_tap
+
+        analyzer = StepAnalyzer(ai_analyzer=mock_ai)
+
+        screenshots_dir = tmp_path / "screenshots"
+        screenshots_dir.mkdir()
+        (screenshots_dir / "step_001_before.png").write_bytes(b"png")
+        (screenshots_dir / "step_001_touch.png").write_bytes(b"png")
+        (screenshots_dir / "step_001_after.png").write_bytes(b"png")
+
+        event = {"gesture": "tap", "x": 100, "y": 200}
+
+        index, result = await analyzer._analyze_with_retry(
+            index=0,
+            event=event,
+            screenshots_dir=screenshots_dir,
+            max_retries=2,
+        )
+
+        assert call_count == 2  # First call failed, second succeeded
+        assert index == 0
+        assert result.element_text == "Button"
+
+    @pytest.mark.asyncio
+    async def test_retries_on_service_unavailable(self, tmp_path):
+        """Should retry when ServiceUnavailable is raised."""
+        mock_ai = MagicMock()
+        mock_ai.is_available = True
+
+        call_count = 0
+
+        async def mock_analyze_tap(*args, **kwargs):
+            nonlocal call_count
+            call_count += 1
+            if call_count < 2:
+                raise google_exceptions.ServiceUnavailable("503")
+            return {
+                "element_text": "OK",
+                "element_type": "button",
+                "before_description": "Before",
+                "after_description": "After",
+                "suggested_verification": None,
+            }
+
+        mock_ai.analyze_tap = mock_analyze_tap
+
+        analyzer = StepAnalyzer(ai_analyzer=mock_ai)
+
+        screenshots_dir = tmp_path / "screenshots"
+        screenshots_dir.mkdir()
+        (screenshots_dir / "step_001_before.png").write_bytes(b"png")
+        (screenshots_dir / "step_001_touch.png").write_bytes(b"png")
+        (screenshots_dir / "step_001_after.png").write_bytes(b"png")
+
+        event = {"gesture": "tap", "x": 100, "y": 200}
+
+        index, result = await analyzer._analyze_with_retry(
+            index=0,
+            event=event,
+            screenshots_dir=screenshots_dir,
+            max_retries=2,
+        )
+
+        assert call_count == 2
+        assert result.element_text == "OK"
+
+    @pytest.mark.asyncio
+    async def test_no_retry_on_client_error(self, tmp_path):
+        """Should NOT retry on client errors like InvalidArgument."""
+        mock_ai = MagicMock()
+        mock_ai.is_available = True
+
+        call_count = 0
+
+        async def mock_analyze_tap(*args, **kwargs):
+            nonlocal call_count
+            call_count += 1
+            raise google_exceptions.InvalidArgument("Invalid API key")
+
+        mock_ai.analyze_tap = mock_analyze_tap
+
+        analyzer = StepAnalyzer(ai_analyzer=mock_ai)
+
+        screenshots_dir = tmp_path / "screenshots"
+        screenshots_dir.mkdir()
+        (screenshots_dir / "step_001_before.png").write_bytes(b"png")
+        (screenshots_dir / "step_001_touch.png").write_bytes(b"png")
+        (screenshots_dir / "step_001_after.png").write_bytes(b"png")
+
+        event = {"gesture": "tap", "x": 100, "y": 200}
+
+        index, result = await analyzer._analyze_with_retry(
+            index=0,
+            event=event,
+            screenshots_dir=screenshots_dir,
+            max_retries=2,
+        )
+
+        # Should only be called once - no retry on client errors
+        assert call_count == 1
+        assert index == 0
+        assert result.element_text is None
+        assert "Invalid API key" in result.before_description
+
+    @pytest.mark.asyncio
+    async def test_no_retry_on_permission_denied(self, tmp_path):
+        """Should NOT retry on PermissionDenied errors."""
+        mock_ai = MagicMock()
+        mock_ai.is_available = True
+
+        call_count = 0
+
+        async def mock_analyze_tap(*args, **kwargs):
+            nonlocal call_count
+            call_count += 1
+            raise google_exceptions.PermissionDenied("Access denied")
+
+        mock_ai.analyze_tap = mock_analyze_tap
+
+        analyzer = StepAnalyzer(ai_analyzer=mock_ai)
+
+        screenshots_dir = tmp_path / "screenshots"
+        screenshots_dir.mkdir()
+        (screenshots_dir / "step_001_before.png").write_bytes(b"png")
+        (screenshots_dir / "step_001_touch.png").write_bytes(b"png")
+        (screenshots_dir / "step_001_after.png").write_bytes(b"png")
+
+        event = {"gesture": "tap", "x": 100, "y": 200}
+
+        index, result = await analyzer._analyze_with_retry(
+            index=0,
+            event=event,
+            screenshots_dir=screenshots_dir,
+            max_retries=2,
+        )
+
+        assert call_count == 1  # No retry
+        assert "Access denied" in result.before_description
+
+    @pytest.mark.asyncio
+    async def test_returns_placeholder_after_max_retries(self, tmp_path):
+        """Should return placeholder after all retries exhausted."""
+        mock_ai = MagicMock()
+        mock_ai.is_available = True
+
+        call_count = 0
+
+        async def mock_analyze_tap(*args, **kwargs):
+            nonlocal call_count
+            call_count += 1
+            raise google_exceptions.ServiceUnavailable("Still down")
+
+        mock_ai.analyze_tap = mock_analyze_tap
+
+        analyzer = StepAnalyzer(ai_analyzer=mock_ai)
+
+        screenshots_dir = tmp_path / "screenshots"
+        screenshots_dir.mkdir()
+        (screenshots_dir / "step_001_before.png").write_bytes(b"png")
+        (screenshots_dir / "step_001_touch.png").write_bytes(b"png")
+        (screenshots_dir / "step_001_after.png").write_bytes(b"png")
+
+        event = {"gesture": "tap", "x": 100, "y": 200}
+
+        index, result = await analyzer._analyze_with_retry(
+            index=0,
+            event=event,
+            screenshots_dir=screenshots_dir,
+            max_retries=2,
+        )
+
+        # Should be called 3 times (initial + 2 retries)
+        assert call_count == 3
+        assert index == 0
+        assert result.element_text is None
+        assert "Still down" in result.before_description
+
+    @pytest.mark.asyncio
+    async def test_retries_on_timeout_error(self, tmp_path):
+        """Should retry on Python TimeoutError."""
+        mock_ai = MagicMock()
+        mock_ai.is_available = True
+
+        call_count = 0
+
+        async def mock_analyze_tap(*args, **kwargs):
+            nonlocal call_count
+            call_count += 1
+            if call_count < 2:
+                raise TimeoutError("Connection timed out")
+            return {
+                "element_text": "Done",
+                "element_type": "button",
+                "before_description": "Before",
+                "after_description": "After",
+                "suggested_verification": None,
+            }
+
+        mock_ai.analyze_tap = mock_analyze_tap
+
+        analyzer = StepAnalyzer(ai_analyzer=mock_ai)
+
+        screenshots_dir = tmp_path / "screenshots"
+        screenshots_dir.mkdir()
+        (screenshots_dir / "step_001_before.png").write_bytes(b"png")
+        (screenshots_dir / "step_001_touch.png").write_bytes(b"png")
+        (screenshots_dir / "step_001_after.png").write_bytes(b"png")
+
+        event = {"gesture": "tap", "x": 100, "y": 200}
+
+        index, result = await analyzer._analyze_with_retry(
+            index=0,
+            event=event,
+            screenshots_dir=screenshots_dir,
+            max_retries=2,
+        )
+
+        assert call_count == 2
+        assert result.element_text == "Done"
+
+
+class TestGestureRouting:
+    """Test gesture routing to correct handlers."""
+
+    @pytest.mark.asyncio
+    async def test_routes_tap_to_analyze_tap(self, tmp_path):
+        """Should route tap gesture to analyze_tap handler."""
+        mock_ai = MagicMock()
+        mock_ai.is_available = True
+        mock_ai.analyze_tap = AsyncMock(return_value={
+            "element_text": "Submit",
+            "element_type": "button",
+            "before_description": "Form displayed",
+            "after_description": "Form submitted",
+            "suggested_verification": None,
+        })
+        mock_ai.analyze_swipe = AsyncMock()
+        mock_ai.analyze_long_press = AsyncMock()
+
+        analyzer = StepAnalyzer(ai_analyzer=mock_ai)
+
+        screenshots_dir = tmp_path / "screenshots"
+        screenshots_dir.mkdir()
+        (screenshots_dir / "step_001_before.png").write_bytes(b"png")
+        (screenshots_dir / "step_001_touch.png").write_bytes(b"png")
+        (screenshots_dir / "step_001_after.png").write_bytes(b"png")
+
+        event = {"gesture": "tap", "x": 100, "y": 200}
+
+        result = await analyzer._analyze_single_step(0, event, screenshots_dir)
+
+        mock_ai.analyze_tap.assert_called_once()
+        mock_ai.analyze_swipe.assert_not_called()
+        mock_ai.analyze_long_press.assert_not_called()
+        assert result.element_text == "Submit"
+
+    @pytest.mark.asyncio
+    async def test_routes_swipe_to_analyze_swipe(self, tmp_path):
+        """Should route swipe gesture to analyze_swipe handler."""
+        mock_ai = MagicMock()
+        mock_ai.is_available = True
+        mock_ai.analyze_tap = AsyncMock()
+        mock_ai.analyze_swipe = AsyncMock(return_value={
+            "direction": "up",
+            "content_changed": "Scrolled to next section",
+            "before_description": "Top of list",
+            "after_description": "Middle of list",
+            "suggested_verification": None,
+        })
+        mock_ai.analyze_long_press = AsyncMock()
+
+        analyzer = StepAnalyzer(ai_analyzer=mock_ai)
+
+        screenshots_dir = tmp_path / "screenshots"
+        screenshots_dir.mkdir()
+        (screenshots_dir / "step_001_before.png").write_bytes(b"png")
+        (screenshots_dir / "step_001_swipe_start.png").write_bytes(b"png")
+        (screenshots_dir / "step_001_swipe_end.png").write_bytes(b"png")
+        (screenshots_dir / "step_001_after.png").write_bytes(b"png")
+
+        event = {"gesture": "swipe", "x": 200, "y": 500, "end_x": 200, "end_y": 200}
+
+        result = await analyzer._analyze_single_step(0, event, screenshots_dir)
+
+        mock_ai.analyze_tap.assert_not_called()
+        mock_ai.analyze_swipe.assert_called_once()
+        mock_ai.analyze_long_press.assert_not_called()
+        assert result.element_text == "swipe up"
+
+    @pytest.mark.asyncio
+    async def test_routes_long_press_to_analyze_long_press(self, tmp_path):
+        """Should route long_press gesture to analyze_long_press handler."""
+        mock_ai = MagicMock()
+        mock_ai.is_available = True
+        mock_ai.analyze_tap = AsyncMock()
+        mock_ai.analyze_swipe = AsyncMock()
+        mock_ai.analyze_long_press = AsyncMock(return_value={
+            "element_text": "Item 1",
+            "element_type": "list_item",
+            "result_type": "context_menu",
+            "before_description": "List displayed",
+            "after_description": "Context menu shown",
+            "suggested_verification": "Context menu visible",
+        })
+
+        analyzer = StepAnalyzer(ai_analyzer=mock_ai)
+
+        screenshots_dir = tmp_path / "screenshots"
+        screenshots_dir.mkdir()
+        (screenshots_dir / "step_001_before.png").write_bytes(b"png")
+        (screenshots_dir / "step_001_press_start.png").write_bytes(b"png")
+        (screenshots_dir / "step_001_press_held.png").write_bytes(b"png")
+        (screenshots_dir / "step_001_after.png").write_bytes(b"png")
+
+        event = {"gesture": "long_press", "x": 150, "y": 300, "duration_ms": 800}
+
+        result = await analyzer._analyze_single_step(0, event, screenshots_dir)
+
+        mock_ai.analyze_tap.assert_not_called()
+        mock_ai.analyze_swipe.assert_not_called()
+        mock_ai.analyze_long_press.assert_called_once()
+        assert result.element_text == "Item 1"
+
+    @pytest.mark.asyncio
+    async def test_unknown_gesture_defaults_to_tap(self, tmp_path):
+        """Should treat unknown gesture as tap."""
+        mock_ai = MagicMock()
+        mock_ai.is_available = True
+        mock_ai.analyze_tap = AsyncMock(return_value={
+            "element_text": "Element",
+            "element_type": "other",
+            "before_description": "Before",
+            "after_description": "After",
+            "suggested_verification": None,
+        })
+
+        analyzer = StepAnalyzer(ai_analyzer=mock_ai)
+
+        screenshots_dir = tmp_path / "screenshots"
+        screenshots_dir.mkdir()
+        (screenshots_dir / "step_001_before.png").write_bytes(b"png")
+        (screenshots_dir / "step_001_touch.png").write_bytes(b"png")
+        (screenshots_dir / "step_001_after.png").write_bytes(b"png")
+
+        event = {"gesture": "unknown_gesture", "x": 100, "y": 200}
+
+        result = await analyzer._analyze_single_step(0, event, screenshots_dir)
+
+        mock_ai.analyze_tap.assert_called_once()
+        assert result.element_text == "Element"
+
+
+class TestPlaceholderResult:
+    """Test _placeholder_result method."""
+
+    def test_creates_placeholder_with_error_message(self):
+        """Should create placeholder with error info."""
+        mock_ai = MagicMock()
+        analyzer = StepAnalyzer(ai_analyzer=mock_ai)
+
+        event = {"gesture": "tap", "x": 100, "y": 200}
+
+        result = analyzer._placeholder_result(
+            index=2,
+            event=event,
+            error_message="Connection failed",
+        )
+
+        assert result.index == 2
+        assert result.original_tap == event
+        assert result.element_text is None
+        assert "Connection failed" in result.before_description
+        assert "Connection failed" in result.after_description
+        assert result.suggested_verification is None
+
+    def test_preserves_original_event_data(self):
+        """Should preserve all original event data."""
+        mock_ai = MagicMock()
+        analyzer = StepAnalyzer(ai_analyzer=mock_ai)
+
+        event = {
+            "gesture": "swipe",
+            "x": 100,
+            "y": 200,
+            "end_x": 100,
+            "end_y": 500,
+            "custom_field": "value",
+        }
+
+        result = analyzer._placeholder_result(
+            index=0,
+            event=event,
+            error_message="Error",
+        )
+
+        assert result.original_tap == event
+        assert result.original_tap["custom_field"] == "value"
