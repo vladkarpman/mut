@@ -49,7 +49,8 @@ class FrameExtractor:
                 stream = container.streams.video[0]
 
                 # Calculate pts for seek
-                target_pts = int(timestamp_sec / float(stream.time_base))
+                time_base = stream.time_base or 1
+                target_pts = int(timestamp_sec / float(time_base))
                 container.seek(target_pts, stream=stream)
 
                 # Get first frame after seek

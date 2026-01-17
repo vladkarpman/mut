@@ -181,7 +181,8 @@ class ReportGenerator:
         # Screenshots HTML (if any)
         screenshots_html = self._generate_screenshots_html(step)
 
-        return f"""<div class="step-card {status}" data-status="{status}" data-index="{index}" onclick="selectStep({index})">
+        return f"""<div class="step-card {status}" data-status="{status}" \
+data-index="{index}" onclick="selectStep({index})">
     <div class="step-header">
         <div class="step-title">
             <div class="step-number {status}">{step["number"]}</div>
@@ -218,7 +219,10 @@ class ReportGenerator:
     ) -> str:
         """Generate HTML for a single frame column."""
         if image_data:
-            image_html = f'<img src="{image_data}" alt="{label}" onclick="openImageModal(this.src)">'
+            image_html = (
+                f'<img src="{image_data}" alt="{label}" '
+                f'onclick="openImageModal(this.src)">'
+            )
         else:
             image_html = '<div class="frame-placeholder">No screenshot</div>'
 
@@ -246,7 +250,8 @@ class ReportGenerator:
         </div>
         <div class="video-controls">
             <button class="video-play-btn" id="videoPlayBtn">&#9658;</button>
-            <input type="range" class="video-scrubber" id="videoScrubber" value="0" min="0" max="100">
+            <input type="range" class="video-scrubber" id="videoScrubber"
+                   value="0" min="0" max="100">
             <span class="video-time" id="videoTime">0:00 / 0:00</span>
         </div>
     </div>

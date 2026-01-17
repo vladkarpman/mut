@@ -19,7 +19,8 @@ A tap occurred at coordinates ({x}, {y}).
 2. What is the text label of that element?
 
 Respond with JSON only:
-{{"element_text": "button/field text or null if unclear", "element_type": "button|text_field|link|icon|other"}}'''
+{{"element_text": "button/field text or null if unclear",
+"element_type": "button|text_field|link|icon|other"}}'''
 
 
 @dataclass

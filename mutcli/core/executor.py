@@ -231,22 +231,32 @@ class TestExecutor:
             return self._coordinates_to_pixels(step), None
 
         # Case 2: Text + coordinates - validate with AI, use coordinates
-        if has_text and has_coords:
+        if has_text and has_coords and step.coordinates and step.target:
             coords = self._coordinates_to_pixels(step)
             if coords:
                 screenshot = self._device.take_screenshot()
-                x_pct = step.coordinates[0] if step.coordinates_type == "percent" else (coords[0] * 100 / width)
-                y_pct = step.coordinates[1] if step.coordinates_type == "percent" else (coords[1] * 100 / height)
+                if step.coordinates_type == "percent":
+                    x_pct = step.coordinates[0]
+                    y_pct = step.coordinates[1]
+                else:
+                    x_pct = coords[0] * 100 / width
+                    y_pct = coords[1] * 100 / height
 
-                validation = self._ai.validate_element_at(screenshot, step.target, x_pct, y_pct)
+                validation = self._ai.validate_element_at(
+                    screenshot, step.target, x_pct, y_pct
+                )
                 if not validation.get("valid") and not validation.get("skipped"):
-                    return None, f"Validation failed: expected '{step.target}' at ({x_pct:.0f}%, {y_pct:.0f}%), but: {validation.get('reason', 'unknown')}"
+                    reason = validation.get("reason", "unknown")
+                    return None, (
+                        f"Validation failed: expected '{step.target}' "
+                        f"at ({x_pct:.0f}%, {y_pct:.0f}%), but: {reason}"
+                    )
 
                 return coords, None
             return None, f"Invalid coordinates for '{step.target}'"
 
         # Case 3: Text only - AI finds element
-        if has_text:
+        if has_text and step.target:
             # First try device's element finder (faster, uses accessibility tree)
             coords = self._device.find_element(step.target)
             if coords:
@@ -270,7 +280,7 @@ class TestExecutor:
         if error:
             return error
         if coords is None:
-            return f"Could not resolve coordinates for tap"
+            return "Could not resolve coordinates for tap"
 
         self._device.tap(coords[0], coords[1])
         return None
@@ -385,7 +395,7 @@ class TestExecutor:
         if error:
             return error
         if coords is None:
-            return f"Could not resolve coordinates for long_press"
+            return "Could not resolve coordinates for long_press"
 
         duration = step.duration or 500  # Default 500ms
         self._device.long_press(coords[0], coords[1], duration)

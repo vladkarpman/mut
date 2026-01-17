@@ -217,7 +217,8 @@ If you find the element, respond with its CENTER coordinates as percentages of s
 If you cannot find the element, respond with null coordinates.
 
 Respond with JSON only (no markdown, no code blocks):
-{{"found": true/false, "x_percent": 0-100 or null, "y_percent": 0-100 or null, "reason": "brief explanation"}}'''
+{{"found": true/false, "x_percent": 0-100 or null, "y_percent": 0-100 or null,
+"reason": "brief explanation"}}'''
 
         try:
             image_part = types.Part.from_bytes(
@@ -265,7 +266,8 @@ Respond with JSON only (no markdown, no code blocks):
         if not self.is_available or self._client is None:
             return {"valid": True, "reason": "Validation skipped (no API key)", "skipped": True}
 
-        prompt = f'''Look at the UI element at approximately ({x_percent:.0f}%, {y_percent:.0f}%) of the screen in this mobile app screenshot.
+        prompt = f'''Look at the UI element at approximately ({x_percent:.0f}%, {y_percent:.0f}%)
+of the screen in this mobile app screenshot.
 
 The coordinates are percentages from the top-left corner.
 

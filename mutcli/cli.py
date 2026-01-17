@@ -204,7 +204,9 @@ def record(
 
 @app.command()
 def stop(
-    test_dir: Path | None = typer.Argument(None, help="Test directory (optional, uses most recent)"),
+    test_dir: Path | None = typer.Argument(
+        None, help="Test directory (optional, uses most recent)"
+    ),
 ) -> None:
     """Process recording and generate YAML test."""
     import json
@@ -218,17 +220,19 @@ def stop(
     from mutcli.core.yaml_generator import YAMLGenerator
 
     # Find recording directory
+    recording_dir: Path
     if test_dir:
         recording_dir = test_dir / "recording"
         if not recording_dir.exists():
             # Maybe test_dir is the recording dir itself
             recording_dir = test_dir
     else:
-        recording_dir = _find_most_recent_recording()
-        if recording_dir is None:
+        maybe_recording_dir = _find_most_recent_recording()
+        if maybe_recording_dir is None:
             console.print("[red]Error:[/red] No recordings found in tests/ directory")
             console.print("\nRecord a test first with: mut record <name>")
             raise typer.Exit(2)
+        recording_dir = maybe_recording_dir
         # Get parent (test_dir) from recording_dir
         test_dir = recording_dir.parent
 
