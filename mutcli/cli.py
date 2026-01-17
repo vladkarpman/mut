@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import asyncio
 import sys
+from datetime import datetime
 from pathlib import Path
 from typing import TYPE_CHECKING
 
@@ -27,6 +28,25 @@ app = typer.Typer(
     no_args_is_help=True,
 )
 console = Console()
+
+
+def _create_run_folder(test_dir: Path) -> Path:
+    """Create timestamped run folder for test execution.
+
+    Args:
+        test_dir: Test directory (e.g., tests/my_test/)
+
+    Returns:
+        Path to created run folder (e.g., tests/my_test/runs/2026-01-17_14-30-25/)
+    """
+    runs_dir = test_dir / "runs"
+    runs_dir.mkdir(exist_ok=True)
+
+    timestamp = datetime.now().strftime("%Y-%m-%d_%H-%M-%S")
+    run_folder = runs_dir / timestamp
+    run_folder.mkdir()
+
+    return run_folder
 
 
 def version_callback(value: bool) -> None:
@@ -59,8 +79,6 @@ def run(
     junit: Path | None = typer.Option(None, "--junit", help="JUnit XML output path"),
 ) -> None:
     """Execute a YAML test file."""
-    from datetime import datetime
-
     from mutcli.core.config import ConfigLoader
     from mutcli.core.device_controller import DeviceController
     from mutcli.core.executor import TestExecutor
