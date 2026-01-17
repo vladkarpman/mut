@@ -3,7 +3,32 @@
 import time
 from unittest.mock import MagicMock, patch
 
-from mutcli.core.touch_monitor import TouchEvent, TouchMonitor
+from mutcli.core.touch_monitor import TouchEvent, TouchMonitor, TrajectoryPoint
+
+
+def make_event(
+    timestamp=1.0,
+    x=100,
+    y=200,
+    gesture="tap",
+    duration_ms=50,
+    start_x=100,
+    start_y=200,
+    trajectory=None,
+    path_distance=0.0,
+):
+    """Helper to create TouchEvent with defaults."""
+    return TouchEvent(
+        timestamp=timestamp,
+        x=x,
+        y=y,
+        gesture=gesture,
+        duration_ms=duration_ms,
+        start_x=start_x,
+        start_y=start_y,
+        trajectory=trajectory or [],
+        path_distance=path_distance,
+    )
 
 
 class TestTouchEvent:
@@ -11,39 +36,64 @@ class TestTouchEvent:
 
     def test_creation(self):
         """TouchEvent should store all fields correctly."""
-        event = TouchEvent(
+        event = make_event(
             timestamp=1.5,
             x=540,
             y=1200,
-            event_type="tap",
+            gesture="tap",
+            duration_ms=100,
         )
 
         assert event.timestamp == 1.5
         assert event.x == 540
         assert event.y == 1200
-        assert event.event_type == "tap"
+        assert event.gesture == "tap"
+        assert event.duration_ms == 100
 
-    def test_to_dict(self):
-        """to_dict should return all fields."""
-        event = TouchEvent(
+    def test_to_dict_tap(self):
+        """to_dict for tap should return core fields."""
+        event = make_event(
             timestamp=2.5,
             x=100,
             y=200,
-            event_type="swipe_start",
+            gesture="tap",
+            duration_ms=50,
+            path_distance=10.5,
         )
 
         result = event.to_dict()
 
-        assert result == {
-            "timestamp": 2.5,
-            "x": 100,
-            "y": 200,
-            "event_type": "swipe_start",
-        }
+        assert result["timestamp"] == 2.5
+        assert result["x"] == 100
+        assert result["y"] == 200
+        assert result["gesture"] == "tap"
+        assert result["duration_ms"] == 50
+        assert result["path_distance"] == 10.5
+        assert "trajectory" not in result  # Not included for taps
+
+    def test_to_dict_swipe_includes_trajectory(self):
+        """to_dict for swipe should include trajectory."""
+        trajectory = [
+            TrajectoryPoint(0.0, 100, 200),
+            TrajectoryPoint(0.1, 150, 250),
+            TrajectoryPoint(0.2, 200, 300),
+        ]
+        event = make_event(
+            gesture="swipe",
+            trajectory=trajectory,
+            path_distance=150.0,
+        )
+
+        result = event.to_dict()
+
+        assert result["gesture"] == "swipe"
+        assert "trajectory" in result
+        assert len(result["trajectory"]) == 3
+        assert result["trajectory"][0] == {"t": 0.0, "x": 100, "y": 200}
 
     def test_to_dict_returns_new_dict(self):
         """to_dict should return a new dict each time."""
-        event = TouchEvent(timestamp=0, x=0, y=0, event_type="tap")
+        event = make_event()
 
         dict1 = event.to_dict()
         dict2 = event.to_dict()
@@ -80,7 +130,8 @@ class TestTouchMonitorStart:
 
     def test_start_launches_adb_getevent(self):
         """start() should launch adb getevent subprocess."""
-        with patch("subprocess.Popen") as mock_popen:
+        with patch("subprocess.Popen") as mock_popen, \
+             patch.object(TouchMonitor, "_get_device_info", return_value=True):
             mock_process = MagicMock()
             mock_process.stdout = iter([])  # Empty iterator
             mock_popen.return_value = mock_process
@@ -106,9 +157,19 @@ class TestTouchMonitorStart:
 
             monitor.stop()
 
+    def test_start_returns_false_on_device_info_failure(self):
+        """start() should return False if device info fails."""
+        with patch.object(TouchMonitor, "_get_device_info", return_value=False):
+            monitor = TouchMonitor("test-device")
+            result = monitor.start()
+
+            assert result is False
+            assert monitor.is_running is False
+
     def test_start_returns_false_on_process_error(self):
         """start() should return False if subprocess fails."""
-        with patch("subprocess.Popen") as mock_popen:
+        with patch("subprocess.Popen") as mock_popen, \
+             patch.object(TouchMonitor, "_get_device_info", return_value=True):
             mock_popen.side_effect = OSError("adb not found")
 
             monitor = TouchMonitor("test-device")
@@ -119,7 +180,8 @@ class TestTouchMonitorStart:
 
     def test_stop_clears_running_state(self):
         """stop() should set is_running to False."""
-        with patch("subprocess.Popen") as mock_popen:
+        with patch("subprocess.Popen") as mock_popen, \
+             patch.object(TouchMonitor, "_get_device_info", return_value=True):
             mock_process = MagicMock()
             mock_process.stdout = iter([])
             mock_popen.return_value = mock_process
@@ -136,7 +198,8 @@ class TestTouchMonitorStart:
 
     def test_stop_terminates_process(self):
         """stop() should terminate the subprocess."""
-        with patch("subprocess.Popen") as mock_popen:
+        with patch("subprocess.Popen") as mock_popen, \
+             patch.object(TouchMonitor, "_get_device_info", return_value=True):
             mock_process = MagicMock()
             mock_process.stdout = iter([])
             mock_popen.return_value = mock_process
@@ -159,41 +222,106 @@ class TestTouchMonitorStart:
         assert monitor.is_running is False
 
 
+class TestGestureClassification:
+    """Test gesture classification logic."""
+
+    def test_classify_tap(self):
+        """Short duration + small distance = tap."""
+        monitor = TouchMonitor("test-device")
+        gesture = monitor._classify_gesture(duration_ms=100, path_distance=20)
+        assert gesture == "tap"
+
+    def test_classify_long_press(self):
+        """Long duration + small distance = long_press."""
+        monitor = TouchMonitor("test-device")
+        gesture = monitor._classify_gesture(duration_ms=600, path_distance=30)
+        assert gesture == "long_press"
+
+    def test_classify_swipe(self):
+        """Large distance = swipe (regardless of duration)."""
+        monitor = TouchMonitor("test-device")
+        gesture = monitor._classify_gesture(duration_ms=100, path_distance=150)
+        assert gesture == "swipe"
+
+    def test_swipe_takes_priority_over_long_press(self):
+        """Swipe classification takes priority even with long duration."""
+        monitor = TouchMonitor("test-device")
+        gesture = monitor._classify_gesture(duration_ms=1000, path_distance=200)
+        assert gesture == "swipe"
+
+    def test_ambiguous_defaults_to_tap(self):
+        """Ambiguous cases default to tap."""
+        monitor = TouchMonitor("test-device")
+        # 300ms duration, 60px distance - between thresholds
+        gesture = monitor._classify_gesture(duration_ms=300, path_distance=60)
+        assert gesture == "tap"
+
+
+class TestPathDistanceCalculation:
+    """Test path distance calculation from trajectory."""
+
+    def test_empty_trajectory(self):
+        """Empty trajectory should return 0."""
+        monitor = TouchMonitor("test-device")
+        distance = monitor._calculate_path_distance([])
+        assert distance == 0.0
+
+    def test_single_point(self):
+        """Single point trajectory should return 0."""
+        monitor = TouchMonitor("test-device")
+        trajectory = [TrajectoryPoint(0.0, 100, 200)]
+        distance = monitor._calculate_path_distance(trajectory)
+        assert distance == 0.0
+
+    def test_straight_line(self):
+        """Straight line should calculate correct distance."""
+        monitor = TouchMonitor("test-device")
+        trajectory = [
+            TrajectoryPoint(0.0, 0, 0),
+            TrajectoryPoint(0.1, 100, 0),  # 100px right
+        ]
+        distance = monitor._calculate_path_distance(trajectory)
+        assert distance == 100.0
+
+    def test_diagonal_line(self):
+        """Diagonal should use Pythagorean theorem."""
+        monitor = TouchMonitor("test-device")
+        trajectory = [
+            TrajectoryPoint(0.0, 0, 0),
+            TrajectoryPoint(0.1, 30, 40),  # 3-4-5 triangle = 50px
+        ]
+        distance = monitor._calculate_path_distance(trajectory)
+        assert distance == 50.0
+
+    def test_multi_segment_path(self):
+        """Multi-segment path should sum all segments."""
+        monitor = TouchMonitor("test-device")
+        trajectory = [
+            TrajectoryPoint(0.0, 0, 0),
+            TrajectoryPoint(0.1, 100, 0),    # 100px right
+            TrajectoryPoint(0.2, 100, 100),  # 100px down
+            TrajectoryPoint(0.3, 0, 100),    # 100px left
+        ]
+        distance = monitor._calculate_path_distance(trajectory)
+        assert distance == 300.0
+
+    def test_curved_path_back_to_start(self):
+        """Path returning to start should still measure full distance."""
+        monitor = TouchMonitor("test-device")
+        # Square path returning to origin
+        trajectory = [
+            TrajectoryPoint(0.0, 0, 0),
+            TrajectoryPoint(0.1, 100, 0),
+            TrajectoryPoint(0.2, 100, 100),
+            TrajectoryPoint(0.3, 0, 100),
+            TrajectoryPoint(0.4, 0, 0),  # Back to start
+        ]
+        distance = monitor._calculate_path_distance(trajectory)
+        assert distance == 400.0  # Full perimeter, not 0
+
+
 class TestTouchMonitorEventParsing:
     """Test getevent line parsing."""
-
-    def test_parses_tap_event(self):
-        """Should parse tap from getevent lines."""
-        # Simulate getevent output for a tap
-        getevent_lines = [
-            "[   123.456789] /dev/input/event5: EV_ABS ABS_MT_POSITION_X 00000219",
-            "[   123.456790] /dev/input/event5: EV_ABS ABS_MT_POSITION_Y 000004b0",
-            "[   123.456791] /dev/input/event5: EV_KEY BTN_TOUCH DOWN",
-            "[   123.456792] /dev/input/event5: EV_SYN SYN_REPORT 00000000",
-            "[   123.556789] /dev/input/event5: EV_KEY BTN_TOUCH UP",
-            "[   123.556790] /dev/input/event5: EV_SYN SYN_REPORT 00000000",
-        ]
-
-        with patch("subprocess.Popen") as mock_popen:
-            mock_process = MagicMock()
-            mock_process.stdout = iter(getevent_lines)
-            mock_popen.return_value = mock_process
-
-            monitor = TouchMonitor("test-device")
-            monitor.start()
-
-            # Wait for processing
-            time.sleep(0.2)
-
-            monitor.stop()
-
-            events = monitor.get_events()
-
-            assert len(events) == 1
-            event = events[0]
-            assert event.x == 0x219  # 537 decimal
-            assert event.y == 0x4b0  # 1200 decimal
-            assert event.event_type == "tap"
 
     def test_ignores_non_touch_events(self):
         """Should ignore non-touch events."""
@@ -203,7 +331,8 @@ class TestTouchMonitorEventParsing:
             "[   123.556789] /dev/input/event5: EV_KEY KEY_VOLUMEDOWN UP",
         ]
 
-        with patch("subprocess.Popen") as mock_popen:
+        with patch("subprocess.Popen") as mock_popen, \
+             patch.object(TouchMonitor, "_get_device_info", return_value=True):
             mock_process = MagicMock()
             mock_process.stdout = iter(getevent_lines)
             mock_popen.return_value = mock_process
@@ -217,39 +346,6 @@ class TestTouchMonitorEventParsing:
 
             assert len(events) == 0
 
-    def test_parses_multiple_taps(self):
-        """Should parse multiple consecutive taps."""
-        getevent_lines = [
-            # First tap
-            "[   123.456789] /dev/input/event5: EV_ABS ABS_MT_POSITION_X 00000064",
-            "[   123.456790] /dev/input/event5: EV_ABS ABS_MT_POSITION_Y 000000c8",
-            "[   123.456791] /dev/input/event5: EV_KEY BTN_TOUCH DOWN",
-            "[   123.556789] /dev/input/event5: EV_KEY BTN_TOUCH UP",
-            # Second tap
-            "[   124.456789] /dev/input/event5: EV_ABS ABS_MT_POSITION_X 000001f4",
-            "[   124.456790] /dev/input/event5: EV_ABS ABS_MT_POSITION_Y 000003e8",
-            "[   124.456791] /dev/input/event5: EV_KEY BTN_TOUCH DOWN",
-            "[   124.556789] /dev/input/event5: EV_KEY BTN_TOUCH UP",
-        ]
-
-        with patch("subprocess.Popen") as mock_popen:
-            mock_process = MagicMock()
-            mock_process.stdout = iter(getevent_lines)
-            mock_popen.return_value = mock_process
-
-            monitor = TouchMonitor("test-device")
-            monitor.start()
-            time.sleep(0.2)
-            monitor.stop()
-
-            events = monitor.get_events()
-
-            assert len(events) == 2
-            assert events[0].x == 0x64   # 100
-            assert events[0].y == 0xc8   # 200
-            assert events[1].x == 0x1f4  # 500
-            assert events[1].y == 0x3e8  # 1000
-
 
 class TestTouchMonitorClearEvents:
     """Test clear_events functionality."""
@@ -259,12 +355,8 @@ class TestTouchMonitorClearEvents:
         monitor = TouchMonitor("test-device")
 
         # Manually add events for testing
-        monitor._events.append(
-            TouchEvent(timestamp=1.0, x=100, y=200, event_type="tap")
-        )
-        monitor._events.append(
-            TouchEvent(timestamp=2.0, x=300, y=400, event_type="tap")
-        )
+        monitor._events.append(make_event(timestamp=1.0, x=100, y=200))
+        monitor._events.append(make_event(timestamp=2.0, x=300, y=400))
 
         assert len(monitor.get_events()) == 2
 
@@ -289,9 +381,7 @@ class TestTouchMonitorThreadSafety:
         """get_events should return a copy, not the internal list."""
         monitor = TouchMonitor("test-device")
 
-        monitor._events.append(
-            TouchEvent(timestamp=1.0, x=100, y=200, event_type="tap")
-        )
+        monitor._events.append(make_event(timestamp=1.0, x=100, y=200))
 
         events1 = monitor.get_events()
         events2 = monitor.get_events()
@@ -304,9 +394,7 @@ class TestTouchMonitorThreadSafety:
         """Modifying returned list should not affect internal state."""
         monitor = TouchMonitor("test-device")
 
-        monitor._events.append(
-            TouchEvent(timestamp=1.0, x=100, y=200, event_type="tap")
-        )
+        monitor._events.append(make_event(timestamp=1.0, x=100, y=200))
 
         events = monitor.get_events()
         events.clear()

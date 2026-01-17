@@ -183,7 +183,7 @@ class TestStopCommand:
             mock_ai = MagicMock()
             mock_ai_class.return_value = mock_ai
 
-            # Mock step analyzer
+            # Mock step analyzer with collapsed steps method
             mock_step_analyzer = MagicMock()
             mock_analyzed_steps = [
                 AnalyzedStep(
@@ -203,7 +203,8 @@ class TestStopCommand:
                     suggested_verification="Form submitted",
                 ),
             ]
-            mock_step_analyzer.analyze_all_parallel = AsyncMock(
+            # New pipeline uses analyze_collapsed_steps_parallel
+            mock_step_analyzer.analyze_collapsed_steps_parallel = AsyncMock(
                 return_value=mock_analyzed_steps
             )
             mock_step_analyzer_class.return_value = mock_step_analyzer
@@ -231,7 +232,7 @@ class TestStopCommand:
         # Verify AI components were used
         mock_ai_class.assert_called_once_with(api_key="test-api-key")
         mock_step_analyzer_class.assert_called_once_with(mock_ai)
-        mock_step_analyzer.analyze_all_parallel.assert_called_once()
+        mock_step_analyzer.analyze_collapsed_steps_parallel.assert_called_once()
         mock_suggester_class.assert_called_once_with(mock_ai)
         mock_suggester.suggest.assert_called_once()
         # Check output mentions element extraction
@@ -279,9 +280,9 @@ class TestStopCommand:
             mock_ai = MagicMock()
             mock_ai_class.return_value = mock_ai
 
-            # Mock step analyzer to raise exception
+            # Mock step analyzer to raise exception (new method)
             mock_step_analyzer = MagicMock()
-            mock_step_analyzer.analyze_all_parallel = AsyncMock(
+            mock_step_analyzer.analyze_collapsed_steps_parallel = AsyncMock(
                 side_effect=RuntimeError("API error")
             )
             mock_step_analyzer_class.return_value = mock_step_analyzer
@@ -362,7 +363,7 @@ class TestStopCommand:
             mock_ai = MagicMock()
             mock_ai_class.return_value = mock_ai
 
-            # Mock step analyzer with element names
+            # Mock step analyzer with element names (new method)
             mock_analyzed_steps = [
                 AnalyzedStep(
                     index=0,
@@ -382,7 +383,7 @@ class TestStopCommand:
                 ),
             ]
             mock_step_analyzer = MagicMock()
-            mock_step_analyzer.analyze_all_parallel = AsyncMock(
+            mock_step_analyzer.analyze_collapsed_steps_parallel = AsyncMock(
                 return_value=mock_analyzed_steps
             )
             mock_step_analyzer_class.return_value = mock_step_analyzer
@@ -520,10 +521,10 @@ class TestStopCommandVideoExtraction:
             mock_config.google_api_key = None
             mock_load.return_value = mock_config
 
-            # Mock frame extractor
+            # Mock frame extractor - new pipeline uses extract_for_collapsed_steps
             mock_extractor = MagicMock()
-            mock_extractor.extract_for_touches.return_value = [
-                recording_with_video / "recording" / "screenshots" / "touch_001.png"
+            mock_extractor.extract_for_collapsed_steps.return_value = [
+                recording_with_video / "recording" / "screenshots" / "step_001_before.png"
             ]
             mock_extractor.get_duration.return_value = 10.5
             mock_extractor_class.return_value = mock_extractor
@@ -538,7 +539,7 @@ class TestStopCommandVideoExtraction:
         assert result.exit_code == 0
         # Verify frame extractor was called
         mock_extractor_class.assert_called_once()
-        mock_extractor.extract_for_touches.assert_called_once()
+        mock_extractor.extract_for_collapsed_steps.assert_called_once()
         assert "Extracted 1 frames" in result.output
 
     def test_stop_skips_extraction_when_no_video(
