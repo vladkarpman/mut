@@ -1,0 +1,889 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Test Report - {{test_name}}</title>
+    <style>
+        :root {
+            --pass-color: #10b981;
+            --fail-color: #ef4444;
+            --skip-color: #6b7280;
+            --bg-primary: #111827;
+            --bg-secondary: #1f2937;
+            --bg-tertiary: #374151;
+            --text-primary: #f9fafb;
+            --text-secondary: #9ca3af;
+            --border-color: #4b5563;
+            --accent-color: #3b82f6;
+            --action-tap: #f59e0b;
+            --action-verify: #8b5cf6;
+            --action-type: #06b6d4;
+            --action-wait: #6b7280;
+            --action-swipe: #f59e0b;
+            --action-long_press: #f59e0b;
+            --action-scroll_to: #06b6d4;
+        }
+
+        * {{ margin: 0; padding: 0; box-sizing: border-box; }}
+
+        body {{
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            background: var(--bg-primary);
+            color: var(--text-primary);
+            line-height: 1.6;
+            height: 100vh;
+            overflow: hidden;
+        }}
+
+        /* Header */
+        .header {{
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 12px 20px;
+            background: var(--bg-secondary);
+            border-bottom: 1px solid var(--border-color);
+        }}
+
+        .header-left {{
+            display: flex;
+            align-items: center;
+            gap: 16px;
+            min-width: 200px;
+        }}
+
+        .header-center {{
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+        }}
+
+        .header h1 {{
+            font-size: 1.1rem;
+            font-weight: 600;
+            margin: 0;
+        }}
+
+        .header-timestamp {{
+            font-size: 0.75rem;
+            color: var(--text-secondary);
+            margin-top: 2px;
+        }}
+
+        .header-right {{
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            min-width: 200px;
+            justify-content: flex-end;
+        }}
+
+        .status-badge {{
+            display: inline-flex;
+            align-items: center;
+            gap: 6px;
+            padding: 6px 14px;
+            border-radius: 20px;
+            font-size: 0.8rem;
+            font-weight: 600;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+        }}
+
+        .status-badge.passed {{
+            background: rgba(16, 185, 129, 0.2);
+            color: var(--pass-color);
+            border: 1px solid var(--pass-color);
+        }}
+
+        .status-badge.failed {{
+            background: rgba(239, 68, 68, 0.2);
+            color: var(--fail-color);
+            border: 1px solid var(--fail-color);
+        }}
+
+        .duration-badge {{
+            display: inline-flex;
+            align-items: center;
+            gap: 6px;
+            padding: 6px 12px;
+            background: var(--bg-tertiary);
+            border-radius: 6px;
+            font-size: 0.85rem;
+            color: var(--text-secondary);
+        }}
+
+        .btn {{
+            padding: 8px 16px;
+            border-radius: 6px;
+            font-size: 0.875rem;
+            font-weight: 500;
+            cursor: pointer;
+            transition: all 0.15s;
+            border: none;
+        }}
+
+        .btn-primary {{
+            background: var(--accent-color);
+            color: white;
+        }}
+
+        .btn-primary:hover {{
+            background: #2563eb;
+        }}
+
+        .btn-secondary {{
+            background: var(--bg-tertiary);
+            color: var(--text-primary);
+            border: 1px solid var(--border-color);
+        }}
+
+        .btn-secondary:hover {{
+            background: var(--border-color);
+        }}
+
+        /* Summary Bar */
+        .summary-bar {{
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 24px;
+            padding: 10px 20px;
+            background: var(--bg-tertiary);
+            border-bottom: 1px solid var(--border-color);
+        }}
+
+        .summary-item {{
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            font-size: 0.85rem;
+        }}
+
+        .summary-count {{
+            font-weight: 700;
+            font-size: 1rem;
+        }}
+
+        .summary-item.total .summary-count {{ color: var(--text-primary); }}
+        .summary-item.passed .summary-count {{ color: var(--pass-color); }}
+        .summary-item.failed .summary-count {{ color: var(--fail-color); }}
+        .summary-item.skipped .summary-count {{ color: var(--skip-color); }}
+
+        /* Filter Buttons */
+        .filter-bar {{
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            padding: 10px 20px;
+            background: var(--bg-secondary);
+            border-bottom: 1px solid var(--border-color);
+        }}
+
+        .filter-btn {{
+            padding: 6px 14px;
+            border-radius: 20px;
+            font-size: 0.8rem;
+            font-weight: 500;
+            cursor: pointer;
+            transition: all 0.15s;
+            border: 1px solid var(--border-color);
+            background: transparent;
+            color: var(--text-secondary);
+        }}
+
+        .filter-btn:hover {{
+            background: var(--bg-tertiary);
+            color: var(--text-primary);
+        }}
+
+        .filter-btn.active {{
+            background: var(--accent-color);
+            border-color: var(--accent-color);
+            color: white;
+        }}
+
+        .filter-btn.active.passed {{
+            background: var(--pass-color);
+            border-color: var(--pass-color);
+        }}
+
+        .filter-btn.active.failed {{
+            background: var(--fail-color);
+            border-color: var(--fail-color);
+        }}
+
+        /* Main Layout */
+        .main {{
+            display: flex;
+            height: calc(100vh - 145px);
+        }}
+
+        .video-panel {{
+            width: 25%;
+            min-width: 240px;
+            max-width: 320px;
+            padding: 16px;
+            border-right: 1px solid var(--border-color);
+            display: flex;
+            flex-direction: column;
+            background: var(--bg-secondary);
+        }}
+
+        .video-panel.hidden {{
+            display: none;
+        }}
+
+        .video-container {{
+            flex: 1;
+            display: flex;
+            flex-direction: column;
+        }}
+
+        .video-wrapper {{
+            display: flex;
+            align-items: flex-start;
+            justify-content: center;
+            background: var(--bg-primary);
+            border-radius: 8px;
+            overflow: hidden;
+        }}
+
+        .video-wrapper video {{
+            width: 100%;
+            height: auto;
+            max-height: 400px;
+            object-fit: contain;
+            border-radius: 8px;
+        }}
+
+        .video-controls {{
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            padding: 12px;
+            margin-top: 8px;
+            background: var(--bg-tertiary);
+            border-radius: 8px;
+        }}
+
+        .video-play-btn {{
+            width: 36px;
+            height: 36px;
+            border-radius: 50%;
+            background: var(--accent-color);
+            border: none;
+            color: white;
+            font-size: 14px;
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            flex-shrink: 0;
+        }}
+
+        .video-play-btn:hover {{
+            background: #2563eb;
+        }}
+
+        .video-scrubber {{
+            flex: 1;
+            height: 6px;
+            -webkit-appearance: none;
+            appearance: none;
+            background: var(--bg-primary);
+            border-radius: 3px;
+            cursor: pointer;
+        }}
+
+        .video-scrubber::-webkit-slider-thumb {{
+            -webkit-appearance: none;
+            width: 14px;
+            height: 14px;
+            border-radius: 50%;
+            background: var(--accent-color);
+            cursor: pointer;
+        }}
+
+        .video-scrubber::-moz-range-thumb {{
+            width: 14px;
+            height: 14px;
+            border-radius: 50%;
+            background: var(--accent-color);
+            cursor: pointer;
+            border: none;
+        }}
+
+        .video-time {{
+            font-size: 0.8rem;
+            color: var(--text-secondary);
+            font-family: monospace;
+            white-space: nowrap;
+        }}
+
+        .video-panel-header {{
+            font-size: 0.75rem;
+            font-weight: 600;
+            text-transform: uppercase;
+            color: var(--text-secondary);
+            letter-spacing: 0.5px;
+            margin-bottom: 12px;
+        }}
+
+        /* Steps Panel */
+        .steps-panel {{
+            flex: 1;
+            overflow-y: auto;
+            padding: 20px;
+        }}
+
+        /* Step Cards */
+        .step-card {{
+            background: var(--bg-secondary);
+            border-radius: 10px;
+            padding: 16px;
+            margin-bottom: 16px;
+            border: 1px solid var(--border-color);
+            transition: all 0.2s;
+            cursor: pointer;
+        }}
+
+        .step-card:hover {{
+            border-color: var(--text-secondary);
+            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
+        }}
+
+        .step-card.active {{
+            border-color: var(--accent-color);
+            box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.2);
+        }}
+
+        .step-card.passed {{
+            border-left: 4px solid var(--pass-color);
+        }}
+
+        .step-card.failed {{
+            border-left: 4px solid var(--fail-color);
+        }}
+
+        .step-card.skipped {{
+            border-left: 4px solid var(--skip-color);
+            opacity: 0.7;
+        }}
+
+        .step-card.hidden {{
+            display: none;
+        }}
+
+        .step-header {{
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 12px;
+            padding-bottom: 10px;
+            border-bottom: 1px solid var(--border-color);
+        }}
+
+        .step-title {{
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            flex: 1;
+            min-width: 0;
+        }}
+
+        .step-number {{
+            width: 32px;
+            height: 32px;
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 0.85rem;
+            font-weight: 700;
+            color: white;
+            flex-shrink: 0;
+        }}
+
+        .step-number.passed {{ background: var(--pass-color); }}
+        .step-number.failed {{ background: var(--fail-color); }}
+        .step-number.skipped {{ background: var(--skip-color); }}
+
+        .action-badge {{
+            display: inline-flex;
+            align-items: center;
+            gap: 4px;
+            padding: 4px 10px;
+            border-radius: 4px;
+            font-size: 0.7rem;
+            font-weight: 600;
+            text-transform: uppercase;
+            white-space: nowrap;
+        }}
+
+        .action-badge.tap {{ background: rgba(245, 158, 11, 0.2); color: var(--action-tap); }}
+        .action-badge.swipe {{ background: rgba(245, 158, 11, 0.2); color: var(--action-swipe); }}
+        .action-badge.verify, .action-badge.verify_screen {{ background: rgba(139, 92, 246, 0.2); color: var(--action-verify); }}
+        .action-badge.wait, .action-badge.wait_for {{ background: rgba(107, 114, 128, 0.2); color: var(--action-wait); }}
+        .action-badge.type {{ background: rgba(6, 182, 212, 0.2); color: var(--action-type); }}
+        .action-badge.long_press {{ background: rgba(245, 158, 11, 0.3); color: var(--action-tap); }}
+        .action-badge.scroll_to {{ background: rgba(6, 182, 212, 0.2); color: var(--action-scroll_to); }}
+        .action-badge.launch_app {{ background: rgba(59, 130, 246, 0.2); color: var(--accent-color); }}
+        .action-badge.terminate_app {{ background: rgba(239, 68, 68, 0.2); color: var(--fail-color); }}
+
+        .step-description {{
+            font-size: 0.95rem;
+            font-weight: 500;
+            color: var(--text-primary);
+            flex: 1;
+            min-width: 0;
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
+        }}
+
+        .step-meta {{
+            display: flex;
+            align-items: center;
+            gap: 12px;
+        }}
+
+        .step-duration {{
+            font-size: 0.8rem;
+            color: var(--text-secondary);
+            font-family: monospace;
+        }}
+
+        .step-status-icon {{
+            width: 24px;
+            height: 24px;
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 0.9rem;
+        }}
+
+        .step-status-icon.passed {{
+            background: rgba(16, 185, 129, 0.2);
+            color: var(--pass-color);
+        }}
+
+        .step-status-icon.failed {{
+            background: rgba(239, 68, 68, 0.2);
+            color: var(--fail-color);
+        }}
+
+        .step-status-icon.skipped {{
+            background: rgba(107, 114, 128, 0.2);
+            color: var(--skip-color);
+        }}
+
+        /* Error Message */
+        .step-error {{
+            margin-top: 12px;
+            padding: 12px;
+            background: rgba(239, 68, 68, 0.1);
+            border: 1px solid rgba(239, 68, 68, 0.3);
+            border-radius: 6px;
+            color: var(--fail-color);
+            font-size: 0.85rem;
+            font-family: monospace;
+            white-space: pre-wrap;
+            word-break: break-word;
+        }}
+
+        /* Screenshots Row */
+        .step-frames {{
+            display: flex;
+            gap: 12px;
+            margin-top: 16px;
+        }}
+
+        .frame-column {{
+            flex: 1;
+            display: flex;
+            flex-direction: column;
+            background: var(--bg-tertiary);
+            border-radius: 8px;
+            overflow: hidden;
+            border: 1px solid var(--border-color);
+        }}
+
+        .frame-column.before {{ border-color: var(--action-wait); }}
+        .frame-column.action {{ border-color: var(--action-tap); }}
+        .frame-column.after {{ border-color: var(--pass-color); }}
+
+        .frame-column-header {{
+            padding: 8px 10px;
+            text-align: center;
+            font-size: 0.7rem;
+            font-weight: 600;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+        }}
+
+        .frame-column.before .frame-column-header {{ background: rgba(107, 114, 128, 0.2); color: var(--action-wait); }}
+        .frame-column.action .frame-column-header {{ background: rgba(245, 158, 11, 0.2); color: var(--action-tap); }}
+        .frame-column.after .frame-column-header {{ background: rgba(16, 185, 129, 0.2); color: var(--pass-color); }}
+
+        .frame-image-container {{
+            position: relative;
+            width: 100%;
+            background: var(--bg-primary);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            min-height: 200px;
+            cursor: pointer;
+        }}
+
+        .frame-image-container img {{
+            max-width: 100%;
+            max-height: 400px;
+            object-fit: contain;
+        }}
+
+        .frame-placeholder {{
+            color: var(--text-secondary);
+            font-size: 0.8rem;
+            text-align: center;
+            padding: 20px;
+        }}
+
+        /* Image Modal */
+        .image-modal {{
+            display: none;
+            position: fixed;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background: rgba(0, 0, 0, 0.9);
+            z-index: 1000;
+            align-items: center;
+            justify-content: center;
+            cursor: pointer;
+        }}
+
+        .image-modal.active {{
+            display: flex;
+        }}
+
+        .image-modal img {{
+            max-width: 90%;
+            max-height: 90%;
+            object-fit: contain;
+            border-radius: 8px;
+        }}
+
+        .image-modal-close {{
+            position: absolute;
+            top: 20px;
+            right: 20px;
+            background: var(--bg-tertiary);
+            border: none;
+            color: var(--text-primary);
+            width: 40px;
+            height: 40px;
+            border-radius: 50%;
+            font-size: 1.2rem;
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }}
+
+        .image-modal-close:hover {{
+            background: var(--border-color);
+        }}
+
+        /* Keyboard navigation hint */
+        .keyboard-hint {{
+            position: fixed;
+            bottom: 20px;
+            right: 20px;
+            background: var(--bg-secondary);
+            border: 1px solid var(--border-color);
+            border-radius: 8px;
+            padding: 10px 14px;
+            font-size: 0.75rem;
+            color: var(--text-secondary);
+            display: flex;
+            gap: 12px;
+        }}
+
+        .keyboard-hint kbd {{
+            background: var(--bg-tertiary);
+            border: 1px solid var(--border-color);
+            border-radius: 4px;
+            padding: 2px 6px;
+            font-family: monospace;
+            font-size: 0.7rem;
+        }}
+
+        /* No video state */
+        .no-video-message {{
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            height: 200px;
+            color: var(--text-secondary);
+            text-align: center;
+            padding: 20px;
+        }}
+
+        .no-video-message svg {{
+            width: 48px;
+            height: 48px;
+            margin-bottom: 12px;
+            opacity: 0.5;
+        }}
+    </style>
+</head>
+<body>
+    <!-- Header -->
+    <header class="header">
+        <div class="header-left">
+            <span class="status-badge {{status_class}}">
+                {{status}}
+            </span>
+        </div>
+        <div class="header-center">
+            <h1>{{test_name}}</h1>
+            <span class="header-timestamp">{{timestamp}}</span>
+        </div>
+        <div class="header-right">
+            <span class="duration-badge">
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                    <circle cx="12" cy="12" r="10"></circle>
+                    <polyline points="12 6 12 12 16 14"></polyline>
+                </svg>
+                {{duration}}
+            </span>
+            <button class="btn btn-primary" onclick="exportJSON()">Export JSON</button>
+        </div>
+    </header>
+
+    <!-- Summary Bar -->
+    <div class="summary-bar">
+        <div class="summary-item total">
+            <span class="summary-count">{{summary_total}}</span>
+            <span>Total</span>
+        </div>
+        <div class="summary-item passed">
+            <span class="summary-count">{{summary_passed}}</span>
+            <span>Passed</span>
+        </div>
+        <div class="summary-item failed">
+            <span class="summary-count">{{summary_failed}}</span>
+            <span>Failed</span>
+        </div>
+        <div class="summary-item skipped">
+            <span class="summary-count">{{summary_skipped}}</span>
+            <span>Skipped</span>
+        </div>
+    </div>
+
+    <!-- Filter Bar -->
+    <div class="filter-bar">
+        <button class="filter-btn active" data-filter="all" onclick="filterSteps('all')">All</button>
+        <button class="filter-btn" data-filter="passed" onclick="filterSteps('passed')">Passed</button>
+        <button class="filter-btn" data-filter="failed" onclick="filterSteps('failed')">Failed</button>
+        <button class="filter-btn" data-filter="skipped" onclick="filterSteps('skipped')">Skipped</button>
+    </div>
+
+    <!-- Main Content -->
+    <main class="main">
+        <!-- Video Panel (optional) -->
+        {{video_html}}
+
+        <!-- Steps Panel -->
+        <div class="steps-panel" id="stepsPanel">
+            {{steps_html}}
+        </div>
+    </main>
+
+    <!-- Image Modal -->
+    <div class="image-modal" id="imageModal" onclick="closeImageModal()">
+        <button class="image-modal-close" onclick="closeImageModal()">&times;</button>
+        <img id="modalImage" src="" alt="Screenshot">
+    </div>
+
+    <!-- Keyboard Hint -->
+    <div class="keyboard-hint">
+        <span><kbd>&#8593;</kbd><kbd>&#8595;</kbd> Navigate</span>
+        <span><kbd>Enter</kbd> Expand</span>
+        <span><kbd>Esc</kbd> Close</span>
+    </div>
+
+    <script>
+        // JSON data for export
+        const reportData = {{json_data}};
+
+        // State
+        let activeStepIndex = -1;
+        let currentFilter = 'all';
+        const stepCards = document.querySelectorAll('.step-card');
+
+        // Export JSON
+        function exportJSON() {{
+            const blob = new Blob([JSON.stringify(reportData, null, 2)], {{ type: 'application/json' }});
+            const url = URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = reportData.test_name + '_report.json';
+            document.body.appendChild(a);
+            a.click();
+            document.body.removeChild(a);
+            URL.revokeObjectURL(url);
+        }}
+
+        // Filter steps
+        function filterSteps(filter) {{
+            currentFilter = filter;
+
+            // Update filter buttons
+            document.querySelectorAll('.filter-btn').forEach(btn => {{
+                btn.classList.remove('active', 'passed', 'failed', 'skipped');
+                if (btn.dataset.filter === filter) {{
+                    btn.classList.add('active');
+                    if (filter !== 'all') btn.classList.add(filter);
+                }}
+            }});
+
+            // Show/hide step cards
+            stepCards.forEach(card => {{
+                if (filter === 'all') {{
+                    card.classList.remove('hidden');
+                }} else {{
+                    const status = card.dataset.status;
+                    card.classList.toggle('hidden', status !== filter);
+                }}
+            }});
+
+            // Reset active step
+            activeStepIndex = -1;
+            stepCards.forEach(card => card.classList.remove('active'));
+        }}
+
+        // Step click handler
+        function selectStep(index) {{
+            stepCards.forEach(card => card.classList.remove('active'));
+            activeStepIndex = index;
+
+            const visibleCards = getVisibleCards();
+            if (visibleCards[index]) {{
+                visibleCards[index].classList.add('active');
+                visibleCards[index].scrollIntoView({{ behavior: 'smooth', block: 'nearest' }});
+
+                // Sync video if present
+                const video = document.getElementById('reportVideo');
+                const timestamp = visibleCards[index].dataset.timestamp;
+                if (video && timestamp) {{
+                    video.currentTime = parseFloat(timestamp);
+                }}
+            }}
+        }}
+
+        // Get visible cards based on current filter
+        function getVisibleCards() {{
+            return Array.from(stepCards).filter(card => !card.classList.contains('hidden'));
+        }}
+
+        // Keyboard navigation
+        document.addEventListener('keydown', function(e) {{
+            const visibleCards = getVisibleCards();
+
+            if (e.key === 'ArrowDown') {{
+                e.preventDefault();
+                if (activeStepIndex < visibleCards.length - 1) {{
+                    selectStep(activeStepIndex + 1);
+                }}
+            }} else if (e.key === 'ArrowUp') {{
+                e.preventDefault();
+                if (activeStepIndex > 0) {{
+                    selectStep(activeStepIndex - 1);
+                }}
+            }} else if (e.key === 'Escape') {{
+                closeImageModal();
+            }}
+        }});
+
+        // Image modal
+        function openImageModal(src) {{
+            const modal = document.getElementById('imageModal');
+            const img = document.getElementById('modalImage');
+            img.src = src;
+            modal.classList.add('active');
+        }}
+
+        function closeImageModal() {{
+            const modal = document.getElementById('imageModal');
+            modal.classList.remove('active');
+        }}
+
+        // Video controls (if video exists)
+        function initVideoControls() {{
+            const video = document.getElementById('reportVideo');
+            const playBtn = document.getElementById('videoPlayBtn');
+            const scrubber = document.getElementById('videoScrubber');
+            const timeDisplay = document.getElementById('videoTime');
+
+            if (!video) return;
+
+            playBtn.addEventListener('click', function() {{
+                if (video.paused) {{
+                    video.play();
+                    playBtn.innerHTML = '&#10074;&#10074;';
+                }} else {{
+                    video.pause();
+                    playBtn.innerHTML = '&#9658;';
+                }}
+            }});
+
+            video.addEventListener('timeupdate', function() {{
+                const progress = (video.currentTime / video.duration) * 100;
+                scrubber.value = progress;
+                timeDisplay.textContent = formatTime(video.currentTime) + ' / ' + formatTime(video.duration);
+            }});
+
+            scrubber.addEventListener('input', function() {{
+                const time = (scrubber.value / 100) * video.duration;
+                video.currentTime = time;
+            }});
+
+            video.addEventListener('ended', function() {{
+                playBtn.innerHTML = '&#9658;';
+            }});
+        }}
+
+        function formatTime(seconds) {{
+            if (isNaN(seconds)) return '0:00';
+            const mins = Math.floor(seconds / 60);
+            const secs = Math.floor(seconds % 60);
+            return mins + ':' + (secs < 10 ? '0' : '') + secs;
+        }}
+
+        // Initialize
+        document.addEventListener('DOMContentLoaded', function() {{
+            initVideoControls();
+
+            // Add click handlers to step cards
+            stepCards.forEach((card, index) => {{
+                card.addEventListener('click', function(e) {{
+                    // Don't trigger if clicking on an image
+                    if (e.target.tagName !== 'IMG') {{
+                        const visibleCards = getVisibleCards();
+                        const visibleIndex = visibleCards.indexOf(card);
+                        selectStep(visibleIndex);
+                    }}
+                }});
+            }});
+        }});
+    </script>
+</body>
+</html>

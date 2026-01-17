@@ -224,7 +224,8 @@ class VerificationSuggester:
         Returns:
             VerificationPoint if flow completion detected, None otherwise
         """
-        after_lower = step.after_description.lower()
+        after_desc = step.after_description or ""
+        after_lower = after_desc.lower()
 
         for keyword in FLOW_COMPLETION_KEYWORDS:
             if keyword in after_lower:
@@ -247,8 +248,10 @@ class VerificationSuggester:
         Returns:
             VerificationPoint if navigation change detected, None otherwise
         """
-        before_lower = step.before_description.lower()
-        after_lower = step.after_description.lower()
+        before_desc = step.before_description or ""
+        after_desc = step.after_description or ""
+        before_lower = before_desc.lower()
+        after_lower = after_desc.lower()
 
         # Check if screen/page changed
         nav_keywords_in_after = sum(
@@ -296,8 +299,12 @@ class VerificationSuggester:
 
         next_step = all_steps[index + 1]
 
-        current_timestamp = step.original_tap.get("timestamp", 0.0)
-        next_timestamp = next_step.original_tap.get("timestamp", 0.0)
+        current_timestamp = step.original_tap.get("timestamp")
+        next_timestamp = next_step.original_tap.get("timestamp")
+
+        # Cannot calculate pause without timestamps
+        if current_timestamp is None or next_timestamp is None:
+            return None
 
         pause_duration = next_timestamp - current_timestamp
 

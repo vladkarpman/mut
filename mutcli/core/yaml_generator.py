@@ -5,6 +5,10 @@ from typing import Any
 
 import yaml
 
+from mutcli.core.step_analyzer import AnalyzedStep
+from mutcli.core.typing_detector import TypingSequence
+from mutcli.core.verification_suggester import VerificationPoint
+
 
 class YAMLGenerator:
     """Generate YAML test files from recorded actions.
@@ -160,3 +164,85 @@ class YAMLGenerator:
 
         content = self.generate()
         path.write_text(content, encoding="utf-8")
+
+    def add_analyzed_step(self, step: AnalyzedStep) -> None:
+        """Add step using AI-extracted element text.
+
+        Uses element_text if available, falls back to coordinates.
+
+        Args:
+            step: AnalyzedStep with element_text and original_tap data
+        """
+        if step.element_text:
+            self.add_tap(0, 0, element=step.element_text)
+        else:
+            x = int(step.original_tap.get("x", 0))
+            y = int(step.original_tap.get("y", 0))
+            self.add_tap(x, y)
+
+    def add_typing_sequence(self, sequence: TypingSequence) -> None:
+        """Add type command for detected typing sequence.
+
+        Only adds if text was provided (via interview).
+
+        Args:
+            sequence: TypingSequence with optional text field
+        """
+        if sequence.text:
+            self.add_type(sequence.text)
+        # If no text provided, skip (user didn't fill it in)
+
+    def generate_from_analysis(
+        self,
+        analyzed_steps: list[AnalyzedStep],
+        typing_sequences: list[TypingSequence],
+        verifications: list[VerificationPoint],
+    ) -> str:
+        """Generate YAML from full analysis results.
+
+        Merges steps, typing, and verifications in correct order:
+        1. Typing sequences replace the taps they contain
+        2. Verifications are inserted after specified steps
+
+        Args:
+            analyzed_steps: Steps with AI-extracted element text
+            typing_sequences: Detected typing with user-provided text
+            verifications: Suggested verification points
+
+        Returns:
+            Generated YAML string
+        """
+        # Create map of typing sequences by start_index
+        typing_by_start: dict[int, TypingSequence] = {
+            seq.start_index: seq for seq in typing_sequences
+        }
+
+        # Create set of indices covered by typing sequences (to skip)
+        typing_indices: set[int] = set()
+        for seq in typing_sequences:
+            for i in range(seq.start_index, seq.end_index + 1):
+                typing_indices.add(i)
+
+        # Create map of verifications by after_step_index
+        verifications_by_step: dict[int, VerificationPoint] = {
+            v.after_step_index: v for v in verifications
+        }
+
+        # Process each analyzed step
+        for step in analyzed_steps:
+            idx = step.index
+
+            # Check if this is the start of a typing sequence
+            if idx in typing_by_start:
+                seq = typing_by_start[idx]
+                self.add_typing_sequence(seq)
+            # Skip if this index is part of a typing sequence (but not the start)
+            elif idx not in typing_indices:
+                self.add_analyzed_step(step)
+
+            # Check for verification after this step
+            if idx in verifications_by_step:
+                verification = verifications_by_step[idx]
+                self.add_verify_screen(verification.description)
+
+        return self.generate()

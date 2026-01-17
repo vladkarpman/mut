@@ -241,10 +241,18 @@ def stop(
         console.print("\nMake sure recording completed successfully.")
         raise typer.Exit(2)
 
-    with open(touch_events_path) as f:
-        touch_events = json.load(f)
+    try:
+        with open(touch_events_path) as f:
+            touch_events = json.load(f)
+    except json.JSONDecodeError as e:
+        console.print(f"[red]Error:[/red] Invalid JSON in touch_events.json: {e}")
+        raise typer.Exit(2)
 
     console.print(f"  Found {len(touch_events)} touch events")
+
+    if not touch_events:
+        console.print("[yellow]Warning:[/yellow] No touch events found in recording")
+        console.print("The generated test will only contain app launch/terminate steps.")
 
     # Get screen dimensions for typing detection
     screen_height = touch_events[0].get("screen_height", 2400) if touch_events else 2400

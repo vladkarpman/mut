@@ -2,6 +2,7 @@
 
 import re
 import subprocess
+import time
 import xml.etree.ElementTree as ET
 from pathlib import Path
 from typing import Any
@@ -62,6 +63,40 @@ class DeviceController:
             x: X coordinate
             y: Y coordinate
         """
+        self._adb(["shell", "input", "tap", str(x), str(y)])
+
+    def long_press(self, x: int, y: int, duration_ms: int = 500) -> None:
+        """Long press at coordinates.
+
+        Args:
+            x: X coordinate in pixels
+            y: Y coordinate in pixels
+            duration_ms: Duration in milliseconds (default: 500)
+        """
+        if x < 0 or y < 0:
+            raise ValueError(f"Coordinates must be non-negative: ({x}, {y})")
+        if duration_ms <= 0:
+            raise ValueError(f"Duration must be positive: {duration_ms}")
+        # Swipe from same point to same point = long press
+        self._adb([
+            "shell", "input", "swipe",
+            str(x), str(y), str(x), str(y), str(duration_ms)
+        ])
+
+    def double_tap(self, x: int, y: int, delay_ms: int = 100) -> None:
+        """Double tap at coordinates.
+
+        Args:
+            x: X coordinate in pixels
+            y: Y coordinate in pixels
+            delay_ms: Delay between taps in milliseconds (default: 100)
+        """
+        if x < 0 or y < 0:
+            raise ValueError(f"Coordinates must be non-negative: ({x}, {y})")
+        if delay_ms < 0:
+            raise ValueError(f"Delay must be non-negative: {delay_ms}")
+        self._adb(["shell", "input", "tap", str(x), str(y)])
+        time.sleep(delay_ms / 1000)
         self._adb(["shell", "input", "tap", str(x), str(y)])
 
     def swipe(

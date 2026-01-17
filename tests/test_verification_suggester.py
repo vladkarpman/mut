@@ -148,6 +148,34 @@ class TestSuggestAfterFormSubmission:
         assert suggestions[0].after_step_index == 0
 
 
+class TestFormSubmissionEdgeCases:
+    """Test form submission edge cases."""
+
+    def test_no_suggestion_when_element_text_is_none(self):
+        """Should not suggest form submission when element_text is None."""
+        mock_ai = MagicMock()
+        suggester = VerificationSuggester(ai_analyzer=mock_ai)
+
+        steps = [
+            AnalyzedStep(
+                index=0,
+                original_tap={"x": 200, "y": 500, "timestamp": 0.0},
+                element_text=None,  # No element text
+                before_description="Form screen",
+                after_description="Form modified",
+                suggested_verification=None,
+            ),
+        ]
+
+        suggestions = suggester.suggest(steps)
+
+        # Should not suggest form submission since element_text is None
+        form_suggestions = [
+            s for s in suggestions if "form" in s.reason.lower()
+        ]
+        assert len(form_suggestions) == 0
+
+
 class TestSuggestOnNavigationChange:
     """Test verification suggestion on navigation change."""
 
@@ -269,6 +297,102 @@ class TestSuggestAfterLongPause:
         ]
         assert len(pause_suggestions) == 0
 
+    def test_no_pause_suggestion_when_timestamps_missing(self):
+        """Should not suggest pause verification when timestamps are missing."""
+        mock_ai = MagicMock()
+        suggester = VerificationSuggester(ai_analyzer=mock_ai)
+
+        steps = [
+            AnalyzedStep(
+                index=0,
+                original_tap={"x": 100, "y": 200},  # No timestamp
+                element_text="Item 1",
+                before_description="List view",
+                after_description="Item details",
+                suggested_verification=None,
+            ),
+            AnalyzedStep(
+                index=1,
+                original_tap={"x": 100, "y": 300},  # No timestamp
+                element_text="Back",
+                before_description="Item details",
+                after_description="List view",
+                suggested_verification=None,
+            ),
+        ]
+
+        suggestions = suggester.suggest(steps)
+
+        # Should not suggest pause verification without timestamps
+        pause_suggestions = [
+            s for s in suggestions if "pause" in s.reason.lower()
+        ]
+        assert len(pause_suggestions) == 0
+
+    def test_no_pause_suggestion_when_current_timestamp_missing(self):
+        """Should not suggest pause verification when current timestamp is missing."""
+        mock_ai = MagicMock()
+        suggester = VerificationSuggester(ai_analyzer=mock_ai)
+
+        steps = [
+            AnalyzedStep(
+                index=0,
+                original_tap={"x": 100, "y": 200},  # No timestamp
+                element_text="Item 1",
+                before_description="List view",
+                after_description="Item details",
+                suggested_verification=None,
+            ),
+            AnalyzedStep(
+                index=1,
+                original_tap={"x": 100, "y": 300, "timestamp": 5.0},
+                element_text="Back",
+                before_description="Item details",
+                after_description="List view",
+                suggested_verification=None,
+            ),
+        ]
+
+        suggestions = suggester.suggest(steps)
+
+        # Should not suggest pause verification without current timestamp
+        pause_suggestions = [
+            s for s in suggestions if "pause" in s.reason.lower()
+        ]
+        assert len(pause_suggestions) == 0
+
+    def test_no_pause_suggestion_when_next_timestamp_missing(self):
+        """Should not suggest pause verification when next timestamp is missing."""
+        mock_ai = MagicMock()
+        suggester = VerificationSuggester(ai_analyzer=mock_ai)
+
+        steps = [
+            AnalyzedStep(
+                index=0,
+                original_tap={"x": 100, "y": 200, "timestamp": 0.0},
+                element_text="Item 1",
+                before_description="List view",
+                after_description="Item details",
+                suggested_verification=None,
+            ),
+            AnalyzedStep(
+                index=1,
+                original_tap={"x": 100, "y": 300},  # No timestamp
+                element_text="Back",
+                before_description="Item details",
+                after_description="List view",
+                suggested_verification=None,
+            ),
+        ]
+
+        suggestions = suggester.suggest(steps)
+
+        # Should not suggest pause verification without next timestamp
+        pause_suggestions = [
+            s for s in suggestions if "pause" in s.reason.lower()
+        ]
+        assert len(pause_suggestions) == 0
+
 
 class TestSuggestOnFlowKeywords:
     """Test verification suggestion on flow completion keywords."""
@@ -356,6 +480,84 @@ class TestSuggestOnFlowKeywords:
         suggestions = suggester.suggest(steps)
 
         assert len(suggestions) >= 1
+
+
+class TestNoneDescriptionHandling:
+    """Test handling of None values for descriptions."""
+
+    def test_no_flow_completion_when_after_description_is_none(self):
+        """Should not crash when after_description is None in flow completion check."""
+        mock_ai = MagicMock()
+        suggester = VerificationSuggester(ai_analyzer=mock_ai)
+
+        steps = [
+            AnalyzedStep(
+                index=0,
+                original_tap={"x": 200, "y": 400, "timestamp": 0.0},
+                element_text="Button",
+                before_description="Some screen",
+                after_description=None,  # None after_description
+                suggested_verification=None,
+            ),
+        ]
+
+        # Should not raise AttributeError
+        suggestions = suggester.suggest(steps)
+
+        # No flow completion suggestions for None description
+        flow_suggestions = [
+            s for s in suggestions
+            if "flow" in s.reason.lower() or "completion" in s.reason.lower()
+        ]
+        assert len(flow_suggestions) == 0
+
+    def test_no_navigation_change_when_descriptions_are_none(self):
+        """Should not crash when before/after descriptions are None in navigation check."""
+        mock_ai = MagicMock()
+        suggester = VerificationSuggester(ai_analyzer=mock_ai)
+
+        steps = [
+            AnalyzedStep(
+                index=0,
+                original_tap={"x": 100, "y": 100, "timestamp": 0.0},
+                element_text="Menu",
+                before_description=None,  # None before_description
+                after_description=None,  # None after_description
+                suggested_verification=None,
+            ),
+        ]
+
+        # Should not raise AttributeError
+        suggestions = suggester.suggest(steps)
+
+        # No navigation suggestions for None descriptions
+        nav_suggestions = [
+            s for s in suggestions if "navigation" in s.reason.lower()
+        ]
+        assert len(nav_suggestions) == 0
+
+    def test_no_navigation_when_only_before_description_is_none(self):
+        """Should not crash when only before_description is None."""
+        mock_ai = MagicMock()
+        suggester = VerificationSuggester(ai_analyzer=mock_ai)
+
+        steps = [
+            AnalyzedStep(
+                index=0,
+                original_tap={"x": 100, "y": 100, "timestamp": 0.0},
+                element_text="Settings",
+                before_description=None,  # None before_description
+                after_description="Settings screen displayed",
+                suggested_verification=None,
+            ),
+        ]
+
+        # Should not raise AttributeError
+        suggestions = suggester.suggest(steps)
+
+        # Should still detect navigation since after_description has keywords
+        # (the comparison after_lower != before_lower will work with empty string)
+        assert isinstance(suggestions, list)
 
 
 class TestEmptyAndLimitedResults:

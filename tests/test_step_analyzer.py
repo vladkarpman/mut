@@ -88,14 +88,15 @@ class TestAnalyzeStep:
                 before_screenshot=b"fake_png_before",
                 after_screenshot=b"fake_png_after",
                 tap_coordinates=(100, 200),
-                step_index=0,
-                original_tap={"x": 100, "y": 200, "timestamp": 1.0},
             )
 
         assert result.element_text == "Login Button"
         assert result.before_description == "Login screen with form"
         assert result.after_description == "Loading spinner visible"
         assert result.suggested_verification == "User logged in successfully"
+        # Placeholders are set by analyze_step, caller sets correct values
+        assert result.index == 0
+        assert result.original_tap == {}
 
     def test_returns_none_element_text_when_ai_unavailable(self):
         """Should return None element_text when AI is unavailable."""
@@ -115,8 +116,6 @@ class TestAnalyzeStep:
             before_screenshot=b"fake_png_before",
             after_screenshot=b"fake_png_after",
             tap_coordinates=(100, 200),
-            step_index=0,
-            original_tap={"x": 100, "y": 200, "timestamp": 1.0},
         )
 
         assert result.element_text is None
@@ -144,8 +143,6 @@ class TestAnalyzeStep:
                 before_screenshot=b"fake_png_before",
                 after_screenshot=b"fake_png_after",
                 tap_coordinates=(100, 200),
-                step_index=0,
-                original_tap={"x": 100, "y": 200, "timestamp": 1.0},
             )
 
         assert result.element_text is None
@@ -297,12 +294,8 @@ class TestExtractElement:
         """Should call AI with element extraction prompt."""
         mock_ai = MagicMock()
         mock_ai.is_available = True
-        mock_ai._client = MagicMock()
-
-        # Mock the generate_content call
-        mock_response = MagicMock()
-        mock_response.text = '{"element_text": "Submit", "element_type": "button"}'
-        mock_ai._client.models.generate_content.return_value = mock_response
+        # Mock analyze_image to return JSON response
+        mock_ai.analyze_image.return_value = '{"element_text": "Submit", "element_type": "button"}'
 
         analyzer = StepAnalyzer(ai_analyzer=mock_ai)
 
@@ -313,11 +306,18 @@ class TestExtractElement:
 
         assert result["element_text"] == "Submit"
         assert result["element_type"] == "button"
+        # Verify analyze_image was called with correct arguments
+        mock_ai.analyze_image.assert_called_once()
+        call_args = mock_ai.analyze_image.call_args
+        assert call_args[0][0] == b"fake_png"  # screenshot
+        assert "(100, 200)" in call_args[0][1]  # prompt contains coordinates
 
     def test_returns_none_when_ai_unavailable(self):
         """Should return None element_text when AI unavailable."""
         mock_ai = MagicMock()
-        mock_ai.is_available = False
+        mock_ai.is_available = True
+        # analyze_image returns None when AI unavailable
+        mock_ai.analyze_image.return_value = None
 
         analyzer = StepAnalyzer(ai_analyzer=mock_ai)
 
@@ -329,11 +329,11 @@ class TestExtractElement:
         assert result["element_text"] is None
 
     def test_handles_ai_error_gracefully(self):
-        """Should handle AI errors gracefully."""
+        """Should handle AI errors gracefully (analyze_image returns None)."""
         mock_ai = MagicMock()
         mock_ai.is_available = True
-        mock_ai._client = MagicMock()
-        mock_ai._client.models.generate_content.side_effect = Exception("API Error")
+        # analyze_image returns None on error
+        mock_ai.analyze_image.return_value = None
 
         analyzer = StepAnalyzer(ai_analyzer=mock_ai)
 
@@ -348,11 +348,8 @@ class TestExtractElement:
         """Should handle malformed JSON from AI."""
         mock_ai = MagicMock()
         mock_ai.is_available = True
-        mock_ai._client = MagicMock()
-
-        mock_response = MagicMock()
-        mock_response.text = "not valid json"
-        mock_ai._client.models.generate_content.return_value = mock_response
+        # analyze_image returns invalid JSON
+        mock_ai.analyze_image.return_value = "not valid json"
 
         analyzer = StepAnalyzer(ai_analyzer=mock_ai)
 

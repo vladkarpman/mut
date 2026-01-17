@@ -4,6 +4,9 @@ from pathlib import Path
 
 import yaml
 
+from mutcli.core.step_analyzer import AnalyzedStep
+from mutcli.core.typing_detector import TypingSequence
+from mutcli.core.verification_suggester import VerificationPoint
 from mutcli.core.yaml_generator import YAMLGenerator
 
 
@@ -388,3 +391,561 @@ class TestCompleteWorkflow:
         assert data["steps"][0] == {"wait": "2s"}
         assert data["steps"][1] == {"swipe": {"direction": "left"}}
         assert data["steps"][2] == {"swipe": {"direction": "left", "distance": "75%"}}
+
+
+class TestAddAnalyzedStep:
+    """Test add_analyzed_step method."""
+
+    def test_uses_element_text_when_available(self):
+        """add_analyzed_step should use element_text when provided."""
+        gen = YAMLGenerator("test", "com.example.app")
+        step = AnalyzedStep(
+            index=0,
+            original_tap={"x": 540, "y": 1200, "timestamp": 1.0},
+            element_text="Login Button",
+            before_description="Login screen",
+            after_description="Loading",
+            suggested_verification=None,
+        )
+
+        gen.add_analyzed_step(step)
+
+        assert len(gen._steps) == 1
+        assert gen._steps[0] == {"tap": "Login Button"}
+
+    def test_falls_back_to_coordinates_when_no_element_text(self):
+        """add_analyzed_step should use coordinates when element_text is None."""
+        gen = YAMLGenerator("test", "com.example.app")
+        step = AnalyzedStep(
+            index=0,
+            original_tap={"x": 540, "y": 1200, "timestamp": 1.0},
+            element_text=None,
+            before_description="Screen state",
+            after_description="Changed state",
+            suggested_verification=None,
+        )
+
+        gen.add_analyzed_step(step)
+
+        assert len(gen._steps) == 1
+        assert gen._steps[0] == {"tap": [540, 1200]}
+
+    def test_handles_empty_element_text(self):
+        """add_analyzed_step should treat empty string as no element_text."""
+        gen = YAMLGenerator("test", "com.example.app")
+        step = AnalyzedStep(
+            index=0,
+            original_tap={"x": 100, "y": 200, "timestamp": 1.0},
+            element_text="",
+            before_description="Screen",
+            after_description="Screen",
+            suggested_verification=None,
+        )
+
+        gen.add_analyzed_step(step)
+
+        # Empty string is falsy, should use coordinates
+        assert gen._steps[0] == {"tap": [100, 200]}
+
+
+class TestAddTypingSequence:
+    """Test add_typing_sequence method."""
+
+    def test_adds_type_command_when_text_provided(self):
+        """add_typing_sequence should add type command when text is provided."""
+        gen = YAMLGenerator("test", "com.example.app")
+        sequence = TypingSequence(
+            start_index=2,
+            end_index=10,
+            tap_count=9,
+            duration=3.5,
+            text="user@test.com",
+        )
+
+        gen.add_typing_sequence(sequence)
+
+        assert len(gen._steps) == 1
+        assert gen._steps[0] == {"type": "user@test.com"}
+
+    def test_skips_when_no_text_provided(self):
+        """add_typing_sequence should skip when text is None."""
+        gen = YAMLGenerator("test", "com.example.app")
+        sequence = TypingSequence(
+            start_index=2,
+            end_index=10,
+            tap_count=9,
+            duration=3.5,
+            text=None,
+        )
+
+        gen.add_typing_sequence(sequence)
+
+        assert len(gen._steps) == 0
+
+    def test_skips_when_text_is_empty(self):
+        """add_typing_sequence should skip when text is empty string."""
+        gen = YAMLGenerator("test", "com.example.app")
+        sequence = TypingSequence(
+            start_index=2,
+            end_index=10,
+            tap_count=9,
+            duration=3.5,
+            text="",
+        )
+
+        gen.add_typing_sequence(sequence)
+
+        # Empty string is falsy, should skip
+        assert len(gen._steps) == 0
+
+
+class TestGenerateFromAnalysis:
+    """Test generate_from_analysis method."""
+
+    def test_generates_basic_yaml_from_analyzed_steps(self):
+        """generate_from_analysis should create YAML from analyzed steps."""
+        gen = YAMLGenerator("test", "com.example.app")
+        analyzed_steps = [
+            AnalyzedStep(
+                index=0,
+                original_tap={"x": 100, "y": 200, "timestamp": 1.0},
+                element_text="Login",
+                before_description="Login screen",
+                after_description="Form focused",
+                suggested_verification=None,
+            ),
+            AnalyzedStep(
+                index=1,
+                original_tap={"x": 300, "y": 400, "timestamp": 2.0},
+                element_text="Submit",
+                before_description="Form filled",
+                after_description="Loading",
+                suggested_verification=None,
+            ),
+        ]
+
+        yaml_str = gen.generate_from_analysis(analyzed_steps, [], [])
+        data = yaml.safe_load(yaml_str)
+
+        assert len(data["steps"]) == 2
+        assert data["steps"][0] == {"tap": "Login"}
+        assert data["steps"][1] == {"tap": "Submit"}
+
+    def test_inserts_type_commands_at_correct_positions(self):
+        """generate_from_analysis should replace typing sequence taps with type command."""
+        gen = YAMLGenerator("test", "com.example.app")
+
+        # Steps 0, 1, 2 where 1-2 are typing
+        analyzed_steps = [
+            AnalyzedStep(
+                index=0,
+                original_tap={"x": 100, "y": 200, "timestamp": 1.0},
+                element_text="Email field",
+                before_description="Login screen",
+                after_description="Field focused",
+                suggested_verification=None,
+            ),
+            AnalyzedStep(
+                index=1,
+                original_tap={"x": 50, "y": 1800, "timestamp": 2.0},
+                element_text=None,
+                before_description="Keyboard visible",
+                after_description="Typing",
+                suggested_verification=None,
+            ),
+            AnalyzedStep(
+                index=2,
+                original_tap={"x": 60, "y": 1800, "timestamp": 2.5},
+                element_text=None,
+                before_description="Typing",
+                after_description="Typing",
+                suggested_verification=None,
+            ),
+            AnalyzedStep(
+                index=3,
+                original_tap={"x": 70, "y": 1800, "timestamp": 3.0},
+                element_text=None,
+                before_description="Typing",
+                after_description="Typing complete",
+                suggested_verification=None,
+            ),
+            AnalyzedStep(
+                index=4,
+                original_tap={"x": 200, "y": 500, "timestamp": 4.0},
+                element_text="Submit",
+                before_description="Form filled",
+                after_description="Submitting",
+                suggested_verification=None,
+            ),
+        ]
+
+        # Typing sequence covers indices 1-3
+        typing_sequences = [
+            TypingSequence(
+                start_index=1,
+                end_index=3,
+                tap_count=3,
+                duration=1.0,
+                text="test@email.com",
+            )
+        ]
+
+        yaml_str = gen.generate_from_analysis(analyzed_steps, typing_sequences, [])
+        data = yaml.safe_load(yaml_str)
+
+        # Should have: tap Email field, type text, tap Submit
+        assert len(data["steps"]) == 3
+        assert data["steps"][0] == {"tap": "Email field"}
+        assert data["steps"][1] == {"type": "test@email.com"}
+        assert data["steps"][2] == {"tap": "Submit"}
+
+    def test_inserts_verify_screen_at_suggested_points(self):
+        """generate_from_analysis should insert verify_screen after specified steps."""
+        gen = YAMLGenerator("test", "com.example.app")
+
+        analyzed_steps = [
+            AnalyzedStep(
+                index=0,
+                original_tap={"x": 100, "y": 200, "timestamp": 1.0},
+                element_text="Login",
+                before_description="Login screen",
+                after_description="Form focused",
+                suggested_verification=None,
+            ),
+            AnalyzedStep(
+                index=1,
+                original_tap={"x": 300, "y": 400, "timestamp": 2.0},
+                element_text="Submit",
+                before_description="Form filled",
+                after_description="Dashboard visible",
+                suggested_verification=None,
+            ),
+        ]
+
+        verifications = [
+            VerificationPoint(
+                after_step_index=1,
+                description="Dashboard is displayed with welcome message",
+                confidence=0.85,
+                reason="Form submission detected",
+            )
+        ]
+
+        yaml_str = gen.generate_from_analysis(analyzed_steps, [], verifications)
+        data = yaml.safe_load(yaml_str)
+
+        # Should have: tap Login, tap Submit, verify_screen
+        assert len(data["steps"]) == 3
+        assert data["steps"][0] == {"tap": "Login"}
+        assert data["steps"][1] == {"tap": "Submit"}
+        assert data["steps"][2] == {"verify_screen": "Dashboard is displayed with welcome message"}
+
+    def test_handles_overlapping_typing_and_verifications(self):
+        """generate_from_analysis should handle typing sequences with verification at end."""
+        gen = YAMLGenerator("test", "com.example.app")
+
+        analyzed_steps = [
+            AnalyzedStep(
+                index=0,
+                original_tap={"x": 100, "y": 200, "timestamp": 1.0},
+                element_text="Email field",
+                before_description="Login screen",
+                after_description="Field focused",
+                suggested_verification=None,
+            ),
+            AnalyzedStep(
+                index=1,
+                original_tap={"x": 50, "y": 1800, "timestamp": 2.0},
+                element_text=None,
+                before_description="Keyboard",
+                after_description="Typing",
+                suggested_verification=None,
+            ),
+            AnalyzedStep(
+                index=2,
+                original_tap={"x": 60, "y": 1800, "timestamp": 2.5},
+                element_text=None,
+                before_description="Typing",
+                after_description="Typing",
+                suggested_verification=None,
+            ),
+            AnalyzedStep(
+                index=3,
+                original_tap={"x": 70, "y": 1800, "timestamp": 3.0},
+                element_text=None,
+                before_description="Typing",
+                after_description="Email entered",
+                suggested_verification=None,
+            ),
+        ]
+
+        # Typing sequence covers indices 1-3
+        typing_sequences = [
+            TypingSequence(
+                start_index=1,
+                end_index=3,
+                tap_count=3,
+                duration=1.0,
+                text="user@test.com",
+            )
+        ]
+
+        # Verification after last typing step
+        verifications = [
+            VerificationPoint(
+                after_step_index=3,
+                description="Email field shows entered text",
+                confidence=0.7,
+                reason="Long pause detected",
+            )
+        ]
+
+        yaml_str = gen.generate_from_analysis(analyzed_steps, typing_sequences, verifications)
+        data = yaml.safe_load(yaml_str)
+
+        # Should have: tap Email field, type text, verify_screen
+        assert len(data["steps"]) == 3
+        assert data["steps"][0] == {"tap": "Email field"}
+        assert data["steps"][1] == {"type": "user@test.com"}
+        assert data["steps"][2] == {"verify_screen": "Email field shows entered text"}
+
+    def test_handles_multiple_typing_sequences(self):
+        """generate_from_analysis should handle multiple typing sequences."""
+        gen = YAMLGenerator("test", "com.example.app")
+
+        analyzed_steps = [
+            AnalyzedStep(
+                index=0,
+                original_tap={"x": 100, "y": 200, "timestamp": 1.0},
+                element_text="Email",
+                before_description="Form",
+                after_description="Email focused",
+                suggested_verification=None,
+            ),
+            AnalyzedStep(
+                index=1,
+                original_tap={"x": 50, "y": 1800, "timestamp": 2.0},
+                element_text=None,
+                before_description="Keyboard",
+                after_description="Typing",
+                suggested_verification=None,
+            ),
+            AnalyzedStep(
+                index=2,
+                original_tap={"x": 60, "y": 1800, "timestamp": 2.5},
+                element_text=None,
+                before_description="Typing",
+                after_description="Typing",
+                suggested_verification=None,
+            ),
+            AnalyzedStep(
+                index=3,
+                original_tap={"x": 70, "y": 1800, "timestamp": 3.0},
+                element_text=None,
+                before_description="Typing",
+                after_description="Email done",
+                suggested_verification=None,
+            ),
+            AnalyzedStep(
+                index=4,
+                original_tap={"x": 100, "y": 400, "timestamp": 4.0},
+                element_text="Password",
+                before_description="Email filled",
+                after_description="Password focused",
+                suggested_verification=None,
+            ),
+            AnalyzedStep(
+                index=5,
+                original_tap={"x": 80, "y": 1800, "timestamp": 5.0},
+                element_text=None,
+                before_description="Keyboard",
+                after_description="Typing",
+                suggested_verification=None,
+            ),
+            AnalyzedStep(
+                index=6,
+                original_tap={"x": 90, "y": 1800, "timestamp": 5.5},
+                element_text=None,
+                before_description="Typing",
+                after_description="Typing",
+                suggested_verification=None,
+            ),
+            AnalyzedStep(
+                index=7,
+                original_tap={"x": 95, "y": 1800, "timestamp": 6.0},
+                element_text=None,
+                before_description="Typing",
+                after_description="Password done",
+                suggested_verification=None,
+            ),
+            AnalyzedStep(
+                index=8,
+                original_tap={"x": 200, "y": 600, "timestamp": 7.0},
+                element_text="Login",
+                before_description="Form complete",
+                after_description="Logging in",
+                suggested_verification=None,
+            ),
+        ]
+
+        typing_sequences = [
+            TypingSequence(
+                start_index=1,
+                end_index=3,
+                tap_count=3,
+                duration=1.0,
+                text="user@test.com",
+            ),
+            TypingSequence(
+                start_index=5,
+                end_index=7,
+                tap_count=3,
+                duration=1.0,
+                text="secret123",
+            ),
+        ]
+
+        yaml_str = gen.generate_from_analysis(analyzed_steps, typing_sequences, [])
+        data = yaml.safe_load(yaml_str)
+
+        # Should have: tap Email, type email, tap Password, type password, tap Login
+        assert len(data["steps"]) == 5
+        assert data["steps"][0] == {"tap": "Email"}
+        assert data["steps"][1] == {"type": "user@test.com"}
+        assert data["steps"][2] == {"tap": "Password"}
+        assert data["steps"][3] == {"type": "secret123"}
+        assert data["steps"][4] == {"tap": "Login"}
+
+    def test_handles_empty_inputs(self):
+        """generate_from_analysis should handle empty inputs gracefully."""
+        gen = YAMLGenerator("test", "com.example.app")
+
+        yaml_str = gen.generate_from_analysis([], [], [])
+        data = yaml.safe_load(yaml_str)
+
+        assert data["config"]["app"] == "com.example.app"
+        assert data["steps"] == []
+
+    def test_skips_typing_sequence_without_text(self):
+        """generate_from_analysis should skip typing sequences with no text (user skipped interview)."""
+        gen = YAMLGenerator("test", "com.example.app")
+
+        analyzed_steps = [
+            AnalyzedStep(
+                index=0,
+                original_tap={"x": 100, "y": 200, "timestamp": 1.0},
+                element_text="Email",
+                before_description="Form",
+                after_description="Focused",
+                suggested_verification=None,
+            ),
+            AnalyzedStep(
+                index=1,
+                original_tap={"x": 50, "y": 1800, "timestamp": 2.0},
+                element_text=None,
+                before_description="Keyboard",
+                after_description="Typing",
+                suggested_verification=None,
+            ),
+            AnalyzedStep(
+                index=2,
+                original_tap={"x": 60, "y": 1800, "timestamp": 2.5},
+                element_text=None,
+                before_description="Typing",
+                after_description="Typing",
+                suggested_verification=None,
+            ),
+            AnalyzedStep(
+                index=3,
+                original_tap={"x": 70, "y": 1800, "timestamp": 3.0},
+                element_text=None,
+                before_description="Typing",
+                after_description="Done",
+                suggested_verification=None,
+            ),
+            AnalyzedStep(
+                index=4,
+                original_tap={"x": 200, "y": 500, "timestamp": 4.0},
+                element_text="Submit",
+                before_description="Filled",
+                after_description="Submitting",
+                suggested_verification=None,
+            ),
+        ]
+
+        # Typing sequence without text (user skipped)
+        typing_sequences = [
+            TypingSequence(
+                start_index=1,
+                end_index=3,
+                tap_count=3,
+                duration=1.0,
+                text=None,  # User skipped interview
+            )
+        ]
+
+        yaml_str = gen.generate_from_analysis(analyzed_steps, typing_sequences, [])
+        data = yaml.safe_load(yaml_str)
+
+        # Without text, typing taps are skipped entirely (no type command generated)
+        # Result: tap Email, tap Submit
+        assert len(data["steps"]) == 2
+        assert data["steps"][0] == {"tap": "Email"}
+        assert data["steps"][1] == {"tap": "Submit"}
+
+    def test_multiple_verifications_at_different_steps(self):
+        """generate_from_analysis should insert multiple verifications at correct positions."""
+        gen = YAMLGenerator("test", "com.example.app")
+
+        analyzed_steps = [
+            AnalyzedStep(
+                index=0,
+                original_tap={"x": 100, "y": 200, "timestamp": 1.0},
+                element_text="Login",
+                before_description="Login screen",
+                after_description="Form",
+                suggested_verification=None,
+            ),
+            AnalyzedStep(
+                index=1,
+                original_tap={"x": 200, "y": 300, "timestamp": 2.0},
+                element_text="Submit",
+                before_description="Form",
+                after_description="Loading",
+                suggested_verification=None,
+            ),
+            AnalyzedStep(
+                index=2,
+                original_tap={"x": 300, "y": 400, "timestamp": 5.0},
+                element_text="Dashboard",
+                before_description="Dashboard",
+                after_description="Menu",
+                suggested_verification=None,
+            ),
+        ]
+
+        verifications = [
+            VerificationPoint(
+                after_step_index=1,
+                description="Loading indicator appears",
+                confidence=0.8,
+                reason="Form submission",
+            ),
+            VerificationPoint(
+                after_step_index=2,
+                description="Menu is displayed",
+                confidence=0.7,
+                reason="Navigation",
+            ),
+        ]
+
+        yaml_str = gen.generate_from_analysis(analyzed_steps, [], verifications)
+        data = yaml.safe_load(yaml_str)
+
+        # Should have: tap Login, tap Submit, verify, tap Dashboard, verify
+        assert len(data["steps"]) == 5
+        assert data["steps"][0] == {"tap": "Login"}
+        assert data["steps"][1] == {"tap": "Submit"}
+        assert data["steps"][2] == {"verify_screen": "Loading indicator appears"}
+        assert data["steps"][3] == {"tap": "Dashboard"}
+        assert data["steps"][4] == {"verify_screen": "Menu is displayed"}

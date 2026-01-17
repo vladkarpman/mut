@@ -189,6 +189,34 @@ Respond with JSON only (no markdown, no code blocks):
                 "error": str(e),
             }
 
+    def analyze_image(self, image_data: bytes, prompt: str) -> str | None:
+        """Analyze image with custom prompt.
+
+        Args:
+            image_data: PNG image bytes
+            prompt: Custom analysis prompt
+
+        Returns:
+            AI response text, or None if unavailable
+        """
+        if not self.is_available or self._client is None:
+            return None
+
+        try:
+            image_part = types.Part.from_bytes(
+                data=image_data,
+                mime_type="image/png",
+            )
+
+            response = self._client.models.generate_content(
+                model=self._model,
+                contents=[image_part, prompt],  # type: ignore[arg-type]
+            )
+            return response.text
+        except Exception as e:
+            logger.error(f"analyze_image failed: {e}")
+            return None
+
     def _parse_json_response(self, text: str) -> dict[str, Any]:
         """Parse JSON from model response, handling markdown code blocks."""
         text = text.strip()

@@ -1766,8 +1766,7 @@
         .add-step-frame-preview {
             position: relative;
             width: 100%;
-            min-height: 400px;
-            max-height: 550px;
+            min-height: 280px;
             background: var(--md-surface-dim);
             display: flex;
             align-items: center;
@@ -1782,13 +1781,14 @@
         }
 
         .add-step-frame-preview.captured {
-            background: var(--bg-primary);
+            background: #000;
+            min-height: 0;
         }
 
         .add-step-frame-preview img {
-            max-width: 100%;
-            max-height: 550px;
-            object-fit: contain;
+            width: 100%;
+            height: auto;
+            display: block;
         }
 
         .add-step-frame-preview .capture-hint {
@@ -1828,6 +1828,29 @@
                 0 4px 12px rgba(0, 0, 0, 0.5),
                 0 0 20px rgba(208, 188, 255, 0.6);
             animation: tapBounce 1.5s cubic-bezier(0.34, 1.56, 0.64, 1) infinite;
+        }
+
+        /* Swipe indicators in Add Step preview */
+        .add-step-frame-preview .add-step-swipe-indicator {
+            position: absolute;
+            width: 20px;
+            height: 20px;
+            border-radius: 50%;
+            transform: translate(-50%, -50%);
+            pointer-events: none;
+            box-shadow:
+                0 0 0 2px rgba(0, 0, 0, 0.8),
+                0 2px 8px rgba(0, 0, 0, 0.5);
+        }
+
+        .add-step-frame-preview .add-step-swipe-indicator.start {
+            background: var(--md-tertiary);
+            border: 2px solid #fff;
+        }
+
+        .add-step-frame-preview .add-step-swipe-indicator.end {
+            background: var(--md-primary);
+            border: 2px solid #fff;
         }
 
         /* Column content area */
@@ -2191,9 +2214,9 @@
         .frame-picker-content {
             background: var(--md-surface-container);
             border-radius: 28px;
-            max-width: 700px;
+            max-width: 900px;
             width: 95%;
-            max-height: 92vh;
+            max-height: 95vh;
             display: flex;
             flex-direction: column;
             overflow: hidden;
@@ -2224,11 +2247,6 @@
             font-size: 1.375rem;
             font-weight: 500;
             color: var(--md-on-surface);
-        }
-
-        .frame-picker-subtitle {
-            font-size: 0.8125rem;
-            color: var(--md-on-surface-variant);
         }
 
         .frame-picker-close {
@@ -2278,24 +2296,22 @@
             font-size: 20px;
         }
 
-        /* Preview wrapper */
-        .frame-picker-preview-wrapper {
+        /* Video container */
+        .frame-picker-video-container {
             position: relative;
-            background: var(--md-surface-dim);
-            border-radius: 16px;
+            background: #000;
+            border-radius: 0;
             overflow: hidden;
-            border: 1px solid var(--md-outline-variant);
-            display: flex;
-            justify-content: center;
-            align-items: center;
-            min-height: 400px;
+            margin: 0 -24px; /* Extend to full width */
+            width: calc(100% + 48px);
         }
 
-        .frame-picker-canvas {
-            max-width: 100%;
-            max-height: 450px;
-            object-fit: contain;
+        .frame-picker-video-container video {
+            width: 100%;
+            max-height: 60vh; /* Use viewport height for tall mobile screens */
             display: block;
+            object-fit: contain;
+            background: #000;
         }
 
         .frame-picker-overlay {
@@ -2308,8 +2324,8 @@
         }
 
         .frame-picker-overlay.inactive {
-            cursor: default;
-            pointer-events: none;
+            cursor: pointer;
+            pointer-events: auto;
         }
 
         .frame-picker-tap-indicator {
@@ -2325,193 +2341,282 @@
                 0 0 0 2px rgba(0, 0, 0, 0.8),
                 0 4px 12px rgba(0, 0, 0, 0.5),
                 0 0 20px rgba(208, 188, 255, 0.6);
-            animation: tapBounce 1.5s cubic-bezier(0.34, 1.56, 0.64, 1) infinite;
+            animation: tapPulse 1.5s ease-in-out infinite;
         }
 
-        /* Frame info badge */
-        .frame-info-badge {
+        /* Swipe indicators */
+        .frame-picker-swipe-indicator {
             position: absolute;
-            top: 12px;
-            left: 12px;
-            display: flex;
-            align-items: center;
-            gap: 6px;
-            padding: 8px 14px;
-            background: rgba(0, 0, 0, 0.75);
-            backdrop-filter: blur(8px);
-            border-radius: 8px;
-            font-size: 0.875rem;
-            font-family: 'IBM Plex Mono', monospace;
-            font-weight: 500;
-            color: var(--md-on-surface);
-        }
-
-        /* Filmstrip container */
-        .frame-picker-filmstrip-container {
-            display: flex;
-            flex-direction: column;
-            gap: 8px;
-        }
-
-        .filmstrip-label {
-            display: flex;
-            align-items: center;
-            gap: 8px;
-            font-size: 0.8125rem;
-            color: var(--md-on-surface-variant);
-            padding: 0 4px;
-        }
-
-        .filmstrip-label .material-symbols-outlined {
-            font-size: 18px;
-        }
-
-        .frame-picker-filmstrip {
-            display: flex;
-            gap: 8px;
-            padding: 12px;
-            background: var(--md-surface-container-high);
-            border-radius: 12px;
-            border: 1px solid var(--md-outline-variant);
-            overflow-x: auto;
-            scroll-snap-type: x mandatory;
-            scrollbar-width: thin;
-            scrollbar-color: var(--md-outline-variant) transparent;
-        }
-
-        .frame-picker-filmstrip::-webkit-scrollbar {
-            height: 6px;
-        }
-
-        .frame-picker-filmstrip::-webkit-scrollbar-track {
-            background: transparent;
-        }
-
-        .frame-picker-filmstrip::-webkit-scrollbar-thumb {
-            background: var(--md-outline-variant);
-            border-radius: 3px;
-        }
-
-        .filmstrip-frame {
-            flex-shrink: 0;
-            width: 80px;
-            cursor: pointer;
-            scroll-snap-align: start;
-            border-radius: 8px;
-            overflow: hidden;
-            border: 2px solid transparent;
-            transition: all var(--md-duration-short3) var(--md-easing-standard);
-            position: relative;
-        }
-
-        .filmstrip-frame:hover {
-            border-color: var(--md-outline);
-            transform: scale(1.05);
-        }
-
-        .filmstrip-frame.selected {
-            border-color: var(--md-primary);
-            box-shadow: 0 0 0 2px rgba(208, 188, 255, 0.3);
-        }
-
-        .filmstrip-frame img,
-        .filmstrip-frame canvas {
-            width: 100%;
-            height: auto;
-            display: block;
-        }
-
-        .filmstrip-frame .frame-timestamp {
-            position: absolute;
-            bottom: 0;
-            left: 0;
-            right: 0;
-            padding: 2px 4px;
-            background: rgba(0, 0, 0, 0.7);
-            font-size: 0.625rem;
-            font-family: 'IBM Plex Mono', monospace;
-            color: #fff;
-            text-align: center;
-        }
-
-        .filmstrip-loading {
+            width: 28px;
+            height: 28px;
+            border-radius: 50%;
+            transform: translate(-50%, -50%);
+            pointer-events: none;
             display: flex;
             align-items: center;
             justify-content: center;
-            gap: 8px;
-            padding: 24px;
-            color: var(--md-on-surface-variant);
-            font-size: 0.875rem;
+            box-shadow:
+                0 0 0 2px rgba(0, 0, 0, 0.8),
+                0 4px 12px rgba(0, 0, 0, 0.5);
+        }
+
+        .frame-picker-swipe-indicator.start {
+            background: var(--md-tertiary);
+            border: 3px solid #fff;
+        }
+
+        .frame-picker-swipe-indicator.end {
+            background: var(--md-primary);
+            border: 3px solid #fff;
+        }
+
+        .frame-picker-swipe-indicator .swipe-label {
+            position: absolute;
+            top: -20px;
+            font-size: 0.625rem;
+            font-weight: 700;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+            color: #fff;
+            text-shadow: 0 1px 3px rgba(0, 0, 0, 0.8);
+            white-space: nowrap;
+        }
+
+        /* Swipe line SVG */
+        .frame-picker-swipe-line {
+            position: absolute;
+            top: 0;
+            left: 0;
             width: 100%;
+            height: 100%;
+            pointer-events: none;
+            overflow: visible;
         }
 
-        @keyframes spin {
-            from { transform: rotate(0deg); }
-            to { transform: rotate(360deg); }
+        @keyframes tapPulse {
+            0%, 100% { transform: translate(-50%, -50%) scale(1); opacity: 1; }
+            50% { transform: translate(-50%, -50%) scale(1.1); opacity: 0.9; }
         }
 
-        .spinning {
-            animation: spin 1s linear infinite;
-        }
-
-        /* Position info */
-        .frame-picker-position-info {
+        /* Time badge */
+        .video-time-badge {
+            position: absolute;
+            bottom: 12px;
+            left: 12px;
             display: flex;
             align-items: center;
-            justify-content: space-between;
-            padding: 12px 16px;
-            background: rgba(208, 188, 255, 0.1);
-            border-radius: 12px;
-            border: 1px solid var(--md-primary-container);
+            gap: 4px;
+            padding: 6px 12px;
+            background: rgba(0, 0, 0, 0.8);
+            backdrop-filter: blur(8px);
+            border-radius: 6px;
+            font-size: 0.875rem;
+            font-family: 'IBM Plex Mono', monospace;
+            font-weight: 500;
+            color: #fff;
         }
 
-        .position-info-content {
-            display: flex;
-            align-items: center;
-            gap: 12px;
+        .video-time-badge .time-separator {
+            color: rgba(255, 255, 255, 0.5);
         }
 
-        .position-info-content .material-symbols-outlined {
+        .video-time-badge .frame-number {
             color: var(--md-primary);
-            font-size: 20px;
+            font-weight: 600;
+        }
+
+        /* Play state indicator */
+        .video-play-indicator {
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            width: 64px;
+            height: 64px;
+            background: rgba(0, 0, 0, 0.6);
+            backdrop-filter: blur(8px);
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            opacity: 0;
+            transition: opacity 0.2s ease;
+            pointer-events: none;
+        }
+
+        .video-play-indicator .material-symbols-outlined {
+            font-size: 32px;
+            color: #fff;
+        }
+
+        .video-play-indicator.show {
+            opacity: 1;
+        }
+
+        /* Scrubber timeline */
+        .frame-picker-scrubber {
+            padding: 0;
+            margin: 0 -24px; /* Extend to full width */
+            width: calc(100% + 48px);
+        }
+
+        .scrubber-track {
+            position: relative;
+            height: 48px;
+            background: var(--md-surface-container-high);
+            border-radius: 0;
+            cursor: pointer;
+            overflow: visible;
+        }
+
+        .scrubber-progress {
+            position: absolute;
+            left: 0;
+            top: 0;
+            bottom: 0;
+            background: linear-gradient(90deg,
+                rgba(208, 188, 255, 0.3) 0%,
+                rgba(208, 188, 255, 0.15) 100%);
+            pointer-events: none;
+            transition: width 0.05s linear;
+            border-radius: 0;
+        }
+
+        .scrubber-thumb {
+            position: absolute;
+            top: 0;
+            bottom: 0;
+            width: 2px;
+            background: var(--md-primary);
+            pointer-events: none;
+            transition: left 0.05s linear;
+        }
+
+        .scrubber-markers {
+            position: absolute;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            display: flex;
+            pointer-events: none;
+        }
+
+        .scrubber-marker {
+            position: absolute;
+            top: 4px;
+            bottom: 4px;
+            width: 40px;
+            transform: translateX(-50%);
+            border-radius: 4px;
+            overflow: hidden;
+            opacity: 0.6;
+            transition: opacity 0.2s ease;
+            pointer-events: auto;
+            cursor: pointer;
+        }
+
+        .scrubber-marker:hover {
+            opacity: 1;
+        }
+
+        .scrubber-marker img {
+            width: 100%;
+            height: 100%;
+            object-fit: cover;
+        }
+
+        .marker-time {
+            position: absolute;
+            bottom: 2px;
+            left: 50%;
+            transform: translateX(-50%);
+            font-size: 0.625rem;
+            font-family: 'IBM Plex Mono', monospace;
+            color: var(--md-on-surface-variant);
+            white-space: nowrap;
+        }
+
+        .scrubber-marker:first-child {
+            left: 16px !important; /* Padding from edge */
+            transform: none;
+        }
+
+        .scrubber-marker:first-child .marker-time {
+            left: 0;
+            transform: none;
+        }
+
+        .scrubber-marker:last-child {
+            left: auto !important;
+            right: 16px; /* Padding from edge */
+            transform: none;
+        }
+
+        .scrubber-marker:last-child .marker-time {
+            left: auto;
+            right: 0;
+            transform: none;
+        }
+
+        /* Position info overlay */
+        .frame-picker-position-info {
+            position: absolute;
+            bottom: 12px;
+            right: 12px;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            padding: 6px 10px;
+            background: rgba(0, 0, 0, 0.8);
+            backdrop-filter: blur(8px);
+            border-radius: 6px;
+            font-family: 'IBM Plex Mono', monospace;
+            font-size: 0.875rem;
+            color: #fff;
+        }
+
+        .frame-picker-position-info > .material-symbols-outlined {
+            font-size: 16px;
+            color: var(--md-primary);
         }
 
         .position-label {
-            font-size: 0.75rem;
-            font-weight: 500;
+            font-size: 0.6875rem;
+            font-weight: 600;
             text-transform: uppercase;
-            letter-spacing: 0.05em;
+            letter-spacing: 0.5px;
             color: var(--md-on-surface-variant);
         }
 
         .position-value {
-            font-size: 1rem;
+            font-size: 0.8125rem;
             font-family: 'IBM Plex Mono', monospace;
             color: var(--md-primary);
-            font-weight: 600;
+            font-weight: 500;
         }
 
         .position-clear-btn {
             display: flex;
             align-items: center;
-            gap: 6px;
-            padding: 8px 12px;
-            background: transparent;
-            border: 1px solid var(--md-outline-variant);
-            border-radius: 8px;
+            justify-content: center;
+            padding: 0;
+            width: 20px;
+            height: 20px;
+            background: rgba(255, 255, 255, 0.1);
+            border: none;
+            border-radius: 50%;
             color: var(--md-on-surface-variant);
-            font-size: 0.8125rem;
             cursor: pointer;
             transition: all var(--md-duration-short3) var(--md-easing-standard);
         }
 
         .position-clear-btn .material-symbols-outlined {
-            font-size: 16px;
+            font-size: 14px;
         }
 
         .position-clear-btn:hover {
-            background: rgba(255, 255, 255, 0.08);
-            border-color: var(--md-on-surface);
+            background: rgba(255, 255, 255, 0.2);
             color: var(--md-on-surface);
         }
 
@@ -2931,6 +3036,39 @@
             max-width: 100%;
             max-height: 500px;
             object-fit: contain;
+        }
+
+        .frame-image-container.clickable {
+            cursor: pointer;
+        }
+
+        .frame-image-container.clickable:hover {
+            background: rgba(208, 188, 255, 0.08);
+        }
+
+        .frame-edit-hint {
+            position: absolute;
+            top: 8px;
+            right: 8px;
+            width: 32px;
+            height: 32px;
+            background: rgba(0, 0, 0, 0.7);
+            border-radius: 8px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            opacity: 0;
+            transition: opacity 0.15s ease;
+            pointer-events: none;
+        }
+
+        .frame-edit-hint .material-symbols-outlined {
+            font-size: 18px;
+            color: #fff;
+        }
+
+        .frame-image-container.clickable:hover .frame-edit-hint {
+            opacity: 1;
         }
 
         .gesture-indicator-wrapper {
@@ -5305,14 +5443,14 @@
                 </div>
             </div>
         </div>
+    </div>
 
-        <!-- Frame Picker Modal - Redesigned -->
-        <div id="framePickerModal" class="frame-picker-modal">
+    <!-- Frame Picker Modal - Redesigned (Outside addStepMode so it works for editing existing steps) -->
+    <div id="framePickerModal" class="frame-picker-modal">
             <div class="frame-picker-content">
                 <div class="frame-picker-header">
                     <div class="frame-picker-header-left">
                         <h3 id="framePickerTitle">Select Frame</h3>
-                        <span class="frame-picker-subtitle" id="framePickerSubtitle">Choose the moment to capture</span>
                     </div>
                     <button class="frame-picker-close" onclick="closeFramePickerModal()">
                         <span class="material-symbols-outlined">close</span>
@@ -5323,50 +5461,64 @@
                     <!-- Instruction hint (shown for action frames with tap/swipe) -->
                     <div class="frame-picker-hint" id="framePickerHint" style="display: none;">
                         <span class="material-symbols-outlined">touch_app</span>
-                        <span id="framePickerHintText">Click on the preview to set tap position</span>
+                        <span id="framePickerHintText">Click on the video to pause and set tap position</span>
                     </div>
 
-                    <!-- Main preview area -->
-                    <div class="frame-picker-preview-wrapper">
-                        <canvas id="framePickerCanvas" class="frame-picker-canvas"></canvas>
-                        <div id="framePickerOverlay" class="frame-picker-overlay" onclick="handleFramePickerClick(event)">
+                    <!-- Video player with overlay -->
+                    <div class="frame-picker-video-container">
+                        <video id="framePickerVideo" src="recording/recording.mp4" preload="auto" muted></video>
+                        <div id="framePickerOverlay" class="frame-picker-overlay" onclick="handleFramePickerVideoClick(event)">
+                            <!-- Tap indicator -->
                             <div class="frame-picker-tap-indicator" id="framePickerTapIndicator" style="display: none;"></div>
-                        </div>
-                        <!-- Frame info badge -->
-                        <div class="frame-info-badge" id="frameInfoBadge">
-                            <span class="frame-time" id="frameTimeDisplay">0:00</span>
-                        </div>
-                    </div>
-
-                    <!-- Position info (for tap/swipe actions) -->
-                    <div id="framePickerPositionInfo" class="frame-picker-position-info" style="display: none;">
-                        <div class="position-info-content">
-                            <span class="material-symbols-outlined">location_on</span>
-                            <span class="position-label">Tap Position:</span>
-                            <span class="position-value" id="framePickerPositionValue">(0, 0)</span>
-                        </div>
-                        <button class="position-clear-btn" onclick="clearFramePickerPosition()">
-                            <span class="material-symbols-outlined">close</span>
-                            Clear
-                        </button>
-                    </div>
-
-                    <!-- Filmstrip with frame thumbnails -->
-                    <div class="frame-picker-filmstrip-container">
-                        <div class="filmstrip-label">
-                            <span class="material-symbols-outlined">movie</span>
-                            Select a frame
-                        </div>
-                        <div class="frame-picker-filmstrip" id="framePickerFilmstrip">
-                            <div class="filmstrip-loading" id="filmstripLoading">
-                                <span class="material-symbols-outlined spinning">progress_activity</span>
-                                Extracting frames...
+                            <!-- Swipe indicators -->
+                            <div class="frame-picker-swipe-indicator start" id="framePickerSwipeStart" style="display: none;">
+                                <span class="swipe-label">START</span>
                             </div>
+                            <div class="frame-picker-swipe-indicator end" id="framePickerSwipeEnd" style="display: none;">
+                                <span class="swipe-label">END</span>
+                            </div>
+                            <!-- Swipe line connecting start to end -->
+                            <svg class="frame-picker-swipe-line" id="framePickerSwipeLine" style="display: none;">
+                                <defs>
+                                    <marker id="arrowhead" markerWidth="10" markerHeight="7" refX="9" refY="3.5" orient="auto">
+                                        <polygon points="0 0, 10 3.5, 0 7" fill="var(--md-tertiary)" />
+                                    </marker>
+                                </defs>
+                                <line id="swipeLineElement" stroke="var(--md-tertiary)" stroke-width="3" stroke-dasharray="8,4" marker-end="url(#arrowhead)" />
+                            </svg>
+                        </div>
+                        <!-- Time badge -->
+                        <div class="video-time-badge" id="videoTimeBadge">
+                            <span id="currentTimeDisplay">0:00</span>
+                            <span class="time-separator">/</span>
+                            <span id="durationDisplay">0:00</span>
+                            <span class="time-separator">·</span>
+                            <span class="frame-number">F<span id="frameNumberDisplay">0</span></span>
+                        </div>
+                        <!-- Play state indicator -->
+                        <div class="video-play-indicator" id="videoPlayIndicator">
+                            <span class="material-symbols-outlined">pause</span>
+                        </div>
+                        <!-- Position info overlay (for tap/swipe actions) -->
+                        <div id="framePickerPositionInfo" class="frame-picker-position-info" style="display: none;">
+                            <span class="material-symbols-outlined" id="framePickerPositionIcon">touch_app</span>
+                            <span class="position-label" id="framePickerPositionLabel">TAP</span>
+                            <span class="position-value" id="framePickerPositionValue">(0, 0)</span>
+                            <button class="position-clear-btn" onclick="clearFramePickerPosition(); event.stopPropagation();">
+                                <span class="material-symbols-outlined">close</span>
+                            </button>
                         </div>
                     </div>
 
-                    <!-- Hidden video for frame extraction -->
-                    <video id="framePickerVideo" src="recording/recording.mp4" preload="auto" muted style="display: none;"></video>
+                    <!-- Timeline scrubber -->
+                    <div class="frame-picker-scrubber">
+                        <div class="scrubber-track" id="scrubberTrack" onclick="handleScrubberClick(event)">
+                            <div class="scrubber-progress" id="scrubberProgress"></div>
+                            <div class="scrubber-thumb" id="scrubberThumb"></div>
+                            <!-- Thumbnail markers will be added here -->
+                            <div class="scrubber-markers" id="scrubberMarkers"></div>
+                        </div>
+                    </div>
                 </div>
 
                 <div class="frame-picker-footer">
@@ -5378,7 +5530,6 @@
                 </div>
             </div>
         </div>
-    </div>
 
     <script>
         // Data embedded during generation
@@ -6239,8 +6390,9 @@
                     <!-- BEFORE Column -->
                     <div class="frame-column before">
                         <div class="frame-column-header">Before</div>
-                        <div class="frame-image-container" onclick="openModal('${beforeFrame}'); event.stopPropagation();">
-                            ${beforeFrame ? `<img src="${beforeFrame}">` : '<em>No frame</em>'}
+                        <div class="frame-image-container clickable" onclick="openFramePickerForStep('${step.id}', 'before'); event.stopPropagation();" title="Click to change frame">
+                            ${beforeFrame ? `<img src="${beforeFrame}">` : '<em>Click to select</em>'}
+                            <div class="frame-edit-hint"><span class="material-symbols-outlined">edit</span></div>
                         </div>
                         <div class="frame-description" contenteditable="true"
                              onclick="event.stopPropagation();"
@@ -6259,13 +6411,14 @@
                     <!-- ACTION Column -->
                     <div class="frame-column action">
                         <div class="frame-column-header">Action</div>
-                        <div class="frame-image-container" onclick="openModal('${actionFrame}'); event.stopPropagation();">
+                        <div class="frame-image-container clickable" onclick="openFramePickerForStep('${step.id}', 'action'); event.stopPropagation();" title="Click to change frame">
                             ${actionFrame && showActionFrame ? `
                                 <img src="${actionFrame}" onload="positionIndicator(this, '${step.id}')">
                                 <div class="gesture-indicator-wrapper" data-step-id="${step.id}" data-x="${posXPercent}" data-y="${posYPercent}" data-action="${step.action}" data-direction="${step.direction || 'up'}">
                                     ${renderGestureIndicator()}
                                 </div>
-                            ` : '<em>No action frame</em>'}
+                            ` : '<em>Click to select</em>'}
+                            <div class="frame-edit-hint"><span class="material-symbols-outlined">edit</span></div>
                         </div>
                         <div class="frame-description" contenteditable="true"
                              onclick="event.stopPropagation();"
@@ -6277,8 +6430,9 @@
                     <!-- AFTER Column -->
                     <div class="frame-column after">
                         <div class="frame-column-header">After</div>
-                        <div class="frame-image-container" onclick="openModal('${afterFrame}'); event.stopPropagation();">
-                            ${afterFrame ? `<img src="${afterFrame}">` : '<em>No frame</em>'}
+                        <div class="frame-image-container clickable" onclick="openFramePickerForStep('${step.id}', 'after'); event.stopPropagation();" title="Click to change frame">
+                            ${afterFrame ? `<img src="${afterFrame}">` : '<em>Click to select</em>'}
+                            <div class="frame-edit-hint"><span class="material-symbols-outlined">edit</span></div>
                         </div>
                         <div class="frame-description" contenteditable="true"
                              onclick="event.stopPropagation();"
@@ -7629,20 +7783,25 @@
             }, 100);
         }
 
-        // === FRAME PICKER MODAL ===
+        // === FRAME PICKER MODAL (Video Scrubber Approach) ===
         let framePickerState = {
             frameType: null,      // 'before', 'action', 'after'
-            tapPosition: null,    // {x, y, xPct, yPct} for action frames
-            initialized: false,
-            frames: [],           // Array of {time, dataUrl}
-            selectedFrameIndex: 0,
+            tapPosition: null,    // {x, y, xPct, yPct} for tap actions
+            swipeStart: null,     // {x, y, xPct, yPct} for swipe start
+            swipeEnd: null,       // {x, y, xPct, yPct} for swipe end
+            isPlaying: false,
             videoWidth: 0,
-            videoHeight: 0
+            videoHeight: 0,
+            fps: 30,             // Assumed frame rate for frame stepping
+            editingStepId: null  // Track if editing an existing step (null = Add Step mode)
         };
 
         function openFramePickerModal(frameType) {
             framePickerState.frameType = frameType;
             framePickerState.tapPosition = null;
+            framePickerState.swipeStart = null;
+            framePickerState.swipeEnd = null;
+            framePickerState.editingStepId = null; // Clear editing mode (Add Step mode)
 
             // Set modal title and subtitle
             const titles = {
@@ -7650,13 +7809,7 @@
                 action: 'Select Action Frame',
                 after: 'Select After Frame'
             };
-            const subtitles = {
-                before: 'Choose the screen state before the action',
-                action: 'Choose the moment of action and set tap position',
-                after: 'Choose the screen state after the action'
-            };
             document.getElementById('framePickerTitle').textContent = titles[frameType] || 'Select Frame';
-            document.getElementById('framePickerSubtitle').textContent = subtitles[frameType] || 'Choose the moment to capture';
 
             // Configure overlay for tap placement (only for action frames with tap/swipe)
             const overlay = document.getElementById('framePickerOverlay');
@@ -7668,229 +7821,215 @@
             if (isActionFrame) {
                 overlay.classList.remove('inactive');
                 hint.style.display = 'flex';
-                hintText.textContent = addStepState.type === 'swipe'
-                    ? 'Click on the preview to set swipe start position'
-                    : 'Click on the preview to set tap position';
+                const hintIcon = hint.querySelector('.material-symbols-outlined');
+                if (addStepState.type === 'swipe') {
+                    hintIcon.textContent = 'swipe';
+                    hintText.textContent = 'Click START position, then click END position';
+                } else {
+                    hintIcon.textContent = 'touch_app';
+                    hintText.textContent = 'Click on the video to set tap position';
+                }
             } else {
                 overlay.classList.add('inactive');
                 hint.style.display = 'none';
             }
             positionInfo.style.display = 'none';
 
-            // Clear any existing tap indicator
+            // Clear any existing indicators
             document.getElementById('framePickerTapIndicator').style.display = 'none';
+            document.getElementById('framePickerSwipeStart').style.display = 'none';
+            document.getElementById('framePickerSwipeEnd').style.display = 'none';
+            document.getElementById('framePickerSwipeLine').style.display = 'none';
 
             // Show modal
             document.getElementById('framePickerModal').classList.add('active');
 
-            // Extract frames if not already done
-            if (!framePickerState.initialized) {
-                extractFramesFromVideo();
-            } else if (framePickerState.frames.length > 0) {
-                // Select first frame by default
-                selectFilmstripFrame(0);
-            }
+            // Initialize video player
+            initFramePickerVideo();
         }
 
         function closeFramePickerModal() {
+            const video = document.getElementById('framePickerVideo');
+            if (video) {
+                video.pause();
+                framePickerState.isPlaying = false;
+            }
             document.getElementById('framePickerModal').classList.remove('active');
         }
 
-        function extractFramesFromVideo() {
-            const video = document.getElementById('framePickerVideo');
-            const filmstrip = document.getElementById('framePickerFilmstrip');
+        // Open Frame Picker to edit an existing step's frame
+        function openFramePickerForStep(stepId, frameType) {
+            const step = steps.find(s => s.id === stepId);
+            if (!step) {
+                console.error('Step not found:', stepId);
+                return;
+            }
 
-            // Show loading state
-            filmstrip.innerHTML = `
-                <div class="filmstrip-loading">
-                    <span class="material-symbols-outlined spinning">progress_activity</span>
-                    Extracting frames...
-                </div>
-            `;
+            framePickerState.frameType = frameType;
+            framePickerState.tapPosition = null;
+            framePickerState.swipeStart = null;
+            framePickerState.swipeEnd = null;
+            framePickerState.editingStepId = stepId; // Set editing mode
 
-            function startExtraction() {
-                console.log('Starting frame extraction, video:', video.videoWidth, 'x', video.videoHeight, 'duration:', video.duration);
+            // Set modal title and subtitle for editing
+            const titles = {
+                before: 'Edit Before Frame',
+                action: 'Edit Action Frame',
+                after: 'Edit After Frame'
+            };
+            document.getElementById('framePickerTitle').textContent = titles[frameType] || 'Edit Frame';
 
-                if (!video.videoWidth || !video.videoHeight || !video.duration) {
-                    console.error('Video not properly loaded');
-                    filmstrip.innerHTML = `
-                        <div class="filmstrip-loading" style="color: var(--md-error);">
-                            <span class="material-symbols-outlined">error</span>
-                            Video failed to load
-                        </div>
-                    `;
-                    return;
+            // Configure overlay for tap placement (only for action frames with tap/swipe)
+            const overlay = document.getElementById('framePickerOverlay');
+            const positionInfo = document.getElementById('framePickerPositionInfo');
+            const hint = document.getElementById('framePickerHint');
+            const hintText = document.getElementById('framePickerHintText');
+            const isActionFrame = frameType === 'action' && (step.action === 'tap' || step.action === 'swipe');
+
+            if (isActionFrame) {
+                overlay.classList.remove('inactive');
+                hint.style.display = 'flex';
+                const hintIcon = hint.querySelector('.material-symbols-outlined');
+                if (step.action === 'swipe') {
+                    hintIcon.textContent = 'swipe';
+                    hintText.textContent = 'Click START position, then click END position';
+                } else {
+                    hintIcon.textContent = 'touch_app';
+                    hintText.textContent = 'Click on the video to set tap position';
                 }
+            } else {
+                overlay.classList.add('inactive');
+                hint.style.display = 'none';
+            }
+            positionInfo.style.display = 'none';
 
+            // Clear any existing indicators
+            document.getElementById('framePickerTapIndicator').style.display = 'none';
+            document.getElementById('framePickerSwipeStart').style.display = 'none';
+            document.getElementById('framePickerSwipeEnd').style.display = 'none';
+            document.getElementById('framePickerSwipeLine').style.display = 'none';
+
+            // Show modal
+            document.getElementById('framePickerModal').classList.add('active');
+
+            // Initialize video player and seek to step timestamp
+            initFramePickerVideo();
+
+            // Seek to step's timestamp after video is ready
+            const video = document.getElementById('framePickerVideo');
+            if (video && step.timestamp) {
+                const seekToTimestamp = () => {
+                    video.currentTime = step.timestamp;
+                    video.removeEventListener('loadedmetadata', seekToTimestamp);
+                };
+                if (video.readyState >= 1) {
+                    video.currentTime = step.timestamp;
+                } else {
+                    video.addEventListener('loadedmetadata', seekToTimestamp);
+                }
+            }
+        }
+
+        function initFramePickerVideo() {
+            const video = document.getElementById('framePickerVideo');
+
+            function onVideoReady() {
                 framePickerState.videoWidth = video.videoWidth;
                 framePickerState.videoHeight = video.videoHeight;
 
-                const duration = video.duration;
-                const frameInterval = 0.5; // Extract frame every 0.5 seconds
-                const frameCount = Math.min(Math.ceil(duration / frameInterval), 200); // Max 200 frames
-                const framesToExtract = [];
+                // Update duration display
+                document.getElementById('durationDisplay').textContent = formatTime(video.duration);
+                document.getElementById('currentTimeDisplay').textContent = formatTime(video.currentTime);
 
-                for (let i = 0; i < frameCount; i++) {
-                    framesToExtract.push(i * frameInterval);
-                }
+                // Calculate frame number
+                updateFrameNumber();
 
-                console.log('Extracting', framesToExtract.length, 'frames');
+                // Start paused at beginning
+                video.currentTime = 0;
+                video.pause();
+                framePickerState.isPlaying = false;
+                updatePlayButton();
 
-                // Extract frames sequentially
-                extractFramesSequentially(video, framesToExtract, 0, []);
+                // Generate scrubber markers (sparse thumbnails)
+                generateScrubberMarkers();
             }
 
-            // Check if video is already loaded
+            // Set up video event listeners
+            video.removeEventListener('timeupdate', onVideoTimeUpdate);
+            video.addEventListener('timeupdate', onVideoTimeUpdate);
+
+            video.removeEventListener('loadedmetadata', onVideoReady);
+
             if (video.readyState >= 1 && video.duration > 0) {
-                startExtraction();
+                onVideoReady();
             } else {
-                video.addEventListener('loadedmetadata', function onMeta() {
-                    video.removeEventListener('loadedmetadata', onMeta);
-                    startExtraction();
-                });
-                // Force video to load
+                video.addEventListener('loadedmetadata', onVideoReady);
                 video.load();
             }
         }
 
-        function extractFramesSequentially(video, times, index, results) {
-            if (index >= times.length) {
-                // All frames extracted
-                console.log('Frame extraction complete:', results.length, 'frames');
-                framePickerState.frames = results;
-                framePickerState.initialized = true;
-                renderFilmstrip();
-                return;
-            }
-
-            const time = times[index];
-
-            // Timeout in case seeked event doesn't fire
-            let seekTimeout;
-            let handled = false;
-
-            function onSeeked() {
-                if (handled) return;
-                handled = true;
-                clearTimeout(seekTimeout);
-                video.removeEventListener('seeked', onSeeked);
-
-                try {
-                    // Create thumbnail canvas
-                    const thumbCanvas = document.createElement('canvas');
-                    const thumbWidth = 80;
-                    const thumbHeight = Math.round((video.videoHeight / video.videoWidth) * thumbWidth);
-                    thumbCanvas.width = thumbWidth;
-                    thumbCanvas.height = thumbHeight;
-
-                    const ctx = thumbCanvas.getContext('2d');
-                    ctx.drawImage(video, 0, 0, thumbWidth, thumbHeight);
-
-                    // Create full-size frame canvas
-                    const fullCanvas = document.createElement('canvas');
-                    fullCanvas.width = video.videoWidth;
-                    fullCanvas.height = video.videoHeight;
-                    const fullCtx = fullCanvas.getContext('2d');
-                    fullCtx.drawImage(video, 0, 0);
-
-                    results.push({
-                        time: time,
-                        thumbDataUrl: thumbCanvas.toDataURL('image/jpeg', 0.7),
-                        fullDataUrl: fullCanvas.toDataURL('image/jpeg', 0.9)
-                    });
-                } catch (e) {
-                    console.error('Frame extraction error at time ' + time + ':', e);
-                }
-
-                // Continue to next frame
-                setTimeout(() => extractFramesSequentially(video, times, index + 1, results), 0);
-            }
-
-            video.addEventListener('seeked', onSeeked);
-            video.currentTime = time;
-
-            // Timeout fallback - skip frame if seeked doesn't fire within 500ms
-            seekTimeout = setTimeout(() => {
-                if (!handled) {
-                    console.warn('Seeked event timeout at time', time);
-                    handled = true;
-                    video.removeEventListener('seeked', onSeeked);
-                    extractFramesSequentially(video, times, index + 1, results);
-                }
-            }, 500);
-        }
-
-        function renderFilmstrip() {
-            const filmstrip = document.getElementById('framePickerFilmstrip');
-            filmstrip.innerHTML = '';
-
-            if (framePickerState.frames.length === 0) {
-                filmstrip.innerHTML = `
-                    <div class="filmstrip-loading" style="color: var(--md-error);">
-                        <span class="material-symbols-outlined">error</span>
-                        Could not extract frames. Try running from a local server.
-                    </div>
-                `;
-                return;
-            }
-
-            framePickerState.frames.forEach((frame, index) => {
-                const frameEl = document.createElement('div');
-                frameEl.className = 'filmstrip-frame' + (index === 0 ? ' selected' : '');
-                frameEl.onclick = () => selectFilmstripFrame(index);
-
-                const img = document.createElement('img');
-                img.src = frame.thumbDataUrl;
-                img.alt = `Frame at ${formatTime(frame.time)}`;
-
-                const timestamp = document.createElement('div');
-                timestamp.className = 'frame-timestamp';
-                timestamp.textContent = formatTime(frame.time);
-
-                frameEl.appendChild(img);
-                frameEl.appendChild(timestamp);
-                filmstrip.appendChild(frameEl);
-            });
-
-            // Select first frame
-            selectFilmstripFrame(0);
-        }
-
-        function selectFilmstripFrame(index) {
-            framePickerState.selectedFrameIndex = index;
-            const frame = framePickerState.frames[index];
-            if (!frame) return;
-
-            // Update selection in filmstrip
-            document.querySelectorAll('.filmstrip-frame').forEach((el, i) => {
-                el.classList.toggle('selected', i === index);
-            });
-
-            // Scroll selected frame into view
-            const filmstrip = document.getElementById('framePickerFilmstrip');
-            const selectedEl = filmstrip.children[index];
-            if (selectedEl) {
-                selectedEl.scrollIntoView({ behavior: 'smooth', block: 'nearest', inline: 'center' });
-            }
-
-            // Update main preview canvas
-            const canvas = document.getElementById('framePickerCanvas');
-            const ctx = canvas.getContext('2d');
-            const img = new Image();
-            img.onload = () => {
-                canvas.width = img.width;
-                canvas.height = img.height;
-                ctx.drawImage(img, 0, 0);
-            };
-            img.src = frame.fullDataUrl;
+        function onVideoTimeUpdate() {
+            const video = document.getElementById('framePickerVideo');
+            if (!video) return;
 
             // Update time display
-            document.getElementById('frameTimeDisplay').textContent = formatTime(frame.time);
+            document.getElementById('currentTimeDisplay').textContent = formatTime(video.currentTime);
 
-            // Clear tap indicator when changing frames
-            document.getElementById('framePickerTapIndicator').style.display = 'none';
-            document.getElementById('framePickerPositionInfo').style.display = 'none';
-            framePickerState.tapPosition = null;
+            // Update scrubber position
+            const progress = video.currentTime / video.duration;
+            document.getElementById('scrubberProgress').style.width = (progress * 100) + '%';
+            document.getElementById('scrubberThumb').style.left = (progress * 100) + '%';
+
+            // Update frame number
+            updateFrameNumber();
+        }
+
+        function updateFrameNumber() {
+            const video = document.getElementById('framePickerVideo');
+            if (!video) return;
+            const frameNum = Math.round(video.currentTime * framePickerState.fps);
+            document.getElementById('frameNumberDisplay').textContent = frameNum;
+        }
+
+        function updatePlayButton() {
+            const icon = document.getElementById('fpPlayIcon');
+            const indicator = document.getElementById('videoPlayIndicator');
+            if (framePickerState.isPlaying) {
+                icon.textContent = 'pause';
+                indicator.querySelector('.material-symbols-outlined').textContent = 'play_arrow';
+                indicator.classList.remove('show');
+            } else {
+                icon.textContent = 'play_arrow';
+                indicator.querySelector('.material-symbols-outlined').textContent = 'pause';
+                indicator.classList.add('show');
+                setTimeout(() => indicator.classList.remove('show'), 500);
+            }
+        }
+
+        function generateScrubberMarkers() {
+            const video = document.getElementById('framePickerVideo');
+            const markers = document.getElementById('scrubberMarkers');
+            markers.innerHTML = '';
+
+            if (!video.duration) return;
+
+            // Generate 8 evenly spaced markers
+            const markerCount = 8;
+            for (let i = 0; i <= markerCount; i++) {
+                const time = (i / markerCount) * video.duration;
+                const pct = (i / markerCount) * 100;
+
+                const marker = document.createElement('div');
+                marker.className = 'scrubber-marker';
+                marker.style.left = pct + '%';
+
+                const timeLabel = document.createElement('span');
+                timeLabel.className = 'marker-time';
+                timeLabel.textContent = formatTime(time);
+                marker.appendChild(timeLabel);
+
+                markers.appendChild(marker);
+            }
         }
 
         function formatTime(seconds) {
@@ -7899,19 +8038,92 @@
             return `${mins}:${secs.toString().padStart(2, '0')}`;
         }
 
-        function handleFramePickerClick(event) {
-            // Only handle clicks for action frames when type is tap or swipe
+        // Video control functions
+        function toggleFramePickerPlay() {
+            const video = document.getElementById('framePickerVideo');
+            if (framePickerState.isPlaying) {
+                video.pause();
+                framePickerState.isPlaying = false;
+            } else {
+                video.play();
+                framePickerState.isPlaying = true;
+            }
+            updatePlayButton();
+        }
+
+        function framePickerStepFrame(direction) {
+            const video = document.getElementById('framePickerVideo');
+            video.pause();
+            framePickerState.isPlaying = false;
+            updatePlayButton();
+
+            // Step by approximately one frame (1/fps)
+            const frameTime = 1 / framePickerState.fps;
+            video.currentTime = Math.max(0, Math.min(video.duration, video.currentTime + (direction * frameTime)));
+        }
+
+        function framePickerSkip(seconds) {
+            const video = document.getElementById('framePickerVideo');
+            video.currentTime = Math.max(0, Math.min(video.duration, video.currentTime + seconds));
+        }
+
+        function framePickerSkipTo(time) {
+            const video = document.getElementById('framePickerVideo');
+            video.currentTime = time;
+        }
+
+        function framePickerSkipToEnd() {
+            const video = document.getElementById('framePickerVideo');
+            video.currentTime = video.duration - 0.1; // Slightly before end to avoid edge case
+        }
+
+        function handleScrubberClick(event) {
+            const track = document.getElementById('scrubberTrack');
+            const rect = track.getBoundingClientRect();
+            const clickX = event.clientX - rect.left;
+            const pct = Math.max(0, Math.min(1, clickX / rect.width));
+
+            const video = document.getElementById('framePickerVideo');
+            video.currentTime = pct * video.duration;
+
+            // Pause when scrubbing
+            video.pause();
+            framePickerState.isPlaying = false;
+            updatePlayButton();
+        }
+
+        function handleFramePickerVideoClick(event) {
+            const video = document.getElementById('framePickerVideo');
+            const overlay = document.getElementById('framePickerOverlay');
+
+            // Pause video on click
+            if (framePickerState.isPlaying) {
+                video.pause();
+                framePickerState.isPlaying = false;
+                updatePlayButton();
+            }
+
+            // Handle tap position only for action frames with tap/swipe
             if (framePickerState.frameType !== 'action') return;
-            if (!addStepState.type || (addStepState.type !== 'tap' && addStepState.type !== 'swipe')) return;
 
-            const canvas = document.getElementById('framePickerCanvas');
-            const rect = canvas.getBoundingClientRect();
+            // Check action type from either edit mode (existing step) or add mode
+            let actionType = null;
+            if (framePickerState.editingStepId) {
+                const editingStep = steps.find(s => s.id === framePickerState.editingStepId);
+                actionType = editingStep?.action;
+            } else {
+                actionType = addStepState.type;
+            }
 
-            // Calculate click position relative to canvas
+            if (!actionType || (actionType !== 'tap' && actionType !== 'swipe')) return;
+
+            const rect = video.getBoundingClientRect();
+
+            // Calculate click position relative to video
             const clickX = event.clientX - rect.left;
             const clickY = event.clientY - rect.top;
 
-            // Check if click is within canvas
+            // Check if click is within video
             if (clickX < 0 || clickX > rect.width || clickY < 0 || clickY > rect.height) {
                 return;
             }
@@ -7924,78 +8136,234 @@
             const x = Math.round((xPct / 100) * SCREEN_WIDTH);
             const y = Math.round((yPct / 100) * SCREEN_HEIGHT);
 
-            framePickerState.tapPosition = { x, y, xPct, yPct };
+            if (actionType === 'tap') {
+                // TAP: Single click sets position
+                framePickerState.tapPosition = { x, y, xPct, yPct };
 
-            // Show tap indicator - position relative to preview wrapper
-            const wrapper = document.querySelector('.frame-picker-preview-wrapper');
-            const wrapperRect = wrapper.getBoundingClientRect();
-            const indicator = document.getElementById('framePickerTapIndicator');
-            indicator.style.display = '';
-            indicator.style.left = (rect.left - wrapperRect.left + (xPct / 100) * rect.width) + 'px';
-            indicator.style.top = (rect.top - wrapperRect.top + (yPct / 100) * rect.height) + 'px';
+                // Show tap indicator
+                const indicator = document.getElementById('framePickerTapIndicator');
+                indicator.style.display = '';
+                indicator.style.left = xPct + '%';
+                indicator.style.top = yPct + '%';
 
-            // Show position info
-            document.getElementById('framePickerPositionInfo').style.display = 'flex';
-            document.getElementById('framePickerPositionValue').textContent = `(${xPct.toFixed(1)}%, ${yPct.toFixed(1)}%)`;
+                // Show position info
+                document.getElementById('framePickerPositionInfo').style.display = 'flex';
+                document.getElementById('framePickerPositionIcon').textContent = 'touch_app';
+                document.getElementById('framePickerPositionLabel').textContent = 'TAP';
+                document.getElementById('framePickerPositionValue').textContent = `(${xPct.toFixed(1)}%, ${yPct.toFixed(1)}%)`;
+
+            } else if (actionType === 'swipe') {
+                // SWIPE: First click = start, second click = end
+                if (!framePickerState.swipeStart || framePickerState.swipeEnd) {
+                    // Set start (or reset if both were already set)
+                    framePickerState.swipeStart = { x, y, xPct, yPct };
+                    framePickerState.swipeEnd = null;
+
+                    // Show start indicator
+                    const startIndicator = document.getElementById('framePickerSwipeStart');
+                    startIndicator.style.display = '';
+                    startIndicator.style.left = xPct + '%';
+                    startIndicator.style.top = yPct + '%';
+
+                    // Hide end indicator and line
+                    document.getElementById('framePickerSwipeEnd').style.display = 'none';
+                    document.getElementById('framePickerSwipeLine').style.display = 'none';
+
+                    // Show position info with just start
+                    document.getElementById('framePickerPositionInfo').style.display = 'flex';
+                    document.getElementById('framePickerPositionIcon').textContent = 'swipe';
+                    document.getElementById('framePickerPositionLabel').textContent = 'START';
+                    document.getElementById('framePickerPositionValue').textContent = `(${xPct.toFixed(1)}%, ${yPct.toFixed(1)}%) → click end`;
+
+                } else {
+                    // Set end
+                    framePickerState.swipeEnd = { x, y, xPct, yPct };
+
+                    // Show end indicator
+                    const endIndicator = document.getElementById('framePickerSwipeEnd');
+                    endIndicator.style.display = '';
+                    endIndicator.style.left = xPct + '%';
+                    endIndicator.style.top = yPct + '%';
+
+                    // Show line connecting start to end
+                    updateSwipeLine();
+
+                    // Update position info with both start and end
+                    const start = framePickerState.swipeStart;
+                    document.getElementById('framePickerPositionInfo').style.display = 'flex';
+                    document.getElementById('framePickerPositionIcon').textContent = 'swipe';
+                    document.getElementById('framePickerPositionLabel').textContent = 'SWIPE';
+                    document.getElementById('framePickerPositionValue').textContent =
+                        `(${start.xPct.toFixed(0)}%, ${start.yPct.toFixed(0)}%) → (${xPct.toFixed(0)}%, ${yPct.toFixed(0)}%)`;
+                }
+            }
+        }
+
+        function updateSwipeLine() {
+            const start = framePickerState.swipeStart;
+            const end = framePickerState.swipeEnd;
+            if (!start || !end) return;
+
+            const svg = document.getElementById('framePickerSwipeLine');
+            const line = document.getElementById('swipeLineElement');
+
+            svg.style.display = '';
+            line.setAttribute('x1', start.xPct + '%');
+            line.setAttribute('y1', start.yPct + '%');
+            line.setAttribute('x2', end.xPct + '%');
+            line.setAttribute('y2', end.yPct + '%');
         }
 
         function clearFramePickerPosition() {
+            // Clear tap
             framePickerState.tapPosition = null;
             document.getElementById('framePickerTapIndicator').style.display = 'none';
+
+            // Clear swipe
+            framePickerState.swipeStart = null;
+            framePickerState.swipeEnd = null;
+            document.getElementById('framePickerSwipeStart').style.display = 'none';
+            document.getElementById('framePickerSwipeEnd').style.display = 'none';
+            document.getElementById('framePickerSwipeLine').style.display = 'none';
+
+            // Hide position info
             document.getElementById('framePickerPositionInfo').style.display = 'none';
         }
 
         function captureFromFramePicker() {
-            const frame = framePickerState.frames[framePickerState.selectedFrameIndex];
-            if (!frame) {
+            const video = document.getElementById('framePickerVideo');
+
+            // Capture current frame from video
+            if (!video || video.videoWidth === 0 || video.videoHeight === 0) {
+                console.error('Video not ready for capture');
                 return;
             }
 
-            // Use the already captured frame data
-            const dataUrl = frame.fullDataUrl;
-            const frameType = framePickerState.frameType;
+            try {
+                const canvas = document.createElement('canvas');
+                canvas.width = video.videoWidth;
+                canvas.height = video.videoHeight;
+                const ctx = canvas.getContext('2d');
+                ctx.drawImage(video, 0, 0);
+                const dataUrl = canvas.toDataURL('image/jpeg', 0.9);
 
-            // Store in addStepState
-            addStepState.frames[frameType] = dataUrl;
+                const frameType = framePickerState.frameType;
 
-            // Update preview in Add Step
-            const previewId = `addStep${frameType.charAt(0).toUpperCase() + frameType.slice(1)}Preview`;
-            const preview = document.getElementById(previewId);
-            if (preview) {
-                preview.classList.add('captured');
-                preview.innerHTML = `<img src="${dataUrl}" alt="${frameType} frame">`;
-
-                // For action frame, add tap indicator if position was set
-                if (frameType === 'action') {
-                    const indicator = document.createElement('div');
-                    indicator.className = 'add-step-tap-indicator';
-                    indicator.id = 'addStepTapIndicator';
-
-                    if (framePickerState.tapPosition) {
-                        addStepState.tapPosition = framePickerState.tapPosition;
-                        indicator.style.display = '';
-                        indicator.style.left = framePickerState.tapPosition.xPct + '%';
-                        indicator.style.top = framePickerState.tapPosition.yPct + '%';
-
-                        // Update position display in action column (show percentages)
-                        const pctDisplay = `(${framePickerState.tapPosition.xPct.toFixed(1)}%, ${framePickerState.tapPosition.yPct.toFixed(1)}%)`;
-                        if (addStepState.type === 'tap') {
-                            document.getElementById('addStepTapPosition').textContent = pctDisplay;
-                        } else if (addStepState.type === 'swipe') {
-                            document.getElementById('addStepSwipeStart').textContent = pctDisplay;
+                // Check if editing an existing step or adding a new one
+                if (framePickerState.editingStepId) {
+                    // EDIT MODE: Update existing step's frame
+                    const step = steps.find(s => s.id === framePickerState.editingStepId);
+                    if (step) {
+                        // Initialize frames object if it doesn't exist
+                        if (!step.frames) {
+                            step.frames = {};
                         }
-                    } else {
-                        indicator.style.display = 'none';
+                        step.frames[frameType] = dataUrl;
+
+                        // Update position for action frames
+                        if (frameType === 'action') {
+                            step.target = step.target || {};
+
+                            if (step.action === 'tap' && framePickerState.tapPosition) {
+                                // TAP: single position
+                                step.target.x = Math.round((framePickerState.tapPosition.xPct / 100) * SCREEN_WIDTH);
+                                step.target.y = Math.round((framePickerState.tapPosition.yPct / 100) * SCREEN_HEIGHT);
+
+                            } else if (step.action === 'swipe' && framePickerState.swipeStart && framePickerState.swipeEnd) {
+                                // SWIPE: start and end positions
+                                step.target.x = Math.round((framePickerState.swipeStart.xPct / 100) * SCREEN_WIDTH);
+                                step.target.y = Math.round((framePickerState.swipeStart.yPct / 100) * SCREEN_HEIGHT);
+                                step.target.endX = Math.round((framePickerState.swipeEnd.xPct / 100) * SCREEN_WIDTH);
+                                step.target.endY = Math.round((framePickerState.swipeEnd.yPct / 100) * SCREEN_HEIGHT);
+                            }
+                        }
+
+                        // Re-render to update the UI
+                        renderSteps();
+
+                        // Re-highlight the step being edited
+                        setTimeout(() => {
+                            setActiveStep(framePickerState.editingStepId);
+                        }, 50);
                     }
-                    preview.appendChild(indicator);
+                } else {
+                    // ADD STEP MODE: Store in addStepState
+                    addStepState.frames[frameType] = dataUrl;
+
+                    // Update preview in Add Step
+                    const previewId = `addStep${frameType.charAt(0).toUpperCase() + frameType.slice(1)}Preview`;
+                    const preview = document.getElementById(previewId);
+                    if (preview) {
+                        preview.classList.add('captured');
+                        preview.innerHTML = `<img src="${dataUrl}" alt="${frameType} frame">`;
+
+                        // For action frame, add position indicators
+                        if (frameType === 'action') {
+                            if (addStepState.type === 'tap' && framePickerState.tapPosition) {
+                                // TAP: single indicator
+                                addStepState.tapPosition = framePickerState.tapPosition;
+
+                                const indicator = document.createElement('div');
+                                indicator.className = 'add-step-tap-indicator';
+                                indicator.id = 'addStepTapIndicator';
+                                indicator.style.left = framePickerState.tapPosition.xPct + '%';
+                                indicator.style.top = framePickerState.tapPosition.yPct + '%';
+                                preview.appendChild(indicator);
+
+                                // Update position display
+                                const pctDisplay = `(${framePickerState.tapPosition.xPct.toFixed(1)}%, ${framePickerState.tapPosition.yPct.toFixed(1)}%)`;
+                                document.getElementById('addStepTapPosition').textContent = pctDisplay;
+
+                            } else if (addStepState.type === 'swipe' && framePickerState.swipeStart && framePickerState.swipeEnd) {
+                                // SWIPE: start + end indicators with line
+                                addStepState.swipeStart = framePickerState.swipeStart;
+                                addStepState.swipeEnd = framePickerState.swipeEnd;
+
+                                // Add SVG line
+                                const svg = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
+                                svg.style.cssText = 'position:absolute;top:0;left:0;width:100%;height:100%;pointer-events:none;';
+                                const line = document.createElementNS('http://www.w3.org/2000/svg', 'line');
+                                line.setAttribute('x1', framePickerState.swipeStart.xPct + '%');
+                                line.setAttribute('y1', framePickerState.swipeStart.yPct + '%');
+                                line.setAttribute('x2', framePickerState.swipeEnd.xPct + '%');
+                                line.setAttribute('y2', framePickerState.swipeEnd.yPct + '%');
+                                line.setAttribute('stroke', 'var(--md-tertiary)');
+                                line.setAttribute('stroke-width', '2');
+                                line.setAttribute('stroke-dasharray', '4,2');
+                                svg.appendChild(line);
+                                preview.appendChild(svg);
+
+                                // Add start indicator
+                                const startIndicator = document.createElement('div');
+                                startIndicator.className = 'add-step-swipe-indicator start';
+                                startIndicator.style.left = framePickerState.swipeStart.xPct + '%';
+                                startIndicator.style.top = framePickerState.swipeStart.yPct + '%';
+                                preview.appendChild(startIndicator);
+
+                                // Add end indicator
+                                const endIndicator = document.createElement('div');
+                                endIndicator.className = 'add-step-swipe-indicator end';
+                                endIndicator.style.left = framePickerState.swipeEnd.xPct + '%';
+                                endIndicator.style.top = framePickerState.swipeEnd.yPct + '%';
+                                preview.appendChild(endIndicator);
+
+                                // Update position display
+                                const startDisplay = `(${framePickerState.swipeStart.xPct.toFixed(0)}%, ${framePickerState.swipeStart.yPct.toFixed(0)}%)`;
+                                const endDisplay = `(${framePickerState.swipeEnd.xPct.toFixed(0)}%, ${framePickerState.swipeEnd.yPct.toFixed(0)}%)`;
+                                document.getElementById('addStepSwipeStart').textContent = startDisplay + ' → ' + endDisplay;
+                            }
+                        }
+                    }
+
+                    // Update ready state
+                    updateAddStepReady();
                 }
+
+                // Close modal
+                closeFramePickerModal();
+            } catch (e) {
+                console.error('Failed to capture frame:', e);
             }
-
-            // Update ready state
-            updateAddStepReady();
-
-            // Close modal
-            closeFramePickerModal();
         }
 
         function captureVideoFrame() {

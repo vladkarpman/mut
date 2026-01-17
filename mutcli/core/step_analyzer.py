@@ -6,8 +6,6 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
 
-from google.genai import types
-
 from mutcli.core.ai_analyzer import AIAnalyzer
 
 logger = logging.getLogger("mut.step_analyzer")
@@ -67,8 +65,6 @@ class StepAnalyzer:
         before_screenshot: bytes,
         after_screenshot: bytes,
         tap_coordinates: tuple[int, int],
-        step_index: int,
-        original_tap: dict[str, Any],
     ) -> AnalyzedStep:
         """Analyze a single step using AI.
 
@@ -76,11 +72,11 @@ class StepAnalyzer:
             before_screenshot: PNG bytes before tap
             after_screenshot: PNG bytes after tap
             tap_coordinates: (x, y) of tap
-            step_index: Index of this step (0-based)
-            original_tap: Original touch event data
 
         Returns:
-            AnalyzedStep with extracted information
+            AnalyzedStep with extracted information.
+            Note: index and original_tap are set to placeholders (0 and {}).
+            The caller (analyze_all) sets the correct values.
         """
         # Extract element text from the before screenshot
         element_info = self._extract_element(before_screenshot, tap_coordinates)
@@ -90,8 +86,8 @@ class StepAnalyzer:
         step_analysis = self._ai_analyzer.analyze_step(before_screenshot, after_screenshot)
 
         return AnalyzedStep(
-            index=step_index,
-            original_tap=original_tap,
+            index=0,
+            original_tap={},
             element_text=element_text,
             before_description=step_analysis.get("before", "Unknown"),
             after_description=step_analysis.get("after", "Unknown"),
@@ -146,9 +142,10 @@ class StepAnalyzer:
                     before_screenshot=before_screenshot,
                     after_screenshot=after_screenshot,
                     tap_coordinates=(x, y),
-                    step_index=i,
-                    original_tap=tap,
                 )
+                # Set the correct index and original_tap on the returned object
+                analyzed.index = i
+                analyzed.original_tap = tap
                 results.append(analyzed)
 
             except Exception as e:
@@ -178,30 +175,14 @@ class StepAnalyzer:
         Returns:
             Dict with element_text and element_type (None if unavailable)
         """
-        if not self._ai_analyzer.is_available or self._ai_analyzer._client is None:
-            logger.warning("AI unavailable for element extraction")
-            return {"element_text": None, "element_type": None}
-
         x, y = tap_coordinates
         prompt = ELEMENT_EXTRACTION_PROMPT.format(x=x, y=y)
 
-        try:
-            image_part = types.Part.from_bytes(
-                data=screenshot,
-                mime_type="image/png",
-            )
-
-            response = self._ai_analyzer._client.models.generate_content(
-                model=self._ai_analyzer._model,
-                contents=[image_part, prompt],
-            )
-
-            response_text = response.text or ""
-            return self._parse_element_response(response_text)
-
-        except Exception as e:
-            logger.error(f"Element extraction failed: {e}")
+        response_text = self._ai_analyzer.analyze_image(screenshot, prompt)
+        if not response_text:
             return {"element_text": None, "element_type": None}
+
+        return self._parse_element_response(response_text)
 
     def _parse_element_response(self, text: str) -> dict[str, Any]:
         """Parse JSON response from element extraction.
