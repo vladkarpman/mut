@@ -149,8 +149,15 @@ def record(
     app: str | None = typer.Option(None, "--app", "-a", help="App package name"),
 ) -> None:
     """Start recording user interactions."""
+    from mutcli.core.config import ConfigLoader, setup_logging
     from mutcli.core.device_controller import DeviceController
     from mutcli.core.recorder import Recorder
+
+    # Load config for verbose setting
+    try:
+        config = ConfigLoader.load(require_api_key=False)
+    except Exception:
+        config = None
 
     # Determine device
     device_id = device
@@ -169,6 +176,12 @@ def record(
 
     # Create and start recorder
     recorder = Recorder(name=name, device_id=device_id)
+
+    # Setup verbose logging after recorder is created (so we have the output directory)
+    if config and config.verbose:
+        log_file = setup_logging(verbose=True, log_dir=recorder.output_dir)
+        if log_file:
+            console.print(f"[dim]Verbose logging → {log_file}[/dim]")
     result = recorder.start()
 
     if not result.get("success"):
