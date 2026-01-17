@@ -9,12 +9,14 @@ from mutcli.core.parser import ParseError, TestParser
 from mutcli.core.recorder import Recorder, RecordingState
 from mutcli.core.report import ReportGenerator
 from mutcli.core.scrcpy_service import ScrcpyService
+from mutcli.core.step_analyzer import AnalyzedStep, StepAnalyzer
 from mutcli.core.touch_monitor import TouchEvent, TouchMonitor
 from mutcli.core.typing_detector import TypingDetector, TypingSequence
 from mutcli.core.yaml_generator import YAMLGenerator
 
 __all__ = [
     "AIAnalyzer",
+    "AnalyzedStep",
     "ConfigLoader",
     "DeviceController",
     "FrameExtractor",
@@ -25,6 +27,7 @@ __all__ = [
     "ReportGenerator",
     "RetryConfig",
     "ScrcpyService",
+    "StepAnalyzer",
     "StepResult",
     "TestExecutor",
     "TestParser",
