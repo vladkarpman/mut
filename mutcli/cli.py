@@ -2,12 +2,15 @@
 
 from __future__ import annotations
 
+import asyncio
+import sys
 from pathlib import Path
 from typing import TYPE_CHECKING
 
 import typer
 from dotenv import load_dotenv
 from rich.console import Console
+from rich.progress import BarColumn, Progress, TextColumn
 from rich.table import Table
 
 from mutcli import __version__
@@ -179,8 +182,19 @@ def record(
     # Wait for user input
     try:
         console.print("Press Enter when done recording...")
-        input()
-    except KeyboardInterrupt:
+        console.print("[dim](or Ctrl+C to cancel)[/dim]")
+        sys.stdout.flush()
+        sys.stderr.flush()
+
+        # Use select for more reliable input handling on Unix
+        import select
+        while True:
+            # Check if stdin has data available (timeout 0.5s)
+            readable, _, _ = select.select([sys.stdin], [], [], 0.5)
+            if readable:
+                sys.stdin.readline()
+                break
+    except (KeyboardInterrupt, EOFError):
         console.print("\n[yellow]Recording interrupted[/yellow]")
 
     # Stop recording
@@ -197,9 +211,10 @@ def record(
     duration = stop_result.get("duration_seconds")
     if duration is not None:
         console.print(f"  Duration: {duration:.1f}s")
-    console.print(f"  Output: {stop_result.get('output_dir')}")
     console.print()
-    console.print("[dim]Run 'mut stop' to generate YAML test file.[/dim]")
+
+    # Automatically proceed to preview UI for approval
+    _process_recording(recorder.output_dir / "recording", recorder.output_dir, name, app)
 
 
 @app.command()
@@ -209,16 +224,6 @@ def stop(
     ),
 ) -> None:
     """Process recording and generate YAML test."""
-    import json
-
-    from mutcli.core.ai_analyzer import AIAnalyzer
-    from mutcli.core.config import ConfigLoader
-    from mutcli.core.frame_extractor import FrameExtractor
-    from mutcli.core.step_analyzer import StepAnalyzer
-    from mutcli.core.typing_detector import TypingDetector
-    from mutcli.core.verification_suggester import VerificationSuggester
-    from mutcli.core.yaml_generator import YAMLGenerator
-
     # Find recording directory
     recording_dir: Path
     if test_dir:
@@ -235,6 +240,37 @@ def stop(
         recording_dir = maybe_recording_dir
         # Get parent (test_dir) from recording_dir
         test_dir = recording_dir.parent
+
+    # Derive test name from directory
+    test_name = test_dir.name
+
+    _process_recording(recording_dir, test_dir, test_name)
+
+
+def _process_recording(
+    recording_dir: Path,
+    test_dir: Path,
+    test_name: str,
+    app_package: str | None = None,
+) -> None:
+    """Process a recording and generate YAML test via approval UI.
+
+    Args:
+        recording_dir: Path to the recording directory (contains touch_events.json)
+        test_dir: Path to the test directory (parent of recording_dir)
+        test_name: Name of the test
+        app_package: App package name (optional, will try to detect)
+    """
+    import json
+
+    from mutcli.core.ai_analyzer import AIAnalyzer
+    from mutcli.core.config import ConfigLoader
+    from mutcli.core.frame_extractor import FrameExtractor
+    from mutcli.core.preview_server import PreviewServer, PreviewStep
+    from mutcli.core.step_analyzer import StepAnalyzer
+    from mutcli.core.typing_detector import TypingDetector
+    from mutcli.core.verification_suggester import VerificationSuggester
+    from mutcli.core.yaml_generator import YAMLGenerator
 
     console.print("[blue]Processing recording...[/blue]")
 
@@ -258,7 +294,8 @@ def stop(
         console.print("[yellow]Warning:[/yellow] No touch events found in recording")
         console.print("The generated test will only contain app launch/terminate steps.")
 
-    # Get screen dimensions for typing detection
+    # Get screen dimensions for typing detection and preview
+    screen_width = touch_events[0].get("screen_width", 1080) if touch_events else 1080
     screen_height = touch_events[0].get("screen_height", 2400) if touch_events else 2400
 
     # 1. Detect typing sequences
@@ -268,71 +305,224 @@ def stop(
 
     if typing_sequences:
         console.print(f"    Found {len(typing_sequences)} typing sequence(s)")
-        # Ask user for typed text
-        for seq in typing_sequences:
-            text = typer.prompt(
-                f"    What text was typed at step {seq.start_index + 1}?",
-                default="",
-            )
-            seq.text = text if text else None
 
     # 2. Extract frames from video (if exists)
     video_path = recording_dir / "recording.mp4"
     screenshots_dir = recording_dir / "screenshots"
+    video_duration = "0:00"
     if video_path.exists():
         console.print("  [dim]Extracting frames...[/dim]")
         extractor = FrameExtractor(video_path)
         extracted = extractor.extract_for_touches(touch_events, screenshots_dir)
         console.print(f"    Extracted {len(extracted)} frames")
+        # Get video duration
+        duration_secs = extractor.get_duration()
+        if duration_secs > 0:
+            mins = int(duration_secs // 60)
+            secs = int(duration_secs % 60)
+            video_duration = f"{mins}:{secs:02d}"
     else:
         console.print("  [dim]No video found, skipping frame extraction[/dim]")
 
-    # Get app package from config
-    try:
-        config = ConfigLoader.load(require_api_key=False)
-        app_package = config.app or "com.example.app"
-    except Exception:
-        config = None
-        app_package = "com.example.app"
+    # Get app package from config if not provided
+    if not app_package:
+        try:
+            config = ConfigLoader.load(require_api_key=False)
+            app_package = config.app or "com.example.app"
+        except Exception:
+            config = None
+            app_package = "com.example.app"
+    else:
+        try:
+            config = ConfigLoader.load(require_api_key=False)
+        except Exception:
+            config = None
 
     # 3. Analyze steps with AI (if API key available)
-    analyzed_steps = []
-    verifications = []
+    analyzed_steps: list = []
+    verifications_raw: list[dict] = []
 
     try:
         if config and config.google_api_key:
-            console.print("  [dim]Analyzing with AI...[/dim]")
             ai = AIAnalyzer(api_key=config.google_api_key)
             step_analyzer = StepAnalyzer(ai)
-            analyzed_steps = step_analyzer.analyze_all(touch_events, screenshots_dir)
+
+            # Run async analysis with progress bar
+            async def run_analysis() -> list:
+                with Progress(
+                    TextColumn("  Analyzing..."),
+                    BarColumn(),
+                    TextColumn("{task.percentage:>3.0f}%"),
+                    console=console,
+                ) as progress:
+                    task = progress.add_task("", total=len(touch_events))
+
+                    def on_progress(completed: int, total: int) -> None:
+                        progress.update(task, completed=completed)
+
+                    return await step_analyzer.analyze_all_parallel(
+                        touch_events, screenshots_dir, on_progress
+                    )
+
+            analyzed_steps = asyncio.run(run_analysis())
 
             suggester = VerificationSuggester(ai)
-            verifications = suggester.suggest(analyzed_steps)
+            verifications_obj = suggester.suggest(analyzed_steps)
+            # Convert to dicts for preview server
+            verifications_raw = [
+                {"description": v.description, "after_step": v.after_step_index, "enabled": True}
+                for v in verifications_obj
+            ]
 
             element_count = sum(1 for s in analyzed_steps if s.element_text)
             console.print(f"    Extracted {element_count} element names")
-            console.print(f"    Suggested {len(verifications)} verifications")
+            console.print(f"    Suggested {len(verifications_raw)} verifications")
         else:
             console.print("  [dim]AI analysis skipped (no API key)[/dim]")
     except Exception as e:
         console.print(f"  [yellow]AI analysis skipped: {e}[/yellow]")
 
-    # Derive test name from directory
-    if test_dir is None:
-        test_dir = recording_dir.parent
-    test_name = test_dir.name
+    # 4. Build preview steps
+    preview_steps: list[PreviewStep] = []
 
-    # 4. Generate YAML
-    console.print("  [dim]Generating YAML...[/dim]")
+    # Add initial state (app launched) as step 0
+    initial_screenshot = screenshots_dir / "before_000.png"
+    preview_steps.append(PreviewStep(
+        index=0,
+        action="app_launched",
+        element_text=None,
+        coordinates=(0, 0),
+        screenshot_path=str(initial_screenshot) if initial_screenshot.exists() else None,
+        enabled=True,
+        before_description="Initial app state after launch",
+        after_description="",
+        timestamp=0.0,
+        frames={"before": "recording/screenshots/before_000.png"} if initial_screenshot.exists() else {},
+    ))
+
+    # Add touch events as steps 1, 2, 3, ...
+    for i, event in enumerate(touch_events):
+        step_num = i + 1  # 1-based step number
+
+        # Find matching analyzed step if available
+        element_text = None
+        action = event.get("event_type", "tap")
+        before_desc = ""
+        after_desc = ""
+
+        for analyzed in analyzed_steps:
+            if analyzed.index == i:
+                element_text = analyzed.element_text
+                before_desc = analyzed.before_description or ""
+                after_desc = analyzed.after_description or ""
+                break
+
+        # Screenshots use step_NNN_before.png and step_NNN_after.png
+        before_path = screenshots_dir / f"step_{step_num:03d}_before.png"
+        after_path = screenshots_dir / f"step_{step_num:03d}_after.png"
+        timestamp = event.get("timestamp", 0.0)
+        direction = event.get("direction")  # For swipe events
+
+        # Build frames dict with both before and after
+        frames = {}
+        if before_path.exists():
+            frames["before"] = f"recording/screenshots/step_{step_num:03d}_before.png"
+        if after_path.exists():
+            frames["after"] = f"recording/screenshots/step_{step_num:03d}_after.png"
+
+        preview_steps.append(PreviewStep(
+            index=step_num,
+            action=action,
+            element_text=element_text,
+            coordinates=(event.get("x", 0), event.get("y", 0)),
+            screenshot_path=str(before_path) if before_path.exists() else None,
+            enabled=True,
+            before_description=before_desc,
+            after_description=after_desc,
+            direction=direction,
+            timestamp=timestamp,
+            frames=frames,
+        ))
+
+    # 5. Start preview server and wait for approval
+    console.print()
+    console.print("[blue]Opening approval UI in browser...[/blue]")
+    console.print("[dim]Review and edit steps, then click 'Generate YAML'[/dim]")
+
+    server = PreviewServer(
+        steps=preview_steps,
+        verifications=verifications_raw,
+        test_name=test_name,
+        app_package=app_package,
+        recording_dir=recording_dir,
+        screen_width=screen_width,
+        screen_height=screen_height,
+        video_duration=video_duration,
+    )
+
+    result = server.start_and_wait()
+
+    if result is None or not result.approved:
+        console.print("[yellow]Cancelled[/yellow] - no YAML generated")
+        return
+
+    # 6. Generate YAML from approved steps
+    console.print()
+    console.print("[blue]Generating YAML from approved steps...[/blue]")
+
     generator = YAMLGenerator(name=test_name, app_package=app_package)
     generator.add_launch_app()
 
-    if analyzed_steps:
-        generator.generate_from_analysis(analyzed_steps, typing_sequences, verifications)
-    else:
-        # Fallback to coordinates
-        for event in touch_events:
-            generator.add_tap(event.get("x", 0), event.get("y", 0))
+    # Get enabled steps from approval result (skip app_launched which is index 0)
+    enabled_steps = [
+        s for s in result.steps
+        if s.get("enabled", True) and s.get("action") != "app_launched"
+    ]
+
+    # Handle typing sequences - indices shifted by 1 (step 1 = original touch 0)
+    # typing_sequences use original indices, so we need to map step_index-1
+    typing_indices = {seq.start_index + 1 for seq in typing_sequences}
+
+    for step_data in enabled_steps:
+        idx = step_data.get("index", 0)
+        action = step_data.get("action", "tap")
+        element = step_data.get("element_text")
+        coords = step_data.get("coordinates", [0, 0])
+
+        # Check if this is part of a typing sequence (using shifted index)
+        if idx in typing_indices:
+            # Find the typing sequence (original index = idx - 1)
+            original_idx = idx - 1
+            for seq in typing_sequences:
+                if seq.start_index == original_idx:
+                    if not seq.text:
+                        # Ask for text now
+                        text = typer.prompt(
+                            f"What text was typed at step {idx}?",
+                            default="",
+                        )
+                        seq.text = text if text else None
+                    if seq.text:
+                        if element:
+                            generator.add_tap(element)
+                        else:
+                            generator.add_tap(coords[0], coords[1])
+                        generator.add_type(seq.text)
+                    break
+            continue
+
+        if action == "tap":
+            if element:
+                generator.add_tap(element)
+            else:
+                generator.add_tap(coords[0], coords[1])
+        elif action == "swipe":
+            generator.add_swipe("up")  # Default, could be enhanced
+
+    # Add approved verifications
+    for v in result.verifications:
+        if v.get("enabled", True) and v.get("description"):
+            generator.add_verify_screen(v["description"])
 
     generator.add_terminate_app()
 
@@ -345,7 +535,7 @@ def stop(
     console.print("[green]Test generated![/green]")
     console.print(f"  Output: {yaml_path}")
     console.print()
-    console.print("[dim]Run with: mut run {yaml_path}[/dim]")
+    console.print(f"[dim]Run with: mut run {yaml_path}[/dim]")
 
 
 def _find_most_recent_recording() -> Path | None:
