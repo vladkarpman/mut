@@ -79,7 +79,7 @@ def run(
     junit: Path | None = typer.Option(None, "--junit", help="JUnit XML output path"),
 ) -> None:
     """Execute a YAML test file."""
-    from mutcli.core.config import ConfigLoader
+    from mutcli.core.config import ConfigLoader, setup_logging
     from mutcli.core.device_controller import DeviceController
     from mutcli.core.executor import TestExecutor
     from mutcli.core.parser import ParseError, TestParser
@@ -96,6 +96,18 @@ def run(
     except ValueError as e:
         console.print(f"[red]Error:[/red] {e}")
         raise typer.Exit(2)
+
+    # Determine test directory from test file path
+    test_dir = test_file.parent
+
+    # Create run folder for this execution
+    run_folder = _create_run_folder(test_dir)
+
+    # Setup verbose logging if enabled
+    if config.verbose:
+        log_file = setup_logging(verbose=True, log_dir=run_folder)
+        if log_file:
+            console.print(f"[dim]Verbose logging → {log_file}[/dim]")
 
     # Override device from CLI
     if device:
