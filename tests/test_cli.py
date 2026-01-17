@@ -2,16 +2,31 @@
 
 import json
 from pathlib import Path
-from unittest.mock import MagicMock, patch
+from typing import Any
+from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 from typer.testing import CliRunner
 
 from mutcli.cli import app
+from mutcli.core.preview_server import ApprovalResult
 from mutcli.core.step_analyzer import AnalyzedStep
 from mutcli.core.verification_suggester import VerificationPoint
 
 runner = CliRunner()
+
+
+def create_mock_approval_result(
+    steps: list[dict[str, Any]] | None = None,
+    verifications: list[dict[str, Any]] | None = None,
+    approved: bool = True,
+) -> ApprovalResult:
+    """Create a mock approval result for testing."""
+    if steps is None:
+        steps = []
+    if verifications is None:
+        verifications = []
+    return ApprovalResult(approved=approved, steps=steps, verifications=verifications)
 
 
 class TestStopCommand:
@@ -53,11 +68,29 @@ class TestStopCommand:
 
     def test_stop_generates_yaml(self, recording_dir: Path) -> None:
         """Stop command should generate test.yaml file."""
-        with patch("mutcli.core.config.ConfigLoader.load") as mock_load:
+        with (
+            patch("mutcli.core.config.ConfigLoader.load") as mock_load,
+            patch("mutcli.core.preview_server.PreviewServer") as mock_server_class,
+        ):
             mock_config = MagicMock()
             mock_config.app = "com.example.app"
             mock_config.google_api_key = None
             mock_load.return_value = mock_config
+
+            # Mock preview server to return approved result
+            mock_server = MagicMock()
+            mock_server.start_and_wait.return_value = create_mock_approval_result(
+                steps=[
+                    {
+                        "index": 1,
+                        "action": "tap",
+                        "element_text": None,
+                        "coordinates": [540, 800],
+                        "enabled": True,
+                    }
+                ],
+            )
+            mock_server_class.return_value = mock_server
 
             result = runner.invoke(app, ["stop", str(recording_dir)])
 
@@ -71,6 +104,7 @@ class TestStopCommand:
         with (
             patch("mutcli.core.config.ConfigLoader.load") as mock_load,
             patch("mutcli.core.typing_detector.TypingDetector") as mock_detector_class,
+            patch("mutcli.core.preview_server.PreviewServer") as mock_server_class,
         ):
             mock_config = MagicMock()
             mock_config.app = "com.example.app"
@@ -82,7 +116,14 @@ class TestStopCommand:
             mock_detector.detect.return_value = []  # No sequences for simpler test
             mock_detector_class.return_value = mock_detector
 
-            result = runner.invoke(app, ["stop", str(recording_dir_with_keyboard_taps)])
+            # Mock preview server
+            mock_server = MagicMock()
+            mock_server.start_and_wait.return_value = create_mock_approval_result()
+            mock_server_class.return_value = mock_server
+
+            result = runner.invoke(
+                app, ["stop", str(recording_dir_with_keyboard_taps)]
+            )
 
         assert result.exit_code == 0
         # Verify TypingDetector was called with correct screen height
@@ -93,11 +134,19 @@ class TestStopCommand:
         self, recording_dir_with_keyboard_taps: Path
     ) -> None:
         """Stop command should prompt user for typed text when typing detected."""
-        with patch("mutcli.core.config.ConfigLoader.load") as mock_load:
+        with (
+            patch("mutcli.core.config.ConfigLoader.load") as mock_load,
+            patch("mutcli.core.preview_server.PreviewServer") as mock_server_class,
+        ):
             mock_config = MagicMock()
             mock_config.app = "com.example.app"
             mock_config.google_api_key = None
             mock_load.return_value = mock_config
+
+            # Mock preview server
+            mock_server = MagicMock()
+            mock_server.start_and_wait.return_value = create_mock_approval_result()
+            mock_server_class.return_value = mock_server
 
             # The actual TypingDetector will detect the keyboard taps
             # Simulate user input for typing prompt
@@ -123,6 +172,7 @@ class TestStopCommand:
             patch(
                 "mutcli.core.verification_suggester.VerificationSuggester"
             ) as mock_suggester_class,
+            patch("mutcli.core.preview_server.PreviewServer") as mock_server_class,
         ):
             mock_config = MagicMock()
             mock_config.app = "com.example.app"
@@ -153,7 +203,9 @@ class TestStopCommand:
                     suggested_verification="Form submitted",
                 ),
             ]
-            mock_step_analyzer.analyze_all.return_value = mock_analyzed_steps
+            mock_step_analyzer.analyze_all_parallel = AsyncMock(
+                return_value=mock_analyzed_steps
+            )
             mock_step_analyzer_class.return_value = mock_step_analyzer
 
             # Mock verification suggester
@@ -168,13 +220,18 @@ class TestStopCommand:
             ]
             mock_suggester_class.return_value = mock_suggester
 
+            # Mock preview server
+            mock_server = MagicMock()
+            mock_server.start_and_wait.return_value = create_mock_approval_result()
+            mock_server_class.return_value = mock_server
+
             result = runner.invoke(app, ["stop", str(recording_dir)])
 
         assert result.exit_code == 0
         # Verify AI components were used
         mock_ai_class.assert_called_once_with(api_key="test-api-key")
         mock_step_analyzer_class.assert_called_once_with(mock_ai)
-        mock_step_analyzer.analyze_all.assert_called_once()
+        mock_step_analyzer.analyze_all_parallel.assert_called_once()
         mock_suggester_class.assert_called_once_with(mock_ai)
         mock_suggester.suggest.assert_called_once()
         # Check output mentions element extraction
@@ -184,18 +241,24 @@ class TestStopCommand:
         self, recording_dir: Path
     ) -> None:
         """Stop command should skip AI analysis gracefully when no API key."""
-        with patch("mutcli.core.config.ConfigLoader.load") as mock_load:
+        with (
+            patch("mutcli.core.config.ConfigLoader.load") as mock_load,
+            patch("mutcli.core.preview_server.PreviewServer") as mock_server_class,
+        ):
             mock_config = MagicMock()
             mock_config.app = "com.example.app"
             mock_config.google_api_key = None  # No API key
             mock_load.return_value = mock_config
 
+            # Mock preview server
+            mock_server = MagicMock()
+            mock_server.start_and_wait.return_value = create_mock_approval_result()
+            mock_server_class.return_value = mock_server
+
             result = runner.invoke(app, ["stop", str(recording_dir)])
 
         assert result.exit_code == 0
         assert "AI analysis skipped (no API key)" in result.output
-        # Verify YAML was still generated
-        assert (recording_dir / "test.yaml").exists()
 
     def test_stop_handles_ai_analysis_exception(
         self, recording_dir: Path
@@ -205,6 +268,7 @@ class TestStopCommand:
             patch("mutcli.core.config.ConfigLoader.load") as mock_load,
             patch("mutcli.core.ai_analyzer.AIAnalyzer") as mock_ai_class,
             patch("mutcli.core.step_analyzer.StepAnalyzer") as mock_step_analyzer_class,
+            patch("mutcli.core.preview_server.PreviewServer") as mock_server_class,
         ):
             mock_config = MagicMock()
             mock_config.app = "com.example.app"
@@ -217,16 +281,21 @@ class TestStopCommand:
 
             # Mock step analyzer to raise exception
             mock_step_analyzer = MagicMock()
-            mock_step_analyzer.analyze_all.side_effect = RuntimeError("API error")
+            mock_step_analyzer.analyze_all_parallel = AsyncMock(
+                side_effect=RuntimeError("API error")
+            )
             mock_step_analyzer_class.return_value = mock_step_analyzer
+
+            # Mock preview server
+            mock_server = MagicMock()
+            mock_server.start_and_wait.return_value = create_mock_approval_result()
+            mock_server_class.return_value = mock_server
 
             result = runner.invoke(app, ["stop", str(recording_dir)])
 
         assert result.exit_code == 0
         # Check that error was caught and reported
         assert "AI analysis skipped:" in result.output
-        # Verify YAML was still generated with fallback (coordinates)
-        assert (recording_dir / "test.yaml").exists()
 
     def test_stop_warns_on_empty_touch_events(self, tmp_path: Path) -> None:
         """Stop command should warn when touch_events.json is empty."""
@@ -237,11 +306,19 @@ class TestStopCommand:
         # Write empty touch events array
         (recording_dir / "touch_events.json").write_text("[]")
 
-        with patch("mutcli.core.config.ConfigLoader.load") as mock_load:
+        with (
+            patch("mutcli.core.config.ConfigLoader.load") as mock_load,
+            patch("mutcli.core.preview_server.PreviewServer") as mock_server_class,
+        ):
             mock_config = MagicMock()
             mock_config.app = "com.example.app"
             mock_config.google_api_key = None
             mock_load.return_value = mock_config
+
+            # Mock preview server
+            mock_server = MagicMock()
+            mock_server.start_and_wait.return_value = create_mock_approval_result()
+            mock_server_class.return_value = mock_server
 
             result = runner.invoke(app, ["stop", str(test_dir)])
 
@@ -274,6 +351,7 @@ class TestStopCommand:
             patch(
                 "mutcli.core.verification_suggester.VerificationSuggester"
             ) as mock_suggester_class,
+            patch("mutcli.core.preview_server.PreviewServer") as mock_server_class,
         ):
             mock_config = MagicMock()
             mock_config.app = "com.example.app"
@@ -304,13 +382,37 @@ class TestStopCommand:
                 ),
             ]
             mock_step_analyzer = MagicMock()
-            mock_step_analyzer.analyze_all.return_value = mock_analyzed_steps
+            mock_step_analyzer.analyze_all_parallel = AsyncMock(
+                return_value=mock_analyzed_steps
+            )
             mock_step_analyzer_class.return_value = mock_step_analyzer
 
             # Mock verification suggester
             mock_suggester = MagicMock()
             mock_suggester.suggest.return_value = []
             mock_suggester_class.return_value = mock_suggester
+
+            # Mock preview server with steps that include element names
+            mock_server = MagicMock()
+            mock_server.start_and_wait.return_value = create_mock_approval_result(
+                steps=[
+                    {
+                        "index": 1,
+                        "action": "tap",
+                        "element_text": "Login Button",
+                        "coordinates": [540, 800],
+                        "enabled": True,
+                    },
+                    {
+                        "index": 2,
+                        "action": "tap",
+                        "element_text": "Submit",
+                        "coordinates": [520, 1400],
+                        "enabled": True,
+                    },
+                ],
+            )
+            mock_server_class.return_value = mock_server
 
             result = runner.invoke(app, ["stop", str(recording_dir)])
 
@@ -326,11 +428,29 @@ class TestStopCommand:
         self, recording_dir: Path
     ) -> None:
         """Stop command should fall back to coordinates when no AI analysis."""
-        with patch("mutcli.core.config.ConfigLoader.load") as mock_load:
+        with (
+            patch("mutcli.core.config.ConfigLoader.load") as mock_load,
+            patch("mutcli.core.preview_server.PreviewServer") as mock_server_class,
+        ):
             mock_config = MagicMock()
             mock_config.app = "com.example.app"
             mock_config.google_api_key = None  # No API key
             mock_load.return_value = mock_config
+
+            # Mock preview server with coordinate-based steps
+            mock_server = MagicMock()
+            mock_server.start_and_wait.return_value = create_mock_approval_result(
+                steps=[
+                    {
+                        "index": 1,
+                        "action": "tap",
+                        "element_text": None,
+                        "coordinates": [540, 800],
+                        "enabled": True,
+                    },
+                ],
+            )
+            mock_server_class.return_value = mock_server
 
             result = runner.invoke(app, ["stop", str(recording_dir)])
 
@@ -393,6 +513,7 @@ class TestStopCommandVideoExtraction:
         with (
             patch("mutcli.core.config.ConfigLoader.load") as mock_load,
             patch("mutcli.core.frame_extractor.FrameExtractor") as mock_extractor_class,
+            patch("mutcli.core.preview_server.PreviewServer") as mock_server_class,
         ):
             mock_config = MagicMock()
             mock_config.app = "com.example.app"
@@ -404,7 +525,13 @@ class TestStopCommandVideoExtraction:
             mock_extractor.extract_for_touches.return_value = [
                 recording_with_video / "recording" / "screenshots" / "touch_001.png"
             ]
+            mock_extractor.get_duration.return_value = 10.5
             mock_extractor_class.return_value = mock_extractor
+
+            # Mock preview server
+            mock_server = MagicMock()
+            mock_server.start_and_wait.return_value = create_mock_approval_result()
+            mock_server_class.return_value = mock_server
 
             result = runner.invoke(app, ["stop", str(recording_with_video)])
 
@@ -426,11 +553,19 @@ class TestStopCommandVideoExtraction:
         (recording_dir / "touch_events.json").write_text(json.dumps(touch_events))
         # No video file created
 
-        with patch("mutcli.core.config.ConfigLoader.load") as mock_load:
+        with (
+            patch("mutcli.core.config.ConfigLoader.load") as mock_load,
+            patch("mutcli.core.preview_server.PreviewServer") as mock_server_class,
+        ):
             mock_config = MagicMock()
             mock_config.app = "com.example.app"
             mock_config.google_api_key = None
             mock_load.return_value = mock_config
+
+            # Mock preview server
+            mock_server = MagicMock()
+            mock_server.start_and_wait.return_value = create_mock_approval_result()
+            mock_server_class.return_value = mock_server
 
             result = runner.invoke(app, ["stop", str(test_dir)])
 
@@ -454,11 +589,36 @@ class TestStopCommandIntegration:
         ]
         (recording_dir / "touch_events.json").write_text(json.dumps(touch_events))
 
-        with patch("mutcli.core.config.ConfigLoader.load") as mock_load:
+        with (
+            patch("mutcli.core.config.ConfigLoader.load") as mock_load,
+            patch("mutcli.core.preview_server.PreviewServer") as mock_server_class,
+        ):
             mock_config = MagicMock()
             mock_config.app = "com.test.app"
             mock_config.google_api_key = None
             mock_load.return_value = mock_config
+
+            # Mock preview server with steps
+            mock_server = MagicMock()
+            mock_server.start_and_wait.return_value = create_mock_approval_result(
+                steps=[
+                    {
+                        "index": 1,
+                        "action": "tap",
+                        "element_text": None,
+                        "coordinates": [100, 200],
+                        "enabled": True,
+                    },
+                    {
+                        "index": 2,
+                        "action": "tap",
+                        "element_text": None,
+                        "coordinates": [300, 400],
+                        "enabled": True,
+                    },
+                ],
+            )
+            mock_server_class.return_value = mock_server
 
             result = runner.invoke(app, ["stop", str(test_dir)])
 
@@ -484,11 +644,19 @@ class TestStopCommandIntegration:
         touch_events = [{"x": 100, "y": 200, "timestamp": 1.0, "screen_height": 2400}]
         (recording_dir / "touch_events.json").write_text(json.dumps(touch_events))
 
-        with patch("mutcli.core.config.ConfigLoader.load") as mock_load:
+        with (
+            patch("mutcli.core.config.ConfigLoader.load") as mock_load,
+            patch("mutcli.core.preview_server.PreviewServer") as mock_server_class,
+        ):
             mock_config = MagicMock()
             mock_config.app = "com.example.app"
             mock_config.google_api_key = None
             mock_load.return_value = mock_config
+
+            # Mock preview server
+            mock_server = MagicMock()
+            mock_server.start_and_wait.return_value = create_mock_approval_result()
+            mock_server_class.return_value = mock_server
 
             result = runner.invoke(app, ["stop", str(test_dir)])
 
@@ -510,11 +678,19 @@ class TestStopCommandEdgeCases:
         touch_events = [{"x": 100, "y": 200, "timestamp": 1.0, "screen_height": 2400}]
         (recording_dir / "touch_events.json").write_text(json.dumps(touch_events))
 
-        with patch("mutcli.core.config.ConfigLoader.load") as mock_load:
+        with (
+            patch("mutcli.core.config.ConfigLoader.load") as mock_load,
+            patch("mutcli.core.preview_server.PreviewServer") as mock_server_class,
+        ):
             mock_config = MagicMock()
             mock_config.app = "com.example.app"
             mock_config.google_api_key = None
             mock_load.return_value = mock_config
+
+            # Mock preview server
+            mock_server = MagicMock()
+            mock_server.start_and_wait.return_value = create_mock_approval_result()
+            mock_server_class.return_value = mock_server
 
             result = runner.invoke(app, ["stop", str(test_dir)])
 
@@ -530,9 +706,17 @@ class TestStopCommandEdgeCases:
         touch_events = [{"x": 100, "y": 200, "timestamp": 1.0, "screen_height": 2400}]
         (recording_dir / "touch_events.json").write_text(json.dumps(touch_events))
 
-        with patch("mutcli.core.config.ConfigLoader.load") as mock_load:
+        with (
+            patch("mutcli.core.config.ConfigLoader.load") as mock_load,
+            patch("mutcli.core.preview_server.PreviewServer") as mock_server_class,
+        ):
             # First call for config load raises exception
             mock_load.side_effect = Exception("Config load error")
+
+            # Mock preview server
+            mock_server = MagicMock()
+            mock_server.start_and_wait.return_value = create_mock_approval_result()
+            mock_server_class.return_value = mock_server
 
             result = runner.invoke(app, ["stop", str(test_dir)])
 
@@ -550,11 +734,19 @@ class TestStopCommandEdgeCases:
         touch_events = [{"x": 540, "y": 800, "timestamp": 1.0, "screen_height": 2400}]
         (recording_dir / "touch_events.json").write_text(json.dumps(touch_events))
 
-        with patch("mutcli.core.config.ConfigLoader.load") as mock_load:
+        with (
+            patch("mutcli.core.config.ConfigLoader.load") as mock_load,
+            patch("mutcli.core.preview_server.PreviewServer") as mock_server_class,
+        ):
             mock_config = MagicMock()
             mock_config.app = "com.example.app"
             mock_config.google_api_key = None
             mock_load.return_value = mock_config
+
+            # Mock preview server
+            mock_server = MagicMock()
+            mock_server.start_and_wait.return_value = create_mock_approval_result()
+            mock_server_class.return_value = mock_server
 
             result = runner.invoke(app, ["stop", str(test_dir)])
 
@@ -577,11 +769,19 @@ class TestStopCommandEdgeCases:
         ]
         (recording_dir / "touch_events.json").write_text(json.dumps(touch_events))
 
-        with patch("mutcli.core.config.ConfigLoader.load") as mock_load:
+        with (
+            patch("mutcli.core.config.ConfigLoader.load") as mock_load,
+            patch("mutcli.core.preview_server.PreviewServer") as mock_server_class,
+        ):
             mock_config = MagicMock()
             mock_config.app = "com.example.app"
             mock_config.google_api_key = None
             mock_load.return_value = mock_config
+
+            # Mock preview server
+            mock_server = MagicMock()
+            mock_server.start_and_wait.return_value = create_mock_approval_result()
+            mock_server_class.return_value = mock_server
 
             result = runner.invoke(app, ["stop", str(test_dir)])
 

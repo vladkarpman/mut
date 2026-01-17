@@ -397,7 +397,10 @@ def _process_recording(
         before_description="Initial app state after launch",
         after_description="",
         timestamp=0.0,
-        frames={"before": "recording/screenshots/before_000.png"} if initial_screenshot.exists() else {},
+        frames=(
+            {"before": "recording/screenshots/before_000.png"}
+            if initial_screenshot.exists() else {}
+        ),
     ))
 
     # Add touch events as steps 1, 2, 3, ...
@@ -424,7 +427,7 @@ def _process_recording(
         direction = event.get("direction")  # For swipe events
 
         # Build frames dict with both before and after
-        frames = {}
+        frames: dict[str, str] = {}
         if before_path.exists():
             frames["before"] = f"recording/screenshots/step_{step_num:03d}_before.png"
         if after_path.exists():
@@ -504,7 +507,7 @@ def _process_recording(
                         seq.text = text if text else None
                     if seq.text:
                         if element:
-                            generator.add_tap(element)
+                            generator.add_tap(0, 0, element=element)
                         else:
                             generator.add_tap(coords[0], coords[1])
                         generator.add_type(seq.text)
@@ -513,7 +516,7 @@ def _process_recording(
 
         if action == "tap":
             if element:
-                generator.add_tap(element)
+                generator.add_tap(0, 0, element=element)
             else:
                 generator.add_tap(coords[0], coords[1])
         elif action == "swipe":
