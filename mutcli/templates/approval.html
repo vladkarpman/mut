@@ -3527,6 +3527,15 @@
             letter-spacing: 0.04em;
         }
 
+        .frame-gesture-info .gesture-info-secondary {
+            color: var(--md-on-surface-variant);
+            font-size: 0.625rem;
+            font-weight: 400;
+            text-transform: none;
+            letter-spacing: normal;
+            opacity: 0.8;
+        }
+
         .frame-gesture-info .gesture-value {
             color: var(--md-primary);
             font-weight: 500;
@@ -5900,10 +5909,11 @@
                 }
 
                 if (step.action === 'type') {
+                    const tapCountInfo = step.tapCount ? ` <span class="gesture-info-secondary">(${step.tapCount} keystrokes)</span>` : '';
                     return `
                         <div class="frame-gesture-info">
                             <div class="gesture-row">
-                                <span class="gesture-label">Text:</span>
+                                <span class="gesture-label">Text:${tapCountInfo}</span>
                                 <input type="text" value="${escapeHtml(step.text || '')}"
                                        onchange="updateStepText('${step.id}', this.value); event.stopPropagation();"
                                        onclick="event.stopPropagation();"
@@ -6204,6 +6214,7 @@
             // TYPE gestures
             if (step.action === 'type') {
                 const text = step.text || step.target?.text || '';
+                const tapCountInfo = step.tapCount ? `<span class="config-label" style="color: #666;">(${step.tapCount} keystrokes)</span>` : '';
                 return `
                     <div class="gesture-config">
                         <div class="config-group" style="flex: 1;">
@@ -6211,6 +6222,7 @@
                             <input type="text" value="${escapeHtml(text)}"
                                    onchange="updateTypeText('${step.id}', this.value); event.stopPropagation();"
                                    style="width: 200px;">
+                            ${tapCountInfo}
                         </div>
                         <div class="config-group">
                             <span class="config-label">Submit:</span>
