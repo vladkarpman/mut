@@ -502,7 +502,7 @@ class TestStopCommandVideoExtraction:
         (recording_dir / "touch_events.json").write_text(json.dumps(touch_events))
 
         # Create a fake video file (won't be decoded but will trigger extraction code)
-        (recording_dir / "recording.mp4").write_bytes(b"fake video content")
+        (recording_dir / "video.mp4").write_bytes(b"fake video content")
 
         return test_dir
 

@@ -307,7 +307,7 @@ def _process_recording(
         console.print(f"    Found {len(typing_sequences)} typing sequence(s)")
 
     # 2. Extract frames from video (if exists)
-    video_path = recording_dir / "recording.mp4"
+    video_path = recording_dir / "video.mp4"
     screenshots_dir = recording_dir / "screenshots"
     video_duration = "0:00"
     if video_path.exists():

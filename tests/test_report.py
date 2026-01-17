@@ -301,7 +301,7 @@ class TestReportGenerator:
         # Create recording directory with video file
         recording_dir = output_dir / "recording"
         recording_dir.mkdir()
-        video_file = recording_dir / "recording.mp4"
+        video_file = recording_dir / "video.mp4"
         video_file.write_bytes(b"fake video content")
 
         generator = ReportGenerator(output_dir)
@@ -310,7 +310,7 @@ class TestReportGenerator:
         content = html_path.read_text()
         assert 'class="video-panel"' in content
         assert 'id="reportVideo"' in content
-        assert 'src="recording/recording.mp4"' in content
+        assert 'src="recording/video.mp4"' in content
 
     def test_html_hides_video_player_when_no_video(self, test_result, tmp_path):
         """HTML report hides video player when no recording exists."""

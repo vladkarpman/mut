@@ -235,7 +235,7 @@ data-index="{index}" onclick="selectStep({index})">
 
     def _generate_video_html(self) -> str:
         """Generate video player HTML if video exists."""
-        video_path = self._output_dir / "recording" / "recording.mp4"
+        video_path = self._output_dir / "recording" / "video.mp4"
         if not video_path.exists():
             return ""
 
@@ -244,7 +244,7 @@ data-index="{index}" onclick="selectStep({index})">
     <div class="video-container">
         <div class="video-wrapper">
             <video id="reportVideo" preload="metadata">
-                <source src="recording/recording.mp4" type="video/mp4">
+                <source src="recording/video.mp4" type="video/mp4">
                 Your browser does not support video playback.
             </video>
         </div>
