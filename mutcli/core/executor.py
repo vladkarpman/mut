@@ -316,7 +316,11 @@ class TestExecutor:
         return None
 
     def _action_scroll_to(self, step: Step) -> str | None:
-        """Scroll until element is visible."""
+        """Scroll until element is visible.
+
+        Note: direction refers to scroll direction (content movement).
+        'down' scrolls content down (revealing content below).
+        """
         target = step.target
         if not target:
             return "No element specified for scroll_to"
@@ -347,3 +351,68 @@ class TestExecutor:
                 self._device.swipe(cx, cy, cx - distance, cy)
 
         return f"Element '{target}' not found after {max_scrolls} scrolls"
+
+    def _action_if_present(self, step: Step) -> str | None:
+        """Execute then/else based on element presence."""
+        target = step.condition_target
+        if not target:
+            return "No element specified for if_present"
+
+        coords = self._device.find_element(target)
+
+        if coords:
+            # Element found, execute then branch
+            return self._execute_nested_steps(step.then_steps)
+        elif step.else_steps:
+            # Element not found, execute else branch
+            return self._execute_nested_steps(step.else_steps)
+
+        return None  # No else branch, just skip
+
+    def _action_if_absent(self, step: Step) -> str | None:
+        """Execute then/else based on element absence."""
+        target = step.condition_target
+        if not target:
+            return "No element specified for if_absent"
+
+        coords = self._device.find_element(target)
+
+        if coords is None:
+            # Element not found, execute then branch
+            return self._execute_nested_steps(step.then_steps)
+        elif step.else_steps:
+            # Element found, execute else branch
+            return self._execute_nested_steps(step.else_steps)
+
+        return None
+
+    def _action_if_screen(self, step: Step) -> str | None:
+        """Execute then/else based on AI screen verification."""
+        description = step.condition_target
+        if not description:
+            return "No screen description specified for if_screen"
+
+        screenshot = self._device.take_screenshot()
+        result = self._ai.verify_screen(screenshot, description)
+
+        if result.get("pass"):
+            return self._execute_nested_steps(step.then_steps)
+        elif step.else_steps:
+            return self._execute_nested_steps(step.else_steps)
+
+        return None
+
+    def _execute_nested_steps(self, steps: list[Step]) -> str | None:
+        """Execute a list of nested steps.
+
+        Returns error message if any step fails, None otherwise.
+        """
+        if not steps:
+            return None
+
+        for nested_step in steps:
+            result = self.execute_step(nested_step)
+            if result.status == "failed":
+                return result.error
+
+        return None

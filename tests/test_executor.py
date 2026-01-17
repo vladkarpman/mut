@@ -559,6 +559,235 @@ class TestExecutorScrollToActions:
         assert "no element specified" in result.error.lower()
 
 
+class TestExecutorConditionalActions:
+    """Test conditional action execution."""
+
+    @pytest.fixture
+    def mock_device(self):
+        """Mock DeviceController."""
+        device = MagicMock()
+        device.get_screen_size.return_value = (1080, 2340)
+        return device
+
+    @pytest.fixture
+    def mock_ai(self):
+        """Mock AIAnalyzer."""
+        ai = MagicMock()
+        ai.is_available = True
+        return ai
+
+    @pytest.fixture
+    def executor(self, mock_device, mock_ai):
+        """Create executor with mocked device and AI."""
+        with patch("mutcli.core.executor.DeviceController", return_value=mock_device):
+            with patch("mutcli.core.executor.AIAnalyzer", return_value=mock_ai):
+                return TestExecutor(device_id="test-device")
+
+    def test_if_present_executes_then_when_element_found(self, executor, mock_device):
+        """if_present executes then branch when element is found."""
+        mock_device.find_element.return_value = (540, 1200)
+        then_step = Step(action="tap", target="Next Button")
+        step = Step(
+            action="if_present",
+            condition_target="Login Button",
+            then_steps=[then_step],
+        )
+
+        result = executor.execute_step(step)
+
+        assert result.status == "passed"
+        # Should have called find_element for condition and for tap target
+        mock_device.find_element.assert_any_call("Login Button")
+        mock_device.tap.assert_called()
+
+    def test_if_present_executes_else_when_element_not_found(self, executor, mock_device):
+        """if_present executes else branch when element is not found."""
+        # First call for condition check returns None, second for tap in else branch returns coords
+        mock_device.find_element.side_effect = [None, (540, 1200)]
+        then_step = Step(action="tap", target="Then Target")
+        else_step = Step(action="tap", target="Else Target")
+        step = Step(
+            action="if_present",
+            condition_target="Login Button",
+            then_steps=[then_step],
+            else_steps=[else_step],
+        )
+
+        result = executor.execute_step(step)
+
+        assert result.status == "passed"
+        mock_device.find_element.assert_any_call("Login Button")
+        mock_device.find_element.assert_any_call("Else Target")
+
+    def test_if_present_skips_when_no_else_and_not_found(self, executor, mock_device):
+        """if_present does nothing when element not found and no else branch."""
+        mock_device.find_element.return_value = None
+        then_step = Step(action="tap", target="Then Target")
+        step = Step(
+            action="if_present",
+            condition_target="Login Button",
+            then_steps=[then_step],
+            else_steps=[],
+        )
+
+        result = executor.execute_step(step)
+
+        assert result.status == "passed"
+        mock_device.find_element.assert_called_once_with("Login Button")
+        mock_device.tap.assert_not_called()
+
+    def test_if_absent_executes_then_when_element_not_found(self, executor, mock_device):
+        """if_absent executes then branch when element is NOT found."""
+        # First call for condition check returns None, second for tap returns coords
+        mock_device.find_element.side_effect = [None, (540, 1200)]
+        then_step = Step(action="tap", target="Then Target")
+        step = Step(
+            action="if_absent",
+            condition_target="Error Message",
+            then_steps=[then_step],
+        )
+
+        result = executor.execute_step(step)
+
+        assert result.status == "passed"
+        mock_device.find_element.assert_any_call("Error Message")
+        mock_device.find_element.assert_any_call("Then Target")
+
+    def test_if_absent_executes_else_when_element_found(self, executor, mock_device):
+        """if_absent executes else branch when element IS found."""
+        mock_device.find_element.return_value = (540, 1200)
+        then_step = Step(action="tap", target="Then Target")
+        else_step = Step(action="tap", target="Else Target")
+        step = Step(
+            action="if_absent",
+            condition_target="Error Message",
+            then_steps=[then_step],
+            else_steps=[else_step],
+        )
+
+        result = executor.execute_step(step)
+
+        assert result.status == "passed"
+        mock_device.find_element.assert_any_call("Error Message")
+        mock_device.find_element.assert_any_call("Else Target")
+
+    def test_if_screen_executes_then_on_match(self, executor, mock_device, mock_ai):
+        """if_screen executes then branch when AI confirms screen matches."""
+        mock_device.take_screenshot.return_value = b"fake_screenshot_data"
+        mock_ai.verify_screen.return_value = {"pass": True, "confidence": 0.95}
+        mock_device.find_element.return_value = (540, 1200)
+        then_step = Step(action="tap", target="Continue")
+        step = Step(
+            action="if_screen",
+            condition_target="Login page with email field visible",
+            then_steps=[then_step],
+        )
+
+        result = executor.execute_step(step)
+
+        assert result.status == "passed"
+        mock_device.take_screenshot.assert_called_once()
+        mock_ai.verify_screen.assert_called_once_with(
+            b"fake_screenshot_data", "Login page with email field visible"
+        )
+        mock_device.tap.assert_called()
+
+    def test_if_screen_executes_else_on_no_match(self, executor, mock_device, mock_ai):
+        """if_screen executes else branch when AI says screen doesn't match."""
+        mock_device.take_screenshot.return_value = b"fake_screenshot_data"
+        mock_ai.verify_screen.return_value = {"pass": False, "confidence": 0.3}
+        mock_device.find_element.return_value = (540, 1200)
+        then_step = Step(action="tap", target="Then Target")
+        else_step = Step(action="tap", target="Else Target")
+        step = Step(
+            action="if_screen",
+            condition_target="Login page with email field visible",
+            then_steps=[then_step],
+            else_steps=[else_step],
+        )
+
+        result = executor.execute_step(step)
+
+        assert result.status == "passed"
+        mock_ai.verify_screen.assert_called_once()
+        mock_device.find_element.assert_called_with("Else Target")
+
+    def test_nested_conditionals_execute_correctly(self, executor, mock_device, mock_ai):
+        """Nested conditionals execute properly."""
+        # Outer condition: element found
+        # Inner condition: element not found
+        mock_device.find_element.side_effect = [
+            (540, 1200),  # Outer if_present check - found
+            None,  # Inner if_absent check - not found (condition true)
+            (540, 1200),  # Tap in inner then branch
+        ]
+
+        inner_then_step = Step(action="tap", target="Inner Then Target")
+        inner_conditional = Step(
+            action="if_absent",
+            condition_target="Error Dialog",
+            then_steps=[inner_then_step],
+        )
+        outer_step = Step(
+            action="if_present",
+            condition_target="Main Screen",
+            then_steps=[inner_conditional],
+        )
+
+        result = executor.execute_step(outer_step)
+
+        assert result.status == "passed"
+        mock_device.find_element.assert_any_call("Main Screen")
+        mock_device.find_element.assert_any_call("Error Dialog")
+        mock_device.find_element.assert_any_call("Inner Then Target")
+        mock_device.tap.assert_called()
+
+    def test_if_present_fails_without_condition_target(self, executor, mock_device):
+        """if_present fails when no element specified."""
+        step = Step(action="if_present", condition_target=None)
+
+        result = executor.execute_step(step)
+
+        assert result.status == "failed"
+        assert "no element specified" in result.error.lower()
+
+    def test_if_absent_fails_without_condition_target(self, executor, mock_device):
+        """if_absent fails when no element specified."""
+        step = Step(action="if_absent", condition_target=None)
+
+        result = executor.execute_step(step)
+
+        assert result.status == "failed"
+        assert "no element specified" in result.error.lower()
+
+    def test_if_screen_fails_without_description(self, executor, mock_device):
+        """if_screen fails when no screen description specified."""
+        step = Step(action="if_screen", condition_target=None)
+
+        result = executor.execute_step(step)
+
+        assert result.status == "failed"
+        assert "no screen description" in result.error.lower()
+
+    def test_conditional_propagates_nested_step_failure(self, executor, mock_device):
+        """Conditional returns error when nested step fails."""
+        mock_device.find_element.side_effect = [
+            (540, 1200),  # Condition check - found
+            None,  # Tap target not found - will fail
+        ]
+        then_step = Step(action="tap", target="NonExistent Button")
+        step = Step(
+            action="if_present",
+            condition_target="Login Button",
+            then_steps=[then_step],
+        )
+
+        result = executor.execute_step(step)
+
+        assert result.status == "failed"
+        assert "not found" in result.error.lower()
+
+
 class TestStepResult:
     """Test StepResult dataclass."""
 
