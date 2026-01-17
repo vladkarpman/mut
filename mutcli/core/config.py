@@ -9,6 +9,7 @@ Priority order (highest to lowest):
 
 from __future__ import annotations
 
+import logging
 import os
 from dataclasses import dataclass, field
 from pathlib import Path
@@ -224,8 +225,6 @@ def setup_logging(verbose: bool, log_dir: Path | None) -> Path | None:
     """
     if not verbose or log_dir is None:
         return None
-
-    import logging
 
     log_file = log_dir / "debug.log"
     log_dir.mkdir(parents=True, exist_ok=True)
