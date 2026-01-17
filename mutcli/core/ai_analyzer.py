@@ -3,12 +3,46 @@
 import json
 import logging
 import os
-from typing import Any
+from typing import Any, TypedDict
 
 from google import genai
 from google.genai import types
 
 logger = logging.getLogger("mut.ai")
+
+
+# TypedDict definitions for gesture analysis results
+
+
+class TapAnalysisResult(TypedDict):
+    """Result from analyze_tap() method."""
+
+    element_text: str | None
+    element_type: str  # button|text_field|link|icon|checkbox|other
+    before_description: str
+    after_description: str
+    suggested_verification: str | None
+
+
+class SwipeAnalysisResult(TypedDict):
+    """Result from analyze_swipe() method."""
+
+    direction: str  # up|down|left|right
+    content_changed: str
+    before_description: str
+    after_description: str
+    suggested_verification: str | None
+
+
+class LongPressAnalysisResult(TypedDict):
+    """Result from analyze_long_press() method."""
+
+    element_text: str | None
+    element_type: str  # list_item|text|image|icon|other
+    result_type: str  # context_menu|selection|drag_start|other
+    before_description: str
+    after_description: str
+    suggested_verification: str | None
 
 
 class AIAnalyzer:
@@ -321,6 +355,262 @@ Respond with JSON only (no markdown, no code blocks):
         except Exception as e:
             logger.error(f"analyze_image failed: {e}")
             return None
+
+    # -------------------------------------------------------------------------
+    # Async gesture-specific analysis methods
+    # -------------------------------------------------------------------------
+
+    async def analyze_tap(
+        self,
+        before: bytes,
+        touch: bytes,
+        after: bytes,
+        x: int,
+        y: int,
+    ) -> TapAnalysisResult:
+        """Analyze a TAP gesture using 3 frames.
+
+        Args:
+            before: PNG image bytes - stable state before tap
+            touch: PNG image bytes - moment of tap (shows target element)
+            after: PNG image bytes - result after UI settled
+            x: Tap X coordinate in pixels
+            y: Tap Y coordinate in pixels
+
+        Returns:
+            TapAnalysisResult with element info and descriptions
+        """
+        if not self.is_available or self._client is None:
+            return TapAnalysisResult(
+                element_text=None,
+                element_type="other",
+                before_description="Unknown (AI unavailable)",
+                after_description="Unknown (AI unavailable)",
+                suggested_verification=None,
+            )
+
+        prompt = f"""Analyze this TAP interaction on a mobile app.
+
+Screenshots:
+1. BEFORE - stable state before tap
+2. TOUCH - moment of tap (shows target element)
+3. AFTER - result after UI settled
+
+Tap coordinates: ({x}, {y})
+
+Respond with JSON only (no markdown, no code blocks):
+{{
+  "element_text": "button/field text or null",
+  "element_type": "button|text_field|link|icon|checkbox|other",
+  "before_description": "brief UI state before",
+  "after_description": "brief UI state after",
+  "suggested_verification": "verification phrase or null"
+}}"""
+
+        try:
+            before_part = types.Part.from_bytes(data=before, mime_type="image/png")
+            touch_part = types.Part.from_bytes(data=touch, mime_type="image/png")
+            after_part = types.Part.from_bytes(data=after, mime_type="image/png")
+
+            response = await self._client.aio.models.generate_content(
+                model=self._model,
+                contents=[before_part, touch_part, after_part, prompt],  # type: ignore[arg-type]
+            )
+
+            response_text = response.text or ""
+            result = self._parse_json_response(response_text)
+
+            return TapAnalysisResult(
+                element_text=result.get("element_text"),
+                element_type=result.get("element_type", "other"),
+                before_description=result.get("before_description", ""),
+                after_description=result.get("after_description", ""),
+                suggested_verification=result.get("suggested_verification"),
+            )
+
+        except Exception as e:
+            logger.error(f"analyze_tap failed: {e}")
+            return TapAnalysisResult(
+                element_text=None,
+                element_type="other",
+                before_description=f"Analysis failed: {e}",
+                after_description=f"Analysis failed: {e}",
+                suggested_verification=None,
+            )
+
+    async def analyze_swipe(
+        self,
+        before: bytes,
+        swipe_start: bytes,
+        swipe_end: bytes,
+        after: bytes,
+        start_x: int,
+        start_y: int,
+        end_x: int,
+        end_y: int,
+    ) -> SwipeAnalysisResult:
+        """Analyze a SWIPE gesture using 4 frames.
+
+        Args:
+            before: PNG image bytes - stable state before swipe
+            swipe_start: PNG image bytes - finger down position
+            swipe_end: PNG image bytes - finger up position
+            after: PNG image bytes - result after UI settled
+            start_x: Swipe start X coordinate in pixels
+            start_y: Swipe start Y coordinate in pixels
+            end_x: Swipe end X coordinate in pixels
+            end_y: Swipe end Y coordinate in pixels
+
+        Returns:
+            SwipeAnalysisResult with direction and content change info
+        """
+        if not self.is_available or self._client is None:
+            return SwipeAnalysisResult(
+                direction="unknown",
+                content_changed="Unknown (AI unavailable)",
+                before_description="Unknown (AI unavailable)",
+                after_description="Unknown (AI unavailable)",
+                suggested_verification=None,
+            )
+
+        prompt = f"""Analyze this SWIPE gesture on a mobile app.
+
+Screenshots:
+1. BEFORE - stable state before swipe
+2. SWIPE_START - finger down position
+3. SWIPE_END - finger up position
+4. AFTER - result after UI settled
+
+Start: ({start_x}, {start_y}) -> End: ({end_x}, {end_y})
+
+Respond with JSON only (no markdown, no code blocks):
+{{
+  "direction": "up|down|left|right",
+  "content_changed": "what scrolled into/out of view",
+  "before_description": "brief UI state before",
+  "after_description": "brief UI state after",
+  "suggested_verification": "verification phrase or null"
+}}"""
+
+        try:
+            before_part = types.Part.from_bytes(data=before, mime_type="image/png")
+            start_part = types.Part.from_bytes(data=swipe_start, mime_type="image/png")
+            end_part = types.Part.from_bytes(data=swipe_end, mime_type="image/png")
+            after_part = types.Part.from_bytes(data=after, mime_type="image/png")
+
+            response = await self._client.aio.models.generate_content(
+                model=self._model,
+                contents=[before_part, start_part, end_part, after_part, prompt],  # type: ignore[arg-type]
+            )
+
+            response_text = response.text or ""
+            result = self._parse_json_response(response_text)
+
+            return SwipeAnalysisResult(
+                direction=result.get("direction", "unknown"),
+                content_changed=result.get("content_changed", ""),
+                before_description=result.get("before_description", ""),
+                after_description=result.get("after_description", ""),
+                suggested_verification=result.get("suggested_verification"),
+            )
+
+        except Exception as e:
+            logger.error(f"analyze_swipe failed: {e}")
+            return SwipeAnalysisResult(
+                direction="unknown",
+                content_changed=f"Analysis failed: {e}",
+                before_description=f"Analysis failed: {e}",
+                after_description=f"Analysis failed: {e}",
+                suggested_verification=None,
+            )
+
+    async def analyze_long_press(
+        self,
+        before: bytes,
+        press_start: bytes,
+        press_held: bytes,
+        after: bytes,
+        x: int,
+        y: int,
+        duration_ms: int,
+    ) -> LongPressAnalysisResult:
+        """Analyze a LONG PRESS gesture using 4 frames.
+
+        Args:
+            before: PNG image bytes - stable state before press
+            press_start: PNG image bytes - finger down on element
+            press_held: PNG image bytes - during hold (may show visual feedback)
+            after: PNG image bytes - result (context menu, selection, etc.)
+            x: Press X coordinate in pixels
+            y: Press Y coordinate in pixels
+            duration_ms: Press duration in milliseconds
+
+        Returns:
+            LongPressAnalysisResult with element and result type info
+        """
+        if not self.is_available or self._client is None:
+            return LongPressAnalysisResult(
+                element_text=None,
+                element_type="other",
+                result_type="other",
+                before_description="Unknown (AI unavailable)",
+                after_description="Unknown (AI unavailable)",
+                suggested_verification=None,
+            )
+
+        prompt = f"""Analyze this LONG PRESS gesture on a mobile app.
+
+Screenshots:
+1. BEFORE - stable state before press
+2. PRESS_START - finger down on element
+3. PRESS_HELD - during hold (may show visual feedback)
+4. AFTER - result (context menu, selection, etc.)
+
+Press coordinates: ({x}, {y}), Duration: {duration_ms}ms
+
+Respond with JSON only (no markdown, no code blocks):
+{{
+  "element_text": "pressed element text or null",
+  "element_type": "list_item|text|image|icon|other",
+  "result_type": "context_menu|selection|drag_start|other",
+  "before_description": "brief UI state before",
+  "after_description": "brief UI state after",
+  "suggested_verification": "verification phrase or null"
+}}"""
+
+        try:
+            before_part = types.Part.from_bytes(data=before, mime_type="image/png")
+            start_part = types.Part.from_bytes(data=press_start, mime_type="image/png")
+            held_part = types.Part.from_bytes(data=press_held, mime_type="image/png")
+            after_part = types.Part.from_bytes(data=after, mime_type="image/png")
+
+            response = await self._client.aio.models.generate_content(
+                model=self._model,
+                contents=[before_part, start_part, held_part, after_part, prompt],  # type: ignore[arg-type]
+            )
+
+            response_text = response.text or ""
+            result = self._parse_json_response(response_text)
+
+            return LongPressAnalysisResult(
+                element_text=result.get("element_text"),
+                element_type=result.get("element_type", "other"),
+                result_type=result.get("result_type", "other"),
+                before_description=result.get("before_description", ""),
+                after_description=result.get("after_description", ""),
+                suggested_verification=result.get("suggested_verification"),
+            )
+
+        except Exception as e:
+            logger.error(f"analyze_long_press failed: {e}")
+            return LongPressAnalysisResult(
+                element_text=None,
+                element_type="other",
+                result_type="other",
+                before_description=f"Analysis failed: {e}",
+                after_description=f"Analysis failed: {e}",
+                suggested_verification=None,
+            )
 
     def _parse_json_response(self, text: str) -> dict[str, Any]:
         """Parse JSON from model response, handling markdown code blocks."""
