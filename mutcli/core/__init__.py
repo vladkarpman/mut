@@ -12,6 +12,7 @@ from mutcli.core.scrcpy_service import ScrcpyService
 from mutcli.core.step_analyzer import AnalyzedStep, StepAnalyzer
 from mutcli.core.touch_monitor import TouchEvent, TouchMonitor
 from mutcli.core.typing_detector import TypingDetector, TypingSequence
+from mutcli.core.verification_suggester import VerificationPoint, VerificationSuggester
 from mutcli.core.yaml_generator import YAMLGenerator
 
 __all__ = [
@@ -37,5 +38,7 @@ __all__ = [
     "TouchMonitor",
     "TypingDetector",
     "TypingSequence",
+    "VerificationPoint",
+    "VerificationSuggester",
     "YAMLGenerator",
 ]
