@@ -1,10 +1,6 @@
 """Tests for StepAnalyzer."""
 
-import json
-from pathlib import Path
 from unittest.mock import MagicMock, patch
-
-import pytest
 
 from mutcli.core.step_analyzer import AnalyzedStep, StepAnalyzer
 
@@ -237,7 +233,8 @@ class TestAnalyzeAll:
         assert results[0].index == 0
         # Second step should indicate missing screenshot
         assert results[1].index == 1
-        assert "missing" in results[1].before_description.lower() or results[1].before_description == "Before state"
+        desc = results[1].before_description
+        assert "missing" in desc.lower() or desc == "Before state"
 
     def test_returns_empty_list_for_empty_events(self, tmp_path):
         """Should return empty list when no touch events."""

@@ -827,7 +827,7 @@ class TestGenerateFromAnalysis:
         assert data["steps"] == []
 
     def test_skips_typing_sequence_without_text(self):
-        """generate_from_analysis should skip typing sequences with no text (user skipped interview)."""
+        """Skip typing sequences with no text (user skipped interview)."""
         gen = YAMLGenerator("test", "com.example.app")
 
         analyzed_steps = [

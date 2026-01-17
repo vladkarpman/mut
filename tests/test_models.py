@@ -1,6 +1,5 @@
 """Tests for Step model with conditional fields."""
 
-import pytest
 
 from mutcli.models.test import Step
 

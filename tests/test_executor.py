@@ -4,7 +4,7 @@ from unittest.mock import MagicMock, patch
 
 import pytest
 
-from mutcli.core.executor import StepResult, TestExecutor, TestResult
+from mutcli.core.executor import StepResult, TestExecutor
 from mutcli.models.test import Step, TestConfig, TestFile
 
 
@@ -734,7 +734,7 @@ class TestExecutorConditionalActions:
         result = executor.execute_step(step)
 
         assert result.status == "passed"
-        # take_screenshot is called for: before (outer), if_screen action, before (nested), after (nested), after (outer)
+        # take_screenshot called for: before, if_screen, nested before/after, outer after
         assert mock_device.take_screenshot.call_count >= 1
         mock_ai.verify_screen.assert_called_once_with(
             b"fake_screenshot_data", "Login page with email field visible"

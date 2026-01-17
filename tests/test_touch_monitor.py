@@ -3,8 +3,6 @@
 import time
 from unittest.mock import MagicMock, patch
 
-import pytest
-
 from mutcli.core.touch_monitor import TouchEvent, TouchMonitor
 
 

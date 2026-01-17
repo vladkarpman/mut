@@ -9,7 +9,6 @@ from typer.testing import CliRunner
 
 from mutcli.cli import app
 from mutcli.core.step_analyzer import AnalyzedStep
-from mutcli.core.typing_detector import TypingSequence
 from mutcli.core.verification_suggester import VerificationPoint
 
 runner = CliRunner()
@@ -110,7 +109,8 @@ class TestStopCommand:
 
         assert result.exit_code == 0
         # Check that typing was detected (3 keyboard taps at indices 1-3)
-        assert "typing sequence" in result.output.lower() or "typing pattern" in result.output.lower()
+        output_lower = result.output.lower()
+        assert "typing sequence" in output_lower or "typing pattern" in output_lower
 
     def test_stop_uses_ai_analysis_when_api_key_available(
         self, recording_dir: Path

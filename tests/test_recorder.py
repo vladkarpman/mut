@@ -135,19 +135,19 @@ class TestRecorderStart:
         with tempfile.TemporaryDirectory() as tmpdir:
             output_dir = Path(tmpdir) / "tests" / "new-test"
 
-            with patch("mutcli.core.recorder.ScrcpyService") as MockScrcpy:
-                with patch("mutcli.core.recorder.TouchMonitor") as MockTouch:
+            with patch("mutcli.core.recorder.ScrcpyService") as mock_scrcpy_cls:
+                with patch("mutcli.core.recorder.TouchMonitor") as mock_touch_cls:
                     mock_scrcpy = MagicMock()
                     mock_scrcpy.connect.return_value = True
                     mock_scrcpy.start_recording.return_value = {
                         "success": True,
                         "recording_start_time": time.time(),
                     }
-                    MockScrcpy.return_value = mock_scrcpy
+                    mock_scrcpy_cls.return_value = mock_scrcpy
 
                     mock_touch = MagicMock()
                     mock_touch.start.return_value = True
-                    MockTouch.return_value = mock_touch
+                    mock_touch_cls.return_value = mock_touch
 
                     recorder = Recorder(
                         name="new-test",
@@ -166,19 +166,19 @@ class TestRecorderStart:
         with tempfile.TemporaryDirectory() as tmpdir:
             output_dir = Path(tmpdir) / "tests" / "test"
 
-            with patch("mutcli.core.recorder.ScrcpyService") as MockScrcpy:
-                with patch("mutcli.core.recorder.TouchMonitor") as MockTouch:
+            with patch("mutcli.core.recorder.ScrcpyService") as mock_scrcpy_cls:
+                with patch("mutcli.core.recorder.TouchMonitor") as mock_touch_cls:
                     mock_scrcpy = MagicMock()
                     mock_scrcpy.connect.return_value = True
                     mock_scrcpy.start_recording.return_value = {
                         "success": True,
                         "recording_start_time": time.time(),
                     }
-                    MockScrcpy.return_value = mock_scrcpy
+                    mock_scrcpy_cls.return_value = mock_scrcpy
 
                     mock_touch = MagicMock()
                     mock_touch.start.return_value = True
-                    MockTouch.return_value = mock_touch
+                    mock_touch_cls.return_value = mock_touch
 
                     recorder = Recorder(
                         name="test",
@@ -188,7 +188,7 @@ class TestRecorderStart:
 
                     recorder.start()
 
-                    MockScrcpy.assert_called_once_with("test-device")
+                    mock_scrcpy_cls.assert_called_once_with("test-device")
                     mock_scrcpy.connect.assert_called_once()
 
     def test_start_starts_video_recording(self):
@@ -196,19 +196,19 @@ class TestRecorderStart:
         with tempfile.TemporaryDirectory() as tmpdir:
             output_dir = Path(tmpdir) / "tests" / "test"
 
-            with patch("mutcli.core.recorder.ScrcpyService") as MockScrcpy:
-                with patch("mutcli.core.recorder.TouchMonitor") as MockTouch:
+            with patch("mutcli.core.recorder.ScrcpyService") as mock_scrcpy_cls:
+                with patch("mutcli.core.recorder.TouchMonitor") as mock_touch_cls:
                     mock_scrcpy = MagicMock()
                     mock_scrcpy.connect.return_value = True
                     mock_scrcpy.start_recording.return_value = {
                         "success": True,
                         "recording_start_time": time.time(),
                     }
-                    MockScrcpy.return_value = mock_scrcpy
+                    mock_scrcpy_cls.return_value = mock_scrcpy
 
                     mock_touch = MagicMock()
                     mock_touch.start.return_value = True
-                    MockTouch.return_value = mock_touch
+                    mock_touch_cls.return_value = mock_touch
 
                     recorder = Recorder(
                         name="test",
@@ -226,19 +226,19 @@ class TestRecorderStart:
         with tempfile.TemporaryDirectory() as tmpdir:
             output_dir = Path(tmpdir) / "tests" / "test"
 
-            with patch("mutcli.core.recorder.ScrcpyService") as MockScrcpy:
-                with patch("mutcli.core.recorder.TouchMonitor") as MockTouch:
+            with patch("mutcli.core.recorder.ScrcpyService") as mock_scrcpy_cls:
+                with patch("mutcli.core.recorder.TouchMonitor") as mock_touch_cls:
                     mock_scrcpy = MagicMock()
                     mock_scrcpy.connect.return_value = True
                     mock_scrcpy.start_recording.return_value = {
                         "success": True,
                         "recording_start_time": time.time(),
                     }
-                    MockScrcpy.return_value = mock_scrcpy
+                    mock_scrcpy_cls.return_value = mock_scrcpy
 
                     mock_touch = MagicMock()
                     mock_touch.start.return_value = True
-                    MockTouch.return_value = mock_touch
+                    mock_touch_cls.return_value = mock_touch
 
                     recorder = Recorder(
                         name="test",
@@ -248,7 +248,7 @@ class TestRecorderStart:
 
                     recorder.start()
 
-                    MockTouch.assert_called_once_with("test-device")
+                    mock_touch_cls.assert_called_once_with("test-device")
                     mock_touch.start.assert_called_once()
 
     def test_start_saves_state_file(self):
@@ -257,8 +257,8 @@ class TestRecorderStart:
             output_dir = Path(tmpdir) / "tests" / "test"
             state_file = Path(tmpdir) / ".claude" / "recording-state.json"
 
-            with patch("mutcli.core.recorder.ScrcpyService") as MockScrcpy:
-                with patch("mutcli.core.recorder.TouchMonitor") as MockTouch:
+            with patch("mutcli.core.recorder.ScrcpyService") as mock_scrcpy_cls:
+                with patch("mutcli.core.recorder.TouchMonitor") as mock_touch_cls:
                     with patch.object(Recorder, "STATE_FILE", state_file):
                         mock_scrcpy = MagicMock()
                         mock_scrcpy.connect.return_value = True
@@ -266,11 +266,11 @@ class TestRecorderStart:
                             "success": True,
                             "recording_start_time": time.time(),
                         }
-                        MockScrcpy.return_value = mock_scrcpy
+                        mock_scrcpy_cls.return_value = mock_scrcpy
 
                         mock_touch = MagicMock()
                         mock_touch.start.return_value = True
-                        MockTouch.return_value = mock_touch
+                        mock_touch_cls.return_value = mock_touch
 
                         recorder = Recorder(
                             name="test",
@@ -293,19 +293,19 @@ class TestRecorderStart:
         with tempfile.TemporaryDirectory() as tmpdir:
             output_dir = Path(tmpdir) / "tests" / "test"
 
-            with patch("mutcli.core.recorder.ScrcpyService") as MockScrcpy:
-                with patch("mutcli.core.recorder.TouchMonitor") as MockTouch:
+            with patch("mutcli.core.recorder.ScrcpyService") as mock_scrcpy_cls:
+                with patch("mutcli.core.recorder.TouchMonitor") as mock_touch_cls:
                     mock_scrcpy = MagicMock()
                     mock_scrcpy.connect.return_value = True
                     mock_scrcpy.start_recording.return_value = {
                         "success": True,
                         "recording_start_time": time.time(),
                     }
-                    MockScrcpy.return_value = mock_scrcpy
+                    mock_scrcpy_cls.return_value = mock_scrcpy
 
                     mock_touch = MagicMock()
                     mock_touch.start.return_value = True
-                    MockTouch.return_value = mock_touch
+                    mock_touch_cls.return_value = mock_touch
 
                     recorder = Recorder(
                         name="test",
@@ -322,10 +322,10 @@ class TestRecorderStart:
         with tempfile.TemporaryDirectory() as tmpdir:
             output_dir = Path(tmpdir) / "tests" / "test"
 
-            with patch("mutcli.core.recorder.ScrcpyService") as MockScrcpy:
+            with patch("mutcli.core.recorder.ScrcpyService") as mock_scrcpy_cls:
                 mock_scrcpy = MagicMock()
                 mock_scrcpy.connect.return_value = False
-                MockScrcpy.return_value = mock_scrcpy
+                mock_scrcpy_cls.return_value = mock_scrcpy
 
                 recorder = Recorder(
                     name="test",
@@ -344,19 +344,19 @@ class TestRecorderStart:
         with tempfile.TemporaryDirectory() as tmpdir:
             output_dir = Path(tmpdir) / "tests" / "test"
 
-            with patch("mutcli.core.recorder.ScrcpyService") as MockScrcpy:
-                with patch("mutcli.core.recorder.TouchMonitor") as MockTouch:
+            with patch("mutcli.core.recorder.ScrcpyService") as mock_scrcpy_cls:
+                with patch("mutcli.core.recorder.TouchMonitor") as mock_touch_cls:
                     mock_scrcpy = MagicMock()
                     mock_scrcpy.connect.return_value = True
                     mock_scrcpy.start_recording.return_value = {
                         "success": True,
                         "recording_start_time": time.time(),
                     }
-                    MockScrcpy.return_value = mock_scrcpy
+                    mock_scrcpy_cls.return_value = mock_scrcpy
 
                     mock_touch = MagicMock()
                     mock_touch.start.return_value = False
-                    MockTouch.return_value = mock_touch
+                    mock_touch_cls.return_value = mock_touch
 
                     recorder = Recorder(
                         name="test",
@@ -379,8 +379,8 @@ class TestRecorderStop:
             output_dir = Path(tmpdir) / "tests" / "test"
             state_file = Path(tmpdir) / ".claude" / "recording-state.json"
 
-            with patch("mutcli.core.recorder.ScrcpyService") as MockScrcpy:
-                with patch("mutcli.core.recorder.TouchMonitor") as MockTouch:
+            with patch("mutcli.core.recorder.ScrcpyService") as mock_scrcpy_cls:
+                with patch("mutcli.core.recorder.TouchMonitor") as mock_touch_cls:
                     with patch.object(Recorder, "STATE_FILE", state_file):
                         mock_scrcpy = MagicMock()
                         mock_scrcpy.connect.return_value = True
@@ -392,7 +392,7 @@ class TestRecorderStop:
                             "success": True,
                             "duration_seconds": 5.0,
                         }
-                        MockScrcpy.return_value = mock_scrcpy
+                        mock_scrcpy_cls.return_value = mock_scrcpy
 
                         # Create mock touch events
                         from mutcli.core.touch_monitor import TouchEvent
@@ -405,7 +405,7 @@ class TestRecorderStop:
                         mock_touch = MagicMock()
                         mock_touch.start.return_value = True
                         mock_touch.get_events.return_value = mock_events
-                        MockTouch.return_value = mock_touch
+                        mock_touch_cls.return_value = mock_touch
 
                         recorder = Recorder(
                             name="test",
@@ -433,8 +433,8 @@ class TestRecorderStop:
             output_dir = Path(tmpdir) / "tests" / "test"
             state_file = Path(tmpdir) / ".claude" / "recording-state.json"
 
-            with patch("mutcli.core.recorder.ScrcpyService") as MockScrcpy:
-                with patch("mutcli.core.recorder.TouchMonitor") as MockTouch:
+            with patch("mutcli.core.recorder.ScrcpyService") as mock_scrcpy_cls:
+                with patch("mutcli.core.recorder.TouchMonitor") as mock_touch_cls:
                     with patch.object(Recorder, "STATE_FILE", state_file):
                         mock_scrcpy = MagicMock()
                         mock_scrcpy.connect.return_value = True
@@ -447,7 +447,7 @@ class TestRecorderStop:
                             "duration_seconds": 10.0,
                             "output_path": str(output_dir / "recording" / "recording.mp4"),
                         }
-                        MockScrcpy.return_value = mock_scrcpy
+                        mock_scrcpy_cls.return_value = mock_scrcpy
 
                         from mutcli.core.touch_monitor import TouchEvent
 
@@ -460,7 +460,7 @@ class TestRecorderStop:
                         mock_touch = MagicMock()
                         mock_touch.start.return_value = True
                         mock_touch.get_events.return_value = mock_events
-                        MockTouch.return_value = mock_touch
+                        mock_touch_cls.return_value = mock_touch
 
                         recorder = Recorder(
                             name="test",
@@ -481,8 +481,8 @@ class TestRecorderStop:
             output_dir = Path(tmpdir) / "tests" / "test"
             state_file = Path(tmpdir) / ".claude" / "recording-state.json"
 
-            with patch("mutcli.core.recorder.ScrcpyService") as MockScrcpy:
-                with patch("mutcli.core.recorder.TouchMonitor") as MockTouch:
+            with patch("mutcli.core.recorder.ScrcpyService") as mock_scrcpy_cls:
+                with patch("mutcli.core.recorder.TouchMonitor") as mock_touch_cls:
                     with patch.object(Recorder, "STATE_FILE", state_file):
                         mock_scrcpy = MagicMock()
                         mock_scrcpy.connect.return_value = True
@@ -491,12 +491,12 @@ class TestRecorderStop:
                             "recording_start_time": time.time(),
                         }
                         mock_scrcpy.stop_recording.return_value = {"success": True}
-                        MockScrcpy.return_value = mock_scrcpy
+                        mock_scrcpy_cls.return_value = mock_scrcpy
 
                         mock_touch = MagicMock()
                         mock_touch.start.return_value = True
                         mock_touch.get_events.return_value = []
-                        MockTouch.return_value = mock_touch
+                        mock_touch_cls.return_value = mock_touch
 
                         recorder = Recorder(
                             name="test",
@@ -515,8 +515,8 @@ class TestRecorderStop:
             output_dir = Path(tmpdir) / "tests" / "test"
             state_file = Path(tmpdir) / ".claude" / "recording-state.json"
 
-            with patch("mutcli.core.recorder.ScrcpyService") as MockScrcpy:
-                with patch("mutcli.core.recorder.TouchMonitor") as MockTouch:
+            with patch("mutcli.core.recorder.ScrcpyService") as mock_scrcpy_cls:
+                with patch("mutcli.core.recorder.TouchMonitor") as mock_touch_cls:
                     with patch.object(Recorder, "STATE_FILE", state_file):
                         mock_scrcpy = MagicMock()
                         mock_scrcpy.connect.return_value = True
@@ -525,12 +525,12 @@ class TestRecorderStop:
                             "recording_start_time": time.time(),
                         }
                         mock_scrcpy.stop_recording.return_value = {"success": True}
-                        MockScrcpy.return_value = mock_scrcpy
+                        mock_scrcpy_cls.return_value = mock_scrcpy
 
                         mock_touch = MagicMock()
                         mock_touch.start.return_value = True
                         mock_touch.get_events.return_value = []
-                        MockTouch.return_value = mock_touch
+                        mock_touch_cls.return_value = mock_touch
 
                         recorder = Recorder(
                             name="test",
@@ -549,8 +549,8 @@ class TestRecorderStop:
             output_dir = Path(tmpdir) / "tests" / "test"
             state_file = Path(tmpdir) / ".claude" / "recording-state.json"
 
-            with patch("mutcli.core.recorder.ScrcpyService") as MockScrcpy:
-                with patch("mutcli.core.recorder.TouchMonitor") as MockTouch:
+            with patch("mutcli.core.recorder.ScrcpyService") as mock_scrcpy_cls:
+                with patch("mutcli.core.recorder.TouchMonitor") as mock_touch_cls:
                     with patch.object(Recorder, "STATE_FILE", state_file):
                         mock_scrcpy = MagicMock()
                         mock_scrcpy.connect.return_value = True
@@ -559,12 +559,12 @@ class TestRecorderStop:
                             "recording_start_time": time.time(),
                         }
                         mock_scrcpy.stop_recording.return_value = {"success": True}
-                        MockScrcpy.return_value = mock_scrcpy
+                        mock_scrcpy_cls.return_value = mock_scrcpy
 
                         mock_touch = MagicMock()
                         mock_touch.start.return_value = True
                         mock_touch.get_events.return_value = []
-                        MockTouch.return_value = mock_touch
+                        mock_touch_cls.return_value = mock_touch
 
                         recorder = Recorder(
                             name="test",
@@ -584,8 +584,8 @@ class TestRecorderStop:
             output_dir = Path(tmpdir) / "tests" / "test"
             state_file = Path(tmpdir) / ".claude" / "recording-state.json"
 
-            with patch("mutcli.core.recorder.ScrcpyService") as MockScrcpy:
-                with patch("mutcli.core.recorder.TouchMonitor") as MockTouch:
+            with patch("mutcli.core.recorder.ScrcpyService") as mock_scrcpy_cls:
+                with patch("mutcli.core.recorder.TouchMonitor") as mock_touch_cls:
                     with patch.object(Recorder, "STATE_FILE", state_file):
                         mock_scrcpy = MagicMock()
                         mock_scrcpy.connect.return_value = True
@@ -594,12 +594,12 @@ class TestRecorderStop:
                             "recording_start_time": time.time(),
                         }
                         mock_scrcpy.stop_recording.return_value = {"success": True}
-                        MockScrcpy.return_value = mock_scrcpy
+                        mock_scrcpy_cls.return_value = mock_scrcpy
 
                         mock_touch = MagicMock()
                         mock_touch.start.return_value = True
                         mock_touch.get_events.return_value = []
-                        MockTouch.return_value = mock_touch
+                        mock_touch_cls.return_value = mock_touch
 
                         recorder = Recorder(
                             name="test",

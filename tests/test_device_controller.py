@@ -1,6 +1,6 @@
 """Tests for DeviceController."""
 
-from unittest.mock import patch, MagicMock, call
+from unittest.mock import call, patch
 
 import pytest
 
@@ -63,7 +63,7 @@ class TestDoubleTap:
 
     def test_double_tap_default_delay(self, controller):
         """Verify default delay between taps is 100ms."""
-        with patch.object(controller, "_adb") as mock_adb, \
+        with patch.object(controller, "_adb"), \
              patch("mutcli.core.device_controller.time.sleep") as mock_sleep:
             controller.double_tap(100, 200)
 
@@ -71,7 +71,7 @@ class TestDoubleTap:
 
     def test_double_tap_custom_delay(self, controller):
         """Verify custom delay is applied correctly."""
-        with patch.object(controller, "_adb") as mock_adb, \
+        with patch.object(controller, "_adb"), \
              patch("mutcli.core.device_controller.time.sleep") as mock_sleep:
             controller.double_tap(100, 200, delay_ms=50)
 
