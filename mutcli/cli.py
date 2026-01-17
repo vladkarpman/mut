@@ -255,29 +255,92 @@ def _process_recording(
 ) -> None:
     """Process a recording and generate YAML test via approval UI.
 
+    Pipeline:
+    1. Check for existing analysis.json (recovery)
+    2. Load touch_events.json
+    3. Detect typing sequences
+    4. Collapse steps (merge typing sequences)
+    5. Extract frames for collapsed steps
+    6. AI analysis on collapsed steps
+    7. Save analysis.json
+    8. Build preview_steps from analysis data
+    9. Start preview server
+    10. Generate YAML
+
     Args:
         recording_dir: Path to the recording directory (contains touch_events.json)
-        test_dir: Path to the test directory (parent of recording_dir)
+            Note: For flattened structure, this is the same as test_dir
+        test_dir: Path to the test directory
         test_name: Name of the test
         app_package: App package name (optional, will try to detect)
     """
     import json
 
     from mutcli.core.ai_analyzer import AIAnalyzer
+    from mutcli.core.analysis_io import load_analysis, save_analysis
     from mutcli.core.config import ConfigLoader
     from mutcli.core.frame_extractor import FrameExtractor
-    from mutcli.core.preview_server import PreviewServer, PreviewStep
-    from mutcli.core.step_analyzer import StepAnalyzer
+    from mutcli.core.step_analyzer import AnalyzedStep, StepAnalyzer
+    from mutcli.core.step_collapsing import collapse_steps
     from mutcli.core.typing_detector import TypingDetector
     from mutcli.core.verification_suggester import VerificationSuggester
-    from mutcli.core.yaml_generator import YAMLGenerator
 
     console.print("[blue]Processing recording...[/blue]")
 
-    # Load touch events
-    touch_events_path = recording_dir / "touch_events.json"
+    # Get app package and config early (needed for analysis.json)
+    if not app_package:
+        try:
+            config = ConfigLoader.load(require_api_key=False)
+            app_package = config.app or "com.example.app"
+        except Exception:
+            config = None
+            app_package = "com.example.app"
+    else:
+        try:
+            config = ConfigLoader.load(require_api_key=False)
+        except Exception:
+            config = None
+
+    # 1. Check for existing analysis.json (recovery feature)
+    existing_analysis = load_analysis(test_dir)
+    if existing_analysis:
+        console.print("[dim]Found existing analysis.json, skipping AI analysis...[/dim]")
+        # Use existing analysis data directly
+        screen_width = existing_analysis.screen_width
+        screen_height = existing_analysis.screen_height
+        # Build preview_steps from saved analysis
+        preview_steps = _build_preview_steps_from_analysis(existing_analysis, test_dir)
+        # Get video duration for preview
+        video_path = test_dir / "video.mp4"
+        video_duration = "0:00"
+        if video_path.exists():
+            extractor = FrameExtractor(video_path)
+            duration_secs = extractor.get_duration()
+            if duration_secs > 0:
+                mins = int(duration_secs // 60)
+                secs = int(duration_secs % 60)
+                video_duration = f"{mins}:{secs:02d}"
+        # Skip to preview server (step 9)
+        _start_preview_and_generate_yaml(
+            preview_steps=preview_steps,
+            test_name=test_name,
+            app_package=app_package,
+            recording_dir=test_dir,
+            test_dir=test_dir,
+            screen_width=screen_width,
+            screen_height=screen_height,
+            video_duration=video_duration,
+            typing_sequences=[],  # Not needed for recovery
+        )
+        return
+
+    # 2. Load touch events
+    touch_events_path = test_dir / "touch_events.json"
     if not touch_events_path.exists():
-        console.print(f"[red]Error:[/red] touch_events.json not found in {recording_dir}")
+        # Fall back to recording_dir for backward compatibility
+        touch_events_path = recording_dir / "touch_events.json"
+    if not touch_events_path.exists():
+        console.print(f"[red]Error:[/red] touch_events.json not found in {test_dir}")
         console.print("\nMake sure recording completed successfully.")
         raise typer.Exit(2)
 
@@ -298,7 +361,7 @@ def _process_recording(
     screen_width = touch_events[0].get("screen_width", 1080) if touch_events else 1080
     screen_height = touch_events[0].get("screen_height", 2400) if touch_events else 2400
 
-    # 1. Detect typing sequences
+    # 3. Detect typing sequences
     console.print("  [dim]Detecting typing patterns...[/dim]")
     typing_detector = TypingDetector(screen_height)
     typing_sequences = typing_detector.detect(touch_events)
@@ -306,14 +369,24 @@ def _process_recording(
     if typing_sequences:
         console.print(f"    Found {len(typing_sequences)} typing sequence(s)")
 
-    # 2. Extract frames from video (if exists)
-    video_path = recording_dir / "video.mp4"
-    screenshots_dir = recording_dir / "screenshots"
+    # 4. Collapse steps (merge typing sequences into single "type" steps)
+    console.print("  [dim]Collapsing steps...[/dim]")
+    collapsed_steps = collapse_steps(touch_events, typing_sequences)
+    console.print(f"    {len(touch_events)} events -> {len(collapsed_steps)} steps")
+
+    # 5. Extract frames for collapsed steps
+    video_path = test_dir / "video.mp4"
+    if not video_path.exists():
+        # Fall back to recording_dir for backward compatibility
+        video_path = recording_dir / "video.mp4"
+    screenshots_dir = test_dir / "screenshots"
     video_duration = "0:00"
     if video_path.exists():
         console.print("  [dim]Extracting frames...[/dim]")
         extractor = FrameExtractor(video_path)
-        extracted = extractor.extract_for_touches(touch_events, screenshots_dir)
+        extracted = extractor.extract_for_collapsed_steps(
+            collapsed_steps, touch_events, screenshots_dir
+        )
         console.print(f"    Extracted {len(extracted)} frames")
         # Get video duration
         duration_secs = extractor.get_duration()
@@ -324,22 +397,8 @@ def _process_recording(
     else:
         console.print("  [dim]No video found, skipping frame extraction[/dim]")
 
-    # Get app package from config if not provided
-    if not app_package:
-        try:
-            config = ConfigLoader.load(require_api_key=False)
-            app_package = config.app or "com.example.app"
-        except Exception:
-            config = None
-            app_package = "com.example.app"
-    else:
-        try:
-            config = ConfigLoader.load(require_api_key=False)
-        except Exception:
-            config = None
-
-    # 3. Analyze steps with AI (if API key available)
-    analyzed_steps: list = []
+    # 6. AI analysis on collapsed steps (if API key available)
+    analyzed_steps: list[AnalyzedStep] = []
     verifications_raw: list[dict] = []
 
     try:
@@ -348,20 +407,20 @@ def _process_recording(
             step_analyzer = StepAnalyzer(ai)
 
             # Run async analysis with progress bar
-            async def run_analysis() -> list:
+            async def run_analysis() -> list[AnalyzedStep]:
                 with Progress(
                     TextColumn("  Analyzing..."),
                     BarColumn(),
                     TextColumn("{task.percentage:>3.0f}%"),
                     console=console,
                 ) as progress:
-                    task = progress.add_task("", total=len(touch_events))
+                    task = progress.add_task("", total=len(collapsed_steps))
 
                     def on_progress(completed: int, total: int) -> None:
                         progress.update(task, completed=completed)
 
-                    return await step_analyzer.analyze_all_parallel(
-                        touch_events, screenshots_dir, on_progress
+                    return await step_analyzer.analyze_collapsed_steps_parallel(
+                        collapsed_steps, screenshots_dir, on_progress
                     )
 
             analyzed_steps = asyncio.run(run_analysis())
@@ -382,11 +441,61 @@ def _process_recording(
     except Exception as e:
         console.print(f"  [yellow]AI analysis skipped: {e}[/yellow]")
 
-    # 4. Build preview steps
+    # 7. Build preview steps from collapsed steps and analysis
+    preview_steps = _build_preview_steps(
+        collapsed_steps, analyzed_steps, screenshots_dir, test_dir
+    )
+
+    # 8. Save analysis.json for recovery
+    if analyzed_steps or collapsed_steps:
+        analysis_data = _build_analysis_data(
+            collapsed_steps=collapsed_steps,
+            analyzed_steps=analyzed_steps,
+            app_package=app_package,
+            screen_width=screen_width,
+            screen_height=screen_height,
+        )
+        save_analysis(analysis_data, test_dir)
+        console.print("  [dim]Saved analysis.json[/dim]")
+
+    # 9. Start preview server and generate YAML
+    _start_preview_and_generate_yaml(
+        preview_steps=preview_steps,
+        test_name=test_name,
+        app_package=app_package,
+        recording_dir=test_dir,
+        test_dir=test_dir,
+        screen_width=screen_width,
+        screen_height=screen_height,
+        video_duration=video_duration,
+        typing_sequences=typing_sequences,
+        verifications_raw=verifications_raw,
+    )
+
+
+def _build_preview_steps(
+    collapsed_steps: list,
+    analyzed_steps: list,
+    screenshots_dir: Path,
+    test_dir: Path,
+) -> list:
+    """Build preview steps from collapsed steps and analysis.
+
+    Args:
+        collapsed_steps: List of CollapsedStep objects
+        analyzed_steps: List of AnalyzedStep objects (may be empty)
+        screenshots_dir: Directory containing screenshots
+        test_dir: Test directory for path references
+
+    Returns:
+        List of PreviewStep objects
+    """
+    from mutcli.core.preview_server import PreviewStep
+
     preview_steps: list[PreviewStep] = []
 
     # Add initial state (app launched) as step 0
-    initial_screenshot = screenshots_dir / "before_000.png"
+    initial_screenshot = screenshots_dir / "step_001_before.png"
     preview_steps.append(PreviewStep(
         index=0,
         action="app_launched",
@@ -398,56 +507,242 @@ def _process_recording(
         after_description="",
         timestamp=0.0,
         frames=(
-            {"before": "recording/screenshots/before_000.png"}
+            {"before": "screenshots/step_001_before.png"}
             if initial_screenshot.exists() else {}
         ),
     ))
 
-    # Add touch events as steps 1, 2, 3, ...
-    for i, event in enumerate(touch_events):
-        step_num = i + 1  # 1-based step number
+    # Build a lookup from step index to analyzed step
+    analyzed_lookup = {a.index: a for a in analyzed_steps}
+
+    # Add collapsed steps
+    for step in collapsed_steps:
+        step_num = step.index
+        step_str = f"{step_num:03d}"
 
         # Find matching analyzed step if available
-        element_text = None
-        action = event.get("event_type", "tap")
-        before_desc = ""
-        after_desc = ""
+        analyzed = analyzed_lookup.get(step_num - 1)  # analyzed_steps use 0-based index
+        element_text = analyzed.element_text if analyzed else None
+        before_desc = analyzed.before_description if analyzed else ""
+        after_desc = analyzed.after_description if analyzed else ""
+        suggested_verification = analyzed.suggested_verification if analyzed else None
 
-        for analyzed in analyzed_steps:
-            if analyzed.index == i:
-                element_text = analyzed.element_text
-                before_desc = analyzed.before_description or ""
-                after_desc = analyzed.after_description or ""
-                break
+        # Get coordinates based on action type
+        if step.coordinates:
+            coords = (step.coordinates["x"], step.coordinates["y"])
+        elif step.start:
+            coords = (step.start["x"], step.start["y"])
+        else:
+            coords = (0, 0)
 
         # Screenshots use step_NNN_before.png and step_NNN_after.png
-        before_path = screenshots_dir / f"step_{step_num:03d}_before.png"
-        after_path = screenshots_dir / f"step_{step_num:03d}_after.png"
-        timestamp = event.get("timestamp", 0.0)
-        direction = event.get("direction")  # For swipe events
+        before_path = screenshots_dir / f"step_{step_str}_before.png"
+        after_path = screenshots_dir / f"step_{step_str}_after.png"
 
-        # Build frames dict with both before and after
+        # Build frames dict
         frames: dict[str, str | None] = {}
         if before_path.exists():
-            frames["before"] = f"recording/screenshots/step_{step_num:03d}_before.png"
+            frames["before"] = f"screenshots/step_{step_str}_before.png"
         if after_path.exists():
-            frames["after"] = f"recording/screenshots/step_{step_num:03d}_after.png"
+            frames["after"] = f"screenshots/step_{step_str}_after.png"
 
         preview_steps.append(PreviewStep(
             index=step_num,
-            action=action,
+            action=step.action,
             element_text=element_text,
-            coordinates=(event.get("x", 0), event.get("y", 0)),
+            coordinates=coords,
             screenshot_path=str(before_path) if before_path.exists() else None,
             enabled=True,
             before_description=before_desc,
             after_description=after_desc,
-            direction=direction,
-            timestamp=timestamp,
+            direction=step.direction,
+            timestamp=step.timestamp,
             frames=frames,
+            suggested_verification=suggested_verification,
         ))
 
-    # 5. Start preview server and wait for approval
+    return preview_steps
+
+
+def _build_preview_steps_from_analysis(
+    analysis_data,
+    test_dir: Path,
+) -> list:
+    """Build preview steps from saved analysis.json data.
+
+    Args:
+        analysis_data: AnalysisData loaded from analysis.json
+        test_dir: Test directory for path references
+
+    Returns:
+        List of PreviewStep objects
+    """
+    from mutcli.core.preview_server import PreviewStep
+
+    preview_steps: list[PreviewStep] = []
+    screenshots_dir = test_dir / "screenshots"
+
+    # Add initial state (app launched) as step 0
+    initial_screenshot = screenshots_dir / "step_001_before.png"
+    preview_steps.append(PreviewStep(
+        index=0,
+        action="app_launched",
+        element_text=None,
+        coordinates=(0, 0),
+        screenshot_path=str(initial_screenshot) if initial_screenshot.exists() else None,
+        enabled=True,
+        before_description="Initial app state after launch",
+        after_description="",
+        timestamp=0.0,
+        frames=(
+            {"before": "screenshots/step_001_before.png"}
+            if initial_screenshot.exists() else {}
+        ),
+    ))
+
+    # Add steps from analysis data
+    for step_data in analysis_data.steps:
+        step_num = step_data.get("index", 0)
+        step_str = f"{step_num:03d}"
+
+        coords = step_data.get("coordinates", (0, 0))
+        if isinstance(coords, dict):
+            coords = (coords.get("x", 0), coords.get("y", 0))
+        elif isinstance(coords, list):
+            coords = tuple(coords) if len(coords) >= 2 else (0, 0)
+
+        # Screenshots use step_NNN_before.png and step_NNN_after.png
+        before_path = screenshots_dir / f"step_{step_str}_before.png"
+        after_path = screenshots_dir / f"step_{step_str}_after.png"
+
+        # Build frames dict
+        frames: dict[str, str | None] = {}
+        if before_path.exists():
+            frames["before"] = f"screenshots/step_{step_str}_before.png"
+        if after_path.exists():
+            frames["after"] = f"screenshots/step_{step_str}_after.png"
+
+        preview_steps.append(PreviewStep(
+            index=step_num,
+            action=step_data.get("action", "tap"),
+            element_text=step_data.get("element_text"),
+            coordinates=coords,
+            screenshot_path=str(before_path) if before_path.exists() else None,
+            enabled=step_data.get("enabled", True),
+            before_description=step_data.get("before_description", ""),
+            after_description=step_data.get("after_description", ""),
+            direction=step_data.get("direction"),
+            timestamp=step_data.get("timestamp", 0.0),
+            frames=frames,
+            suggested_verification=step_data.get("suggested_verification"),
+        ))
+
+    return preview_steps
+
+
+def _build_analysis_data(
+    collapsed_steps: list,
+    analyzed_steps: list,
+    app_package: str,
+    screen_width: int,
+    screen_height: int,
+):
+    """Build AnalysisData from collapsed steps and analysis.
+
+    Args:
+        collapsed_steps: List of CollapsedStep objects
+        analyzed_steps: List of AnalyzedStep objects
+        app_package: Android package name
+        screen_width: Screen width in pixels
+        screen_height: Screen height in pixels
+
+    Returns:
+        AnalysisData object
+    """
+    from mutcli.core.analysis_io import AnalysisData
+
+    # Build a lookup from step index to analyzed step
+    analyzed_lookup = {a.index: a for a in analyzed_steps}
+
+    steps_data = []
+    for step in collapsed_steps:
+        # Get coordinates based on action type
+        if step.coordinates:
+            coords = {"x": step.coordinates["x"], "y": step.coordinates["y"]}
+        elif step.start:
+            coords = {"x": step.start["x"], "y": step.start["y"]}
+        else:
+            coords = {"x": 0, "y": 0}
+
+        # Find matching analyzed step (analyzed_steps use 0-based index)
+        analyzed = analyzed_lookup.get(step.index - 1)
+
+        step_dict = {
+            "index": step.index,
+            "action": step.action,
+            "timestamp": step.timestamp,
+            "coordinates": coords,
+            "direction": step.direction,
+            "element_text": analyzed.element_text if analyzed else None,
+            "before_description": analyzed.before_description if analyzed else "",
+            "after_description": analyzed.after_description if analyzed else "",
+            "suggested_verification": analyzed.suggested_verification if analyzed else None,
+            "enabled": True,
+        }
+
+        # Add type-specific fields
+        if step.action == "type":
+            step_dict["tap_count"] = step.tap_count
+            step_dict["text"] = step.text
+        elif step.action == "swipe" and step.end:
+            step_dict["end_coordinates"] = {"x": step.end["x"], "y": step.end["y"]}
+        elif step.action == "long_press" and step.duration_ms:
+            step_dict["duration_ms"] = step.duration_ms
+
+        steps_data.append(step_dict)
+
+    return AnalysisData(
+        app_package=app_package,
+        screen_width=screen_width,
+        screen_height=screen_height,
+        steps=steps_data,
+    )
+
+
+def _start_preview_and_generate_yaml(
+    preview_steps: list,
+    test_name: str,
+    app_package: str,
+    recording_dir: Path,
+    test_dir: Path,
+    screen_width: int,
+    screen_height: int,
+    video_duration: str,
+    typing_sequences: list | None = None,
+    verifications_raw: list | None = None,
+) -> None:
+    """Start preview server and generate YAML on approval.
+
+    Args:
+        preview_steps: List of PreviewStep objects
+        test_name: Name of the test
+        app_package: Android package name
+        recording_dir: Directory containing video/screenshots
+        test_dir: Directory to save test.yaml
+        screen_width: Screen width in pixels
+        screen_height: Screen height in pixels
+        video_duration: Video duration string (e.g., "1:30")
+        typing_sequences: List of typing sequences (for YAML generation)
+        verifications_raw: List of verification dicts for preview
+    """
+    from mutcli.core.preview_server import PreviewServer
+    from mutcli.core.yaml_generator import YAMLGenerator
+
+    if typing_sequences is None:
+        typing_sequences = []
+    if verifications_raw is None:
+        verifications_raw = []
+
     console.print()
     console.print("[blue]Opening approval UI in browser...[/blue]")
     console.print("[dim]Review and edit steps, then click 'Generate YAML'[/dim]")
@@ -469,7 +764,7 @@ def _process_recording(
         console.print("[yellow]Cancelled[/yellow] - no YAML generated")
         return
 
-    # 6. Generate YAML from approved steps
+    # Generate YAML from approved steps
     console.print()
     console.print("[blue]Generating YAML from approved steps...[/blue]")
 
@@ -482,45 +777,33 @@ def _process_recording(
         if s.get("enabled", True) and s.get("action") != "app_launched"
     ]
 
-    # Handle typing sequences - indices shifted by 1 (step 1 = original touch 0)
-    # typing_sequences use original indices, so we need to map step_index-1
-    typing_indices = {seq.start_index + 1 for seq in typing_sequences}
-
     for step_data in enabled_steps:
-        idx = step_data.get("index", 0)
         action = step_data.get("action", "tap")
         element = step_data.get("element_text")
         coords = step_data.get("coordinates", [0, 0])
-
-        # Check if this is part of a typing sequence (using shifted index)
-        if idx in typing_indices:
-            # Find the typing sequence (original index = idx - 1)
-            original_idx = idx - 1
-            for seq in typing_sequences:
-                if seq.start_index == original_idx:
-                    if not seq.text:
-                        # Ask for text now
-                        text = typer.prompt(
-                            f"What text was typed at step {idx}?",
-                            default="",
-                        )
-                        seq.text = text if text else None
-                    if seq.text:
-                        if element:
-                            generator.add_tap(0, 0, element=element)
-                        else:
-                            generator.add_tap(coords[0], coords[1])
-                        generator.add_type(seq.text)
-                    break
-            continue
 
         if action == "tap":
             if element:
                 generator.add_tap(0, 0, element=element)
             else:
                 generator.add_tap(coords[0], coords[1])
+        elif action == "type":
+            # Type action - text field was already tapped in a separate step
+            text = step_data.get("text", "")
+            submit = step_data.get("submit", False)
+            if text:
+                generator.add_type(text, submit=submit)
         elif action == "swipe":
-            generator.add_swipe("up")  # Default, could be enhanced
+            direction = step_data.get("direction", "up")
+            generator.add_swipe(direction)
+        elif action == "long_press":
+            # Long press is not directly supported in YAML format
+            # For now, generate a tap with the element/coordinates
+            # TODO: Add proper long_press support to YAML format
+            if element:
+                generator.add_tap(0, 0, element=element)
+            else:
+                generator.add_tap(coords[0], coords[1])
 
     # Add approved verifications
     for v in result.verifications:

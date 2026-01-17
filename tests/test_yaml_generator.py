@@ -84,6 +84,22 @@ class TestAddType:
 
         assert gen._steps[0] == {"type": {"text": "user@test.com", "field": "Email"}}
 
+    def test_type_with_submit(self):
+        """type with submit=True should include submit flag."""
+        gen = YAMLGenerator("test", "com.example.app")
+
+        gen.add_type("search query", submit=True)
+
+        assert gen._steps[0] == {"type": {"text": "search query", "submit": True}}
+
+    def test_type_with_submit_false(self):
+        """type with submit=False should use simple syntax."""
+        gen = YAMLGenerator("test", "com.example.app")
+
+        gen.add_type("some text", submit=False)
+
+        assert gen._steps[0] == {"type": "some text"}
+
 
 class TestAddSwipe:
     """Test add_swipe method."""

@@ -53,14 +53,19 @@ class YAMLGenerator:
         else:
             self._steps.append({"tap": [x, y]})
 
-    def add_type(self, text: str, field: str | None = None) -> None:
+    def add_type(
+        self, text: str, field: str | None = None, submit: bool = False
+    ) -> None:
         """Add type action.
 
         Args:
             text: Text to type
             field: Target field name (optional, uses rich syntax when provided)
+            submit: Whether to press Enter after typing (optional)
         """
-        if field:
+        if submit:
+            self._steps.append({"type": {"text": text, "submit": True}})
+        elif field:
             self._steps.append({"type": {"text": text, "field": field}})
         else:
             self._steps.append({"type": text})
