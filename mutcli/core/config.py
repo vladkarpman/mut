@@ -210,3 +210,37 @@ class ConfigLoader:
             timeouts=timeouts,
             retry=retry,
         )
+
+
+def setup_logging(verbose: bool, log_dir: Path | None) -> Path | None:
+    """Configure file-based DEBUG logging.
+
+    Args:
+        verbose: Enable logging when True
+        log_dir: Directory to write debug.log
+
+    Returns:
+        Path to log file if created, None otherwise
+    """
+    if not verbose or log_dir is None:
+        return None
+
+    import logging
+
+    log_file = log_dir / "debug.log"
+    log_dir.mkdir(parents=True, exist_ok=True)
+
+    # Create file handler
+    handler = logging.FileHandler(log_file, mode="w")
+    handler.setLevel(logging.DEBUG)
+    handler.setFormatter(logging.Formatter(
+        "%(asctime)s.%(msecs)03d [%(levelname)-5s] %(name)-20s | %(message)s",
+        datefmt="%Y-%m-%d %H:%M:%S"
+    ))
+
+    # Configure root mut logger
+    mut_logger = logging.getLogger("mut")
+    mut_logger.setLevel(logging.DEBUG)
+    mut_logger.addHandler(handler)
+
+    return log_file
