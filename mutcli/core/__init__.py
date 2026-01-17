@@ -10,6 +10,7 @@ from mutcli.core.recorder import Recorder, RecordingState
 from mutcli.core.report import ReportGenerator
 from mutcli.core.scrcpy_service import ScrcpyService
 from mutcli.core.touch_monitor import TouchEvent, TouchMonitor
+from mutcli.core.typing_detector import TypingDetector, TypingSequence
 from mutcli.core.yaml_generator import YAMLGenerator
 
 __all__ = [
@@ -31,5 +32,7 @@ __all__ = [
     "TimeoutConfig",
     "TouchEvent",
     "TouchMonitor",
+    "TypingDetector",
+    "TypingSequence",
     "YAMLGenerator",
 ]
