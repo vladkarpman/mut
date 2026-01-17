@@ -130,11 +130,10 @@ class Recorder:
         if self._recording:
             return {"success": False, "error": "Already recording"}
 
-        # Create directory structure
-        recording_dir = self._output_dir / "recording"
-        recording_dir.mkdir(parents=True, exist_ok=True)
+        # Create output directory
+        self._output_dir.mkdir(parents=True, exist_ok=True)
 
-        video_path = str(recording_dir / "recording.mp4")
+        video_path = str(self._output_dir / "video.mp4")
 
         try:
             # Connect ScrcpyService
@@ -152,9 +151,13 @@ class Recorder:
                     "error": f"Failed to start video recording: {recording_result.get('error')}",
                 }
 
-            # Start touch monitor
+            # Get video start time for synchronization
+            video_start_time = recording_result.get("recording_start_time")
+
+            # Start touch monitor with video start time as reference
+            # This ensures touch timestamps match video timestamps
             self._touch_monitor = TouchMonitor(self._device_id)
-            if not self._touch_monitor.start():
+            if not self._touch_monitor.start(reference_time=video_start_time):
                 self._cleanup_scrcpy()
                 self._touch_monitor = None
                 return {"success": False, "error": "Failed to start touch monitor"}
@@ -221,8 +224,7 @@ class Recorder:
                 logger.warning(f"Error disconnecting scrcpy: {e}")
 
         # Save touch events with exception handling (Issue 4)
-        recording_dir = self._output_dir / "recording"
-        touch_events_path = recording_dir / "touch_events.json"
+        touch_events_path = self._output_dir / "touch_events.json"
 
         try:
             events_data = [event.to_dict() for event in events]

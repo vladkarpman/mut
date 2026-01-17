@@ -159,7 +159,6 @@ class TestRecorderStart:
 
                     assert result["success"] is True
                     assert output_dir.exists()
-                    assert (output_dir / "recording").exists()
 
     def test_start_connects_scrcpy_service(self):
         """start() should connect ScrcpyService."""
@@ -218,7 +217,7 @@ class TestRecorderStart:
 
                     recorder.start()
 
-                    expected_video_path = str(output_dir / "recording" / "recording.mp4")
+                    expected_video_path = str(output_dir / "video.mp4")
                     mock_scrcpy.start_recording.assert_called_once_with(expected_video_path)
 
     def test_start_starts_touch_monitor(self):
@@ -416,7 +415,7 @@ class TestRecorderStop:
                         recorder.start()
                         recorder.stop()
 
-                        touch_events_file = output_dir / "recording" / "touch_events.json"
+                        touch_events_file = output_dir / "touch_events.json"
                         assert touch_events_file.exists()
 
                         with open(touch_events_file) as f:
@@ -445,7 +444,7 @@ class TestRecorderStop:
                         mock_scrcpy.stop_recording.return_value = {
                             "success": True,
                             "duration_seconds": 10.0,
-                            "output_path": str(output_dir / "recording" / "recording.mp4"),
+                            "output_path": str(output_dir / "video.mp4"),
                         }
                         mock_scrcpy_cls.return_value = mock_scrcpy
 
