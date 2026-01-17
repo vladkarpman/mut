@@ -20,6 +20,7 @@ class FrameExtractor:
 
     Uses PyAV for efficient video seeking and frame extraction.
     Uses midpoint approach for non-overlapping time ranges.
+    Uses frame timestamps file for accurate wall-clock time mapping.
 
     Frame extraction by gesture type:
     - tap: before, touch, after (3 frames)
@@ -45,6 +46,64 @@ class FrameExtractor:
             video_path: Path to the video file
         """
         self._video_path = Path(video_path)
+        self._frame_timestamps: list[float] | None = None
+        self._load_timestamps()
+
+    def _load_timestamps(self) -> None:
+        """Load frame timestamps from companion JSON file if it exists."""
+        import json
+        timestamps_path = self._video_path.with_suffix(".timestamps.json")
+        if timestamps_path.exists():
+            try:
+                with open(timestamps_path) as f:
+                    self._frame_timestamps = json.load(f)
+                logger.info(f"Loaded {len(self._frame_timestamps)} frame timestamps")
+            except Exception as e:
+                logger.warning(f"Failed to load timestamps: {e}")
+                self._frame_timestamps = None
+
+    def _find_frame_index(self, target_time: float) -> int:
+        """Find frame index closest to target wall-clock time.
+
+        Uses binary search on frame timestamps.
+
+        Args:
+            target_time: Target time in seconds
+
+        Returns:
+            Frame index (0-based)
+        """
+        if not self._frame_timestamps:
+            # Fallback: assume 30fps
+            return int(target_time * 30)
+
+        import bisect
+        idx = bisect.bisect_left(self._frame_timestamps, target_time)
+
+        # Return closest frame (check both idx-1 and idx)
+        if idx == 0:
+            return 0
+        if idx >= len(self._frame_timestamps):
+            return len(self._frame_timestamps) - 1
+
+        # Choose the closer one
+        if (target_time - self._frame_timestamps[idx - 1] <
+                self._frame_timestamps[idx] - target_time):
+            return idx - 1
+        return idx
+
+    def _get_actual_duration(self) -> float:
+        """Get actual recording duration from timestamps, with fallback to video.
+
+        When timestamps file exists, returns the last frame's wall-clock time.
+        This is more accurate than video duration which is based on frame count.
+
+        Returns:
+            Duration in seconds
+        """
+        if self._frame_timestamps:
+            return self._frame_timestamps[-1]
+        return self.get_duration()
 
     def get_duration(self) -> float:
         """Get video duration in seconds.
@@ -68,37 +127,50 @@ class FrameExtractor:
     def extract_frame(self, timestamp_sec: float) -> bytes | None:
         """Extract single frame at timestamp as PNG bytes.
 
-        Uses accurate frame extraction by seeking to nearest keyframe
-        then decoding forward to the target timestamp.
+        If frame timestamps are available, uses frame index for accurate
+        wall-clock time extraction with efficient seeking.
 
         Args:
-            timestamp_sec: Timestamp in seconds
+            timestamp_sec: Timestamp in seconds (wall-clock time)
 
         Returns:
             PNG image bytes, or None on error
         """
+        # Find target frame index using timestamps if available
+        target_frame_idx = self._find_frame_index(timestamp_sec)
+
         try:
             with av.open(str(self._video_path)) as container:
                 stream = container.streams.video[0]
                 time_base = float(stream.time_base) if stream.time_base else 1.0 / 30
 
-                # Seek to keyframe before target (backward=True seeks to keyframe)
-                target_pts = int(timestamp_sec / time_base)
-                container.seek(target_pts, stream=stream, backward=True)
+                # Seek to keyframe before target (use estimated PTS from frame rate)
+                # This is approximate but gets us close for efficient decoding
+                estimated_pts = int((target_frame_idx / 30.0) / time_base)
+                seek_pts = max(0, estimated_pts - int(1.0 / time_base))
+                container.seek(seek_pts, stream=stream, backward=True)
 
-                # Decode frames until we reach or pass the target timestamp
+                # Decode frames and find the target by index
+                # Track frame indices by counting from seek position
                 best_frame = None
-                target_time = timestamp_sec
+                frames_decoded = 0
 
                 for frame in container.decode(video=0):
-                    frame_time = float(frame.pts * time_base) if frame.pts else 0.0
+                    # Get actual frame index from PTS
+                    frame_idx = int(frame.pts * time_base * 30) if frame.pts else frames_decoded
 
-                    # Keep the frame closest to target without going too far past
-                    if best_frame is None or frame_time <= target_time + 0.05:
+                    # Keep best frame (closest to target without going too far)
+                    if best_frame is None or frame_idx <= target_frame_idx:
                         best_frame = frame
 
-                    # Stop if we've passed the target by more than 100ms
-                    if frame_time > target_time + 0.1:
+                    # Stop if we've passed the target
+                    if frame_idx >= target_frame_idx:
+                        break
+
+                    frames_decoded += 1
+
+                    # Safety limit
+                    if frames_decoded > 100:
                         break
 
                 if best_frame is not None:
@@ -107,7 +179,7 @@ class FrameExtractor:
                     img.save(buffer, format="PNG")
                     return buffer.getvalue()
 
-                logger.warning(f"No frames found at timestamp {timestamp_sec}s")
+                logger.warning(f"Frame {target_frame_idx} not found for timestamp {timestamp_sec}s")
                 return None
 
         except FileNotFoundError:
@@ -254,8 +326,8 @@ class FrameExtractor:
         if not touch_events:
             return extracted_paths
 
-        # Get video duration for boundary calculation
-        video_duration = self.get_duration()
+        # Get actual recording duration for boundary calculation
+        video_duration = self._get_actual_duration()
         if video_duration <= 0:
             logger.warning("Could not get video duration, using fallback")
             video_duration = touch_events[-1].get("timestamp", 0.0) + 2.0
@@ -472,8 +544,8 @@ class FrameExtractor:
         if not collapsed_steps or not touch_events:
             return extracted_paths
 
-        # Get video duration for boundary calculation
-        video_duration = self.get_duration()
+        # Get actual recording duration for boundary calculation
+        video_duration = self._get_actual_duration()
         if video_duration <= 0:
             logger.warning("Could not get video duration, using fallback")
             last_event = touch_events[-1]
