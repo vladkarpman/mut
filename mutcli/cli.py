@@ -209,8 +209,12 @@ def stop(
     """Process recording and generate YAML test."""
     import json
 
+    from mutcli.core.ai_analyzer import AIAnalyzer
     from mutcli.core.config import ConfigLoader
     from mutcli.core.frame_extractor import FrameExtractor
+    from mutcli.core.step_analyzer import StepAnalyzer
+    from mutcli.core.typing_detector import TypingDetector
+    from mutcli.core.verification_suggester import VerificationSuggester
     from mutcli.core.yaml_generator import YAMLGenerator
 
     # Find recording directory
@@ -242,14 +246,32 @@ def stop(
 
     console.print(f"  Found {len(touch_events)} touch events")
 
-    # Extract frames from video (if exists)
+    # Get screen dimensions for typing detection
+    screen_height = touch_events[0].get("screen_height", 2400) if touch_events else 2400
+
+    # 1. Detect typing sequences
+    console.print("  [dim]Detecting typing patterns...[/dim]")
+    typing_detector = TypingDetector(screen_height)
+    typing_sequences = typing_detector.detect(touch_events)
+
+    if typing_sequences:
+        console.print(f"    Found {len(typing_sequences)} typing sequence(s)")
+        # Ask user for typed text
+        for seq in typing_sequences:
+            text = typer.prompt(
+                f"    What text was typed at step {seq.start_index + 1}?",
+                default="",
+            )
+            seq.text = text if text else None
+
+    # 2. Extract frames from video (if exists)
     video_path = recording_dir / "recording.mp4"
+    screenshots_dir = recording_dir / "screenshots"
     if video_path.exists():
-        console.print("  Extracting frames...")
+        console.print("  [dim]Extracting frames...[/dim]")
         extractor = FrameExtractor(video_path)
-        screenshots_dir = recording_dir / "screenshots"
         extracted = extractor.extract_for_touches(touch_events, screenshots_dir)
-        console.print(f"  Extracted {len(extracted)} frames")
+        console.print(f"    Extracted {len(extracted)} frames")
     else:
         console.print("  [dim]No video found, skipping frame extraction[/dim]")
 
@@ -258,28 +280,48 @@ def stop(
         config = ConfigLoader.load(require_api_key=False)
         app_package = config.app or "com.example.app"
     except Exception:
+        config = None
         app_package = "com.example.app"
 
-    # Generate YAML
-    console.print("  Generating YAML...")
+    # 3. Analyze steps with AI (if API key available)
+    analyzed_steps = []
+    verifications = []
+
+    try:
+        if config and config.google_api_key:
+            console.print("  [dim]Analyzing with AI...[/dim]")
+            ai = AIAnalyzer(api_key=config.google_api_key)
+            step_analyzer = StepAnalyzer(ai)
+            analyzed_steps = step_analyzer.analyze_all(touch_events, screenshots_dir)
+
+            suggester = VerificationSuggester(ai)
+            verifications = suggester.suggest(analyzed_steps)
+
+            element_count = sum(1 for s in analyzed_steps if s.element_text)
+            console.print(f"    Extracted {element_count} element names")
+            console.print(f"    Suggested {len(verifications)} verifications")
+        else:
+            console.print("  [dim]AI analysis skipped (no API key)[/dim]")
+    except Exception as e:
+        console.print(f"  [yellow]AI analysis skipped: {e}[/yellow]")
 
     # Derive test name from directory
     if test_dir is None:
         test_dir = recording_dir.parent
     test_name = test_dir.name
 
+    # 4. Generate YAML
+    console.print("  [dim]Generating YAML...[/dim]")
     generator = YAMLGenerator(name=test_name, app_package=app_package)
-
-    # Add setup
     generator.add_launch_app()
 
-    # Add steps from touch events
-    for event in touch_events:
-        x = event.get("x", 0)
-        y = event.get("y", 0)
-        generator.add_tap(x=x, y=y)
+    if analyzed_steps:
+        generator.generate_from_analysis(analyzed_steps, typing_sequences, verifications)
+    else:
+        # Fallback to coordinates
+        for event in touch_events:
+            generator.add_tap(event.get("x", 0), event.get("y", 0))
 
-    # Add teardown
     generator.add_terminate_app()
 
     # Save YAML
@@ -291,8 +333,7 @@ def stop(
     console.print("[green]Test generated![/green]")
     console.print(f"  Output: {yaml_path}")
     console.print()
-    console.print("[dim]Edit the YAML file to add element names and verifications.[/dim]")
-    console.print(f"[dim]Run with: mut run {yaml_path}[/dim]")
+    console.print("[dim]Run with: mut run {yaml_path}[/dim]")
 
 
 def _find_most_recent_recording() -> Path | None:
