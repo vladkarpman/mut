@@ -397,8 +397,28 @@ class TestRecorderStop:
                         from mutcli.core.touch_monitor import TouchEvent
 
                         mock_events = [
-                            TouchEvent(timestamp=1.0, x=100, y=200, event_type="tap"),
-                            TouchEvent(timestamp=2.5, x=300, y=400, event_type="tap"),
+                            TouchEvent(
+                                timestamp=1.0,
+                                x=100,
+                                y=200,
+                                gesture="tap",
+                                duration_ms=50,
+                                start_x=100,
+                                start_y=200,
+                                trajectory=[],
+                                path_distance=0.0,
+                            ),
+                            TouchEvent(
+                                timestamp=2.5,
+                                x=300,
+                                y=400,
+                                gesture="tap",
+                                duration_ms=50,
+                                start_x=300,
+                                start_y=400,
+                                trajectory=[],
+                                path_distance=0.0,
+                            ),
                         ]
 
                         mock_touch = MagicMock()
@@ -451,9 +471,39 @@ class TestRecorderStop:
                         from mutcli.core.touch_monitor import TouchEvent
 
                         mock_events = [
-                            TouchEvent(timestamp=1.0, x=100, y=200, event_type="tap"),
-                            TouchEvent(timestamp=2.0, x=150, y=250, event_type="tap"),
-                            TouchEvent(timestamp=3.0, x=200, y=300, event_type="tap"),
+                            TouchEvent(
+                                timestamp=1.0,
+                                x=100,
+                                y=200,
+                                gesture="tap",
+                                duration_ms=50,
+                                start_x=100,
+                                start_y=200,
+                                trajectory=[],
+                                path_distance=0.0,
+                            ),
+                            TouchEvent(
+                                timestamp=2.0,
+                                x=150,
+                                y=250,
+                                gesture="tap",
+                                duration_ms=50,
+                                start_x=150,
+                                start_y=250,
+                                trajectory=[],
+                                path_distance=0.0,
+                            ),
+                            TouchEvent(
+                                timestamp=3.0,
+                                x=200,
+                                y=300,
+                                gesture="tap",
+                                duration_ms=50,
+                                start_x=200,
+                                start_y=300,
+                                trajectory=[],
+                                path_distance=0.0,
+                            ),
                         ]
 
                         mock_touch = MagicMock()
