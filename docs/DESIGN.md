@@ -111,6 +111,134 @@ plugins/mobile-ui-testing/  # Claude Code plugin (optional)
 | Device interaction | Direct adb | No mobile-mcp dependency, simpler |
 | Verification | Hybrid (deferred + real-time) | Fast execution, no state loss |
 | Approval UI | Web-based | Visual review of screenshots essential, already have HTML template |
+| Element finding | AI-first with coordinate fallback | Multi-language support, semantic understanding |
+
+## AI-First Element Finding Architecture
+
+**Date Updated:** 2026-01-17
+
+### Problem
+
+Traditional mobile testing tools like Maestro use literal text matching or resource IDs:
+- **Text matching** fails when app is in different language (e.g., "Sign In" vs "Войти")
+- **Resource IDs** are not universal - many apps don't have them, or they change between builds
+- **Coordinates** are brittle and screen-size dependent
+
+### Solution: AI-First with Coordinate Fallback
+
+mut uses AI vision to find elements semantically, with optional coordinates for validation:
+
+```
+┌─────────────────────────────────────────────────────────────┐
+│                    Element Resolution                        │
+│                                                              │
+│  Input: step with target text and/or coordinates            │
+│                                                              │
+│  ┌──────────────────────────────────────────────────────┐  │
+│  │ Case 1: Coordinates only (no text)                    │  │
+│  │         → Use coordinates directly (no AI needed)     │  │
+│  └──────────────────────────────────────────────────────┘  │
+│                                                              │
+│  ┌──────────────────────────────────────────────────────┐  │
+│  │ Case 2: Text + Coordinates (at: field)                │  │
+│  │         → Validate with AI, use coordinates           │  │
+│  │         → If validation fails, return error           │  │
+│  └──────────────────────────────────────────────────────┘  │
+│                                                              │
+│  ┌──────────────────────────────────────────────────────┐  │
+│  │ Case 3: Text only                                     │  │
+│  │         → Try device finder first (accessibility)     │  │
+│  │         → Fall back to AI vision if not found         │  │
+│  └──────────────────────────────────────────────────────┘  │
+│                                                              │
+└─────────────────────────────────────────────────────────────┘
+```
+
+### YAML Syntax
+
+```yaml
+# Text only - AI finds element in any language
+- tap: "Sign In button"     # Works: "Sign In", "Войти", "登录"
+
+# Coordinates only - no AI, just tap
+- tap: [50%, 85%]           # Percentage coordinates
+- tap: [540, 1200]          # Pixel coordinates
+
+# Text + Coordinates - AI validates, then uses coordinates
+- tap: "Sign In"
+  at: [50%, 85%]            # Validates button is at these coords
+```
+
+### How It Enables Multi-Language Support
+
+Tests are written in English (intent-based), but AI understands semantics:
+
+```yaml
+# This test works on Russian device:
+- tap: "Login button"       # AI finds "Войти" button
+- type: "user@test.com"
+- tap: "Submit"             # AI finds "Отправить"
+- verify_screen: "Welcome screen"  # AI checks for welcome message
+```
+
+The AI understands that "Login button" semantically matches a button that performs login, regardless of the displayed text language.
+
+### Comparison with Alternatives
+
+| Approach | Multi-language | Maintenance | Speed |
+|----------|---------------|-------------|-------|
+| **mut (AI-first)** | ✅ Yes | Low (semantic) | ~200ms |
+| Maestro (text/ID) | ❌ No | High (per-language) | Fast |
+| mobile-mcp (coords) | ❌ Manual | Very High | Fast |
+| Appium (XPath) | ⚠️ Partial | High (brittle) | Slow |
+
+### Implementation Details
+
+**AIAnalyzer Methods:**
+
+```python
+def find_element(screenshot: bytes, description: str, width: int, height: int) -> tuple[int, int] | None:
+    """Find element on screen by semantic description.
+
+    Returns center coordinates of matching element, or None if not found.
+    """
+
+def validate_element_at(screenshot: bytes, description: str, x_pct: float, y_pct: float) -> dict:
+    """Validate that element at coordinates matches description.
+
+    Returns {"valid": bool, "reason": str}.
+    Used when 'at:' coordinates are provided with text.
+    """
+```
+
+**Executor Resolution Logic:**
+
+```python
+def _resolve_coordinates_ai(step: Step) -> tuple[tuple[int, int] | None, str | None]:
+    """Resolve coordinates using AI-first approach.
+
+    Strategy:
+    1. coordinates only (no text) → use coordinates directly
+    2. text + coordinates → validate with AI, use coordinates
+    3. text only → device finder first, AI vision fallback
+    """
+```
+
+### When to Use Each Pattern
+
+| Pattern | Use When |
+|---------|----------|
+| `tap: "Button"` | Most cases - let AI find element |
+| `tap: [50%, 85%]` | Fixed UI position, no text needed |
+| `tap: "Button" at: [50%, 85%]` | Known position but want validation |
+
+### Performance Considerations
+
+- Device accessibility tree lookup: ~100ms
+- AI element finding: ~200-500ms
+- AI validation: ~200-500ms
+
+For performance-critical tests, use coordinates. For maintainability, use text descriptions.
 
 ## CLI Commands
 

@@ -154,6 +154,15 @@ class TestParser:
         # Simple syntax: `tap: "Button"`
         if isinstance(value, str):
             step.target = value
+            # Also parse any additional fields at step level (e.g., `at:`, `duration:`)
+            cls._parse_step_level_fields(step, data, action)
+            return step
+
+        # Simple coordinate syntax: `tap: [50%, 80%]` or `tap: [540, 1200]`
+        if isinstance(value, list):
+            step.coordinates, step.coordinates_type = cls._parse_coordinates(value)
+            # Also parse any additional fields at step level
+            cls._parse_step_level_fields(step, data, action)
             return step
 
         # Rich syntax: `tap: {element: "Button", timeout: 5s}`
@@ -161,6 +170,33 @@ class TestParser:
             cls._parse_rich_action(step, value)
 
         return step
+
+    @classmethod
+    def _parse_step_level_fields(cls, step: Step, data: dict[str, Any], action: str) -> None:
+        """Parse fields at step level (outside the action value).
+
+        Example:
+            - tap: "button"
+              at: [50%, 85%]    # This is at step level
+              duration: 1000
+        """
+        # Skip the action key itself
+        for key, value in data.items():
+            if key == action:
+                continue
+
+            if key == "at":
+                step.coordinates, step.coordinates_type = cls._parse_coordinates(value)
+            elif key == "duration":
+                step.duration = int(value)
+            elif key == "max_scrolls":
+                step.max_scrolls = int(value)
+            elif key == "direction":
+                step.direction = value
+            elif key == "timeout":
+                step.timeout = cls._parse_duration(value)
+            elif key == "retry":
+                step.retry = int(value)
 
     @classmethod
     def _parse_rich_action(cls, step: Step, data: dict[str, Any]) -> None:
@@ -173,9 +209,14 @@ class TestParser:
         if "retry" in data:
             step.retry = int(data["retry"])
 
-        # Coordinates
+        # Coordinates (legacy field)
         if "coordinates" in data:
             coords = data["coordinates"]
+            step.coordinates, step.coordinates_type = cls._parse_coordinates(coords)
+
+        # New 'at:' field for fallback coordinates (percentages recommended)
+        if "at" in data:
+            coords = data["at"]
             step.coordinates, step.coordinates_type = cls._parse_coordinates(coords)
 
         # Type-specific
@@ -193,6 +234,14 @@ class TestParser:
             step.distance = cls._parse_percent(data["distance"])
         if "from" in data:
             step.from_coords, _ = cls._parse_coordinates(data["from"])
+
+        # Long press specific
+        if "duration" in data:
+            step.duration = int(data["duration"])
+
+        # Scroll specific
+        if "max_scrolls" in data:
+            step.max_scrolls = int(data["max_scrolls"])
 
     @classmethod
     def _parse_conditional(cls, cond_type: str, data: dict[str, Any]) -> Step:

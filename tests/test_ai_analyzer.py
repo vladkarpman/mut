@@ -40,22 +40,25 @@ class TestVerifyScreen:
 
     def test_returns_skipped_when_no_api_key(self):
         """Should return skipped result when no API key."""
-        analyzer = AIAnalyzer(api_key=None)
+        # Clear GOOGLE_API_KEY to ensure no API key is available
+        with patch.dict(os.environ, {}, clear=True):
+            os.environ.pop("GOOGLE_API_KEY", None)
+            analyzer = AIAnalyzer(api_key=None)
 
-        # Create a minimal PNG (1x1 pixel)
-        import io
+            # Create a minimal PNG (1x1 pixel)
+            import io
 
-        from PIL import Image
-        img = Image.new("RGB", (1, 1), color="red")
-        buffer = io.BytesIO()
-        img.save(buffer, format="PNG")
-        screenshot = buffer.getvalue()
+            from PIL import Image
+            img = Image.new("RGB", (1, 1), color="red")
+            buffer = io.BytesIO()
+            img.save(buffer, format="PNG")
+            screenshot = buffer.getvalue()
 
-        result = analyzer.verify_screen(screenshot, "test description")
+            result = analyzer.verify_screen(screenshot, "test description")
 
-        assert result["pass"] is True
-        assert result["skipped"] is True
-        assert "skipped" in result["reason"].lower() or "no api key" in result["reason"].lower()
+            assert result["pass"] is True
+            assert result["skipped"] is True
+            assert "skipped" in result["reason"].lower() or "no api key" in result["reason"].lower()
 
     @patch("mutcli.core.ai_analyzer.genai")
     def test_calls_gemini_api_with_image(self, mock_genai):
@@ -134,19 +137,22 @@ class TestIfScreen:
 
     def test_returns_false_when_no_api_key(self):
         """Should return False when no API key (safe default)."""
-        analyzer = AIAnalyzer(api_key=None)
+        # Clear GOOGLE_API_KEY to ensure no API key is available
+        with patch.dict(os.environ, {}, clear=True):
+            os.environ.pop("GOOGLE_API_KEY", None)
+            analyzer = AIAnalyzer(api_key=None)
 
-        import io
+            import io
 
-        from PIL import Image
-        img = Image.new("RGB", (1, 1))
-        buffer = io.BytesIO()
-        img.save(buffer, format="PNG")
+            from PIL import Image
+            img = Image.new("RGB", (1, 1))
+            buffer = io.BytesIO()
+            img.save(buffer, format="PNG")
 
-        result = analyzer.if_screen(buffer.getvalue(), "some condition")
+            result = analyzer.if_screen(buffer.getvalue(), "some condition")
 
-        # When AI is unavailable, default to False (don't execute conditional branch)
-        assert result is False
+            # When AI is unavailable, default to False (don't execute conditional branch)
+            assert result is False
 
     @patch("mutcli.core.ai_analyzer.genai")
     def test_returns_true_when_condition_met(self, mock_genai):
@@ -198,24 +204,27 @@ class TestAnalyzeStep:
 
     def test_returns_skipped_when_no_api_key(self):
         """Should return skipped result when no API key."""
-        analyzer = AIAnalyzer(api_key=None)
+        # Clear GOOGLE_API_KEY to ensure no API key is available
+        with patch.dict(os.environ, {}, clear=True):
+            os.environ.pop("GOOGLE_API_KEY", None)
+            analyzer = AIAnalyzer(api_key=None)
 
-        import io
+            import io
 
-        from PIL import Image
+            from PIL import Image
 
-        def make_image():
-            img = Image.new("RGB", (100, 100))
-            buffer = io.BytesIO()
-            img.save(buffer, format="PNG")
-            return buffer.getvalue()
+            def make_image():
+                img = Image.new("RGB", (100, 100))
+                buffer = io.BytesIO()
+                img.save(buffer, format="PNG")
+                return buffer.getvalue()
 
-        result = analyzer.analyze_step(make_image(), make_image())
+            result = analyzer.analyze_step(make_image(), make_image())
 
-        assert result["skipped"] is True
-        assert "before" in result
-        assert "action" in result
-        assert "after" in result
+            assert result["skipped"] is True
+            assert "before" in result
+            assert "action" in result
+            assert "after" in result
 
     @patch("mutcli.core.ai_analyzer.genai")
     def test_analyzes_before_after_frames(self, mock_genai):

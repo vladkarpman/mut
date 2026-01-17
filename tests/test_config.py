@@ -79,12 +79,14 @@ class TestConfigDefaults:
 
     def test_optional_fields_are_none_by_default(self):
         """Optional fields should be None when not specified."""
-        with patch.object(Path, "exists", return_value=False):
-            config = ConfigLoader.load()
+        # Clear environment to ensure no API key is present
+        with patch.dict(os.environ, {}, clear=True):
+            with patch.object(Path, "exists", return_value=False):
+                config = ConfigLoader.load()
 
-        assert config.app is None
-        assert config.device is None
-        assert config.google_api_key is None
+            assert config.app is None
+            assert config.device is None
+            assert config.google_api_key is None
 
 
 class TestConfigMerging:

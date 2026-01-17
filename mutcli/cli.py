@@ -69,7 +69,7 @@ def run(
         console.print(f"[red]Error:[/red] Test file not found: {test_file}")
         raise typer.Exit(2)
 
-    # Load config
+    # Load config (API key required for AI-based testing)
     try:
         config = ConfigLoader.load(require_api_key=True)
     except ValueError as e:

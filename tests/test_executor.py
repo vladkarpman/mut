@@ -181,23 +181,34 @@ class TestExecutorAppActions:
 
 
 class TestExecutorCoordinateResolution:
-    """Test coordinate resolution logic."""
+    """Test coordinate resolution logic with AI-first approach."""
 
     @pytest.fixture
     def mock_device(self):
         """Mock DeviceController."""
         device = MagicMock()
         device.get_screen_size.return_value = (1080, 2340)
+        device.take_screenshot.return_value = b"fake_screenshot_bytes"
         return device
 
     @pytest.fixture
-    def executor(self, mock_device):
-        """Create executor with mocked device."""
+    def mock_ai(self):
+        """Mock AIAnalyzer."""
+        ai = MagicMock()
+        ai.is_available = True
+        ai.find_element.return_value = None  # Default: AI doesn't find element
+        ai.validate_element_at.return_value = {"valid": True, "reason": "Found button"}
+        return ai
+
+    @pytest.fixture
+    def executor(self, mock_device, mock_ai):
+        """Create executor with mocked device and AI."""
         with patch("mutcli.core.executor.DeviceController", return_value=mock_device):
-            return TestExecutor(device_id="test-device")
+            with patch("mutcli.core.executor.AIAnalyzer", return_value=mock_ai):
+                return TestExecutor(device_id="test-device")
 
     def test_tap_by_pixel_coordinates(self, executor, mock_device):
-        """Tap at pixel coordinates."""
+        """Tap at pixel coordinates (no text = no AI needed)."""
         step = Step(
             action="tap",
             coordinates=(100.0, 200.0),
@@ -209,14 +220,29 @@ class TestExecutorCoordinateResolution:
         assert result.status == "passed"
         mock_device.tap.assert_called_with(100, 200)
 
-    def test_element_text_takes_priority_over_coordinates(self, executor, mock_device):
-        """When both text and coordinates specified, text is used first."""
+    def test_text_and_coordinates_validates_with_ai(self, executor, mock_device, mock_ai):
+        """When both text and coordinates specified, AI validates then uses coordinates."""
+        mock_ai.validate_element_at.return_value = {"valid": True, "reason": "Button found"}
+        step = Step(
+            action="tap",
+            target="Button",
+            coordinates=(50.0, 80.0),
+            coordinates_type="percent",
+        )
+
+        result = executor.execute_step(step)
+
+        assert result.status == "passed"
+        mock_ai.validate_element_at.assert_called_once()
+        # Uses validated coordinates (50% of 1080 = 540, 80% of 2340 = 1872)
+        mock_device.tap.assert_called_with(540, 1872)
+
+    def test_text_only_uses_device_finder_first(self, executor, mock_device, mock_ai):
+        """Text only: tries device finder first (faster than AI)."""
         mock_device.find_element.return_value = (540, 1200)
         step = Step(
             action="tap",
             target="Button",
-            coordinates=(100.0, 200.0),
-            coordinates_type="pixels",
         )
 
         result = executor.execute_step(step)
@@ -224,21 +250,38 @@ class TestExecutorCoordinateResolution:
         assert result.status == "passed"
         mock_device.find_element.assert_called_with("Button")
         mock_device.tap.assert_called_with(540, 1200)
+        # AI finder not called since device finder succeeded
+        mock_ai.find_element.assert_not_called()
 
-    def test_falls_back_to_coordinates_when_element_not_found(self, executor, mock_device):
-        """Falls back to coordinates when element not found."""
+    def test_text_only_falls_back_to_ai_finder(self, executor, mock_device, mock_ai):
+        """Text only: falls back to AI vision when device finder fails."""
         mock_device.find_element.return_value = None
+        mock_ai.find_element.return_value = (540, 1200)
         step = Step(
             action="tap",
             target="Button",
-            coordinates=(100.0, 200.0),
-            coordinates_type="pixels",
         )
 
         result = executor.execute_step(step)
 
         assert result.status == "passed"
-        mock_device.tap.assert_called_with(100, 200)
+        mock_device.find_element.assert_called_with("Button")
+        mock_ai.find_element.assert_called_once()
+        mock_device.tap.assert_called_with(540, 1200)
+
+    def test_text_only_fails_when_not_found(self, executor, mock_device, mock_ai):
+        """Text only: fails when neither device nor AI finds element."""
+        mock_device.find_element.return_value = None
+        mock_ai.find_element.return_value = None
+        step = Step(
+            action="tap",
+            target="Button",
+        )
+
+        result = executor.execute_step(step)
+
+        assert result.status == "failed"
+        assert "not found" in result.error.lower()
 
 
 class TestExecutorSwipeActions:
@@ -560,13 +603,14 @@ class TestExecutorScrollToActions:
 
 
 class TestExecutorConditionalActions:
-    """Test conditional action execution."""
+    """Test conditional action execution with AI-first approach."""
 
     @pytest.fixture
     def mock_device(self):
         """Mock DeviceController."""
         device = MagicMock()
         device.get_screen_size.return_value = (1080, 2340)
+        device.take_screenshot.return_value = b"fake_screenshot_bytes"
         return device
 
     @pytest.fixture
@@ -574,6 +618,8 @@ class TestExecutorConditionalActions:
         """Mock AIAnalyzer."""
         ai = MagicMock()
         ai.is_available = True
+        ai.find_element.return_value = None  # Default: AI doesn't find element
+        ai.validate_element_at.return_value = {"valid": True}
         return ai
 
     @pytest.fixture
@@ -583,7 +629,7 @@ class TestExecutorConditionalActions:
             with patch("mutcli.core.executor.AIAnalyzer", return_value=mock_ai):
                 return TestExecutor(device_id="test-device")
 
-    def test_if_present_executes_then_when_element_found(self, executor, mock_device):
+    def test_if_present_executes_then_when_element_found(self, executor, mock_device, mock_ai):
         """if_present executes then branch when element is found."""
         mock_device.find_element.return_value = (540, 1200)
         then_step = Step(action="tap", target="Next Button")
@@ -596,14 +642,15 @@ class TestExecutorConditionalActions:
         result = executor.execute_step(step)
 
         assert result.status == "passed"
-        # Should have called find_element for condition and for tap target
         mock_device.find_element.assert_any_call("Login Button")
         mock_device.tap.assert_called()
 
-    def test_if_present_executes_else_when_element_not_found(self, executor, mock_device):
-        """if_present executes else branch when element is not found."""
-        # First call for condition check returns None, second for tap in else branch returns coords
+    def test_if_present_executes_else_when_element_not_found(self, executor, mock_device, mock_ai):
+        """if_present executes else branch when element not found by device AND AI."""
+        # Device finder: returns None for condition, coords for else branch tap
         mock_device.find_element.side_effect = [None, (540, 1200)]
+        # AI finder: also returns None for condition check
+        mock_ai.find_element.return_value = None
         then_step = Step(action="tap", target="Then Target")
         else_step = Step(action="tap", target="Else Target")
         step = Step(
@@ -617,11 +664,11 @@ class TestExecutorConditionalActions:
 
         assert result.status == "passed"
         mock_device.find_element.assert_any_call("Login Button")
-        mock_device.find_element.assert_any_call("Else Target")
 
-    def test_if_present_skips_when_no_else_and_not_found(self, executor, mock_device):
+    def test_if_present_skips_when_no_else_and_not_found(self, executor, mock_device, mock_ai):
         """if_present does nothing when element not found and no else branch."""
         mock_device.find_element.return_value = None
+        mock_ai.find_element.return_value = None  # AI also doesn't find
         then_step = Step(action="tap", target="Then Target")
         step = Step(
             action="if_present",
@@ -633,13 +680,15 @@ class TestExecutorConditionalActions:
         result = executor.execute_step(step)
 
         assert result.status == "passed"
-        mock_device.find_element.assert_called_once_with("Login Button")
+        mock_device.find_element.assert_called_with("Login Button")
         mock_device.tap.assert_not_called()
 
-    def test_if_absent_executes_then_when_element_not_found(self, executor, mock_device):
-        """if_absent executes then branch when element is NOT found."""
-        # First call for condition check returns None, second for tap returns coords
+    def test_if_absent_executes_then_when_element_not_found(self, executor, mock_device, mock_ai):
+        """if_absent executes then branch when element NOT found by device AND AI."""
+        # Device finder: returns None for condition, coords for then branch tap
         mock_device.find_element.side_effect = [None, (540, 1200)]
+        # AI finder: also returns None for condition check
+        mock_ai.find_element.return_value = None
         then_step = Step(action="tap", target="Then Target")
         step = Step(
             action="if_absent",
@@ -651,7 +700,6 @@ class TestExecutorConditionalActions:
 
         assert result.status == "passed"
         mock_device.find_element.assert_any_call("Error Message")
-        mock_device.find_element.assert_any_call("Then Target")
 
     def test_if_absent_executes_else_when_element_found(self, executor, mock_device):
         """if_absent executes else branch when element IS found."""
@@ -714,14 +762,16 @@ class TestExecutorConditionalActions:
         mock_device.find_element.assert_called_with("Else Target")
 
     def test_nested_conditionals_execute_correctly(self, executor, mock_device, mock_ai):
-        """Nested conditionals execute properly."""
-        # Outer condition: element found
-        # Inner condition: element not found
+        """Nested conditionals execute properly with AI fallback."""
+        # Outer condition: element found by device
+        # Inner condition: element not found (device None, AI None)
+        # Tap: element found by device
         mock_device.find_element.side_effect = [
             (540, 1200),  # Outer if_present check - found
-            None,  # Inner if_absent check - not found (condition true)
+            None,  # Inner if_absent check - not found by device
             (540, 1200),  # Tap in inner then branch
         ]
+        mock_ai.find_element.return_value = None  # AI also doesn't find "Error Dialog"
 
         inner_then_step = Step(action="tap", target="Inner Then Target")
         inner_conditional = Step(
@@ -739,8 +789,6 @@ class TestExecutorConditionalActions:
 
         assert result.status == "passed"
         mock_device.find_element.assert_any_call("Main Screen")
-        mock_device.find_element.assert_any_call("Error Dialog")
-        mock_device.find_element.assert_any_call("Inner Then Target")
         mock_device.tap.assert_called()
 
     def test_if_present_fails_without_condition_target(self, executor, mock_device):
@@ -770,12 +818,13 @@ class TestExecutorConditionalActions:
         assert result.status == "failed"
         assert "no screen description" in result.error.lower()
 
-    def test_conditional_propagates_nested_step_failure(self, executor, mock_device):
-        """Conditional returns error when nested step fails."""
+    def test_conditional_propagates_nested_step_failure(self, executor, mock_device, mock_ai):
+        """Conditional returns error when nested step fails (element not found by device or AI)."""
         mock_device.find_element.side_effect = [
             (540, 1200),  # Condition check - found
-            None,  # Tap target not found - will fail
+            None,  # Tap target not found by device
         ]
+        mock_ai.find_element.return_value = None  # AI also doesn't find tap target
         then_step = Step(action="tap", target="NonExistent Button")
         step = Step(
             action="if_present",

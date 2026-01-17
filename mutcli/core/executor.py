@@ -62,6 +62,7 @@ class TestExecutor:
         self._screen_size: tuple[int, int] | None = None
         self._step_number = 0
         self._test_start: float = 0.0  # Track test start time for timestamps
+        self._test_app: str | None = None  # App from test file config
 
     def execute_test(self, test: TestFile) -> TestResult:
         """Execute a complete test file.
@@ -75,6 +76,7 @@ class TestExecutor:
         start = time.time()
         self._test_start = start  # Store for step timestamps
         self._step_number = 0  # Reset for each test
+        self._test_app = test.config.app  # Store app from test file config
         results: list[StepResult] = []
         status = "passed"
         error = None
@@ -191,36 +193,84 @@ class TestExecutor:
             self._screen_size = self._device.get_screen_size()
         return self._screen_size
 
-    def _resolve_coordinates(self, step: Step) -> tuple[int, int] | None:
-        """Resolve step coordinates to pixels.
+    def _coordinates_to_pixels(self, step: Step) -> tuple[int, int] | None:
+        """Convert step coordinates to pixels.
 
-        Priority:
-        1. Element text (if found)
-        2. Coordinates (percent or pixels)
+        Args:
+            step: Step with coordinates
+
+        Returns:
+            (x, y) in pixels, or None if no coordinates
         """
-        # Try element text first
-        if step.target:
+        if not step.coordinates:
+            return None
+
+        x, y = step.coordinates
+        if step.coordinates_type == "percent":
+            width, height = self._get_screen_size()
+            return int(x * width / 100), int(y * height / 100)
+        return int(x), int(y)
+
+    def _resolve_coordinates_ai(self, step: Step) -> tuple[tuple[int, int] | None, str | None]:
+        """Resolve coordinates using AI-first approach.
+
+        Strategy:
+        1. coordinates only (no text) → use coordinates directly
+        2. text + coordinates → validate with AI, use coordinates
+        3. text only → AI finds element
+
+        Returns:
+            (coordinates, error) - coordinates are (x, y) or None, error is message or None
+        """
+        width, height = self._get_screen_size()
+        has_text = bool(step.target)
+        has_coords = bool(step.coordinates)
+
+        # Case 1: Coordinates only - use directly, no AI
+        if has_coords and not has_text:
+            return self._coordinates_to_pixels(step), None
+
+        # Case 2: Text + coordinates - validate with AI, use coordinates
+        if has_text and has_coords:
+            coords = self._coordinates_to_pixels(step)
+            if coords:
+                screenshot = self._device.take_screenshot()
+                x_pct = step.coordinates[0] if step.coordinates_type == "percent" else (coords[0] * 100 / width)
+                y_pct = step.coordinates[1] if step.coordinates_type == "percent" else (coords[1] * 100 / height)
+
+                validation = self._ai.validate_element_at(screenshot, step.target, x_pct, y_pct)
+                if not validation.get("valid") and not validation.get("skipped"):
+                    return None, f"Validation failed: expected '{step.target}' at ({x_pct:.0f}%, {y_pct:.0f}%), but: {validation.get('reason', 'unknown')}"
+
+                return coords, None
+            return None, f"Invalid coordinates for '{step.target}'"
+
+        # Case 3: Text only - AI finds element
+        if has_text:
+            # First try device's element finder (faster, uses accessibility tree)
             coords = self._device.find_element(step.target)
             if coords:
-                return coords
+                return coords, None
 
-        # Fall back to coordinates
-        if step.coordinates:
-            x, y = step.coordinates
-            if step.coordinates_type == "percent":
-                width, height = self._get_screen_size()
-                return int(x * width / 100), int(y * height / 100)
-            return int(x), int(y)
+            # Fall back to AI vision
+            screenshot = self._device.take_screenshot()
+            coords = self._ai.find_element(screenshot, step.target, width, height)
+            if coords:
+                return coords, None
 
-        return None
+            return None, f"Element '{step.target}' not found"
+
+        return None, "No target or coordinates specified"
 
     # Action handlers
 
     def _action_tap(self, step: Step) -> str | None:
-        """Execute tap action."""
-        coords = self._resolve_coordinates(step)
+        """Execute tap action using AI-first approach."""
+        coords, error = self._resolve_coordinates_ai(step)
+        if error:
+            return error
         if coords is None:
-            return f"Element '{step.target}' not found"
+            return f"Could not resolve coordinates for tap"
 
         self._device.tap(coords[0], coords[1])
         return None
@@ -291,7 +341,7 @@ class TestExecutor:
 
     def _action_launch_app(self, step: Step) -> str | None:
         """Launch app."""
-        package = step.target or self._config.app
+        package = step.target or self._test_app or self._config.app
         if not package:
             return "No app package specified"
 
@@ -300,7 +350,7 @@ class TestExecutor:
 
     def _action_terminate_app(self, step: Step) -> str | None:
         """Terminate app."""
-        package = step.target or self._config.app
+        package = step.target or self._test_app or self._config.app
         if not package:
             return "No app package specified"
 
@@ -330,17 +380,19 @@ class TestExecutor:
         return None
 
     def _action_long_press(self, step: Step) -> str | None:
-        """Execute long press action."""
-        coords = self._resolve_coordinates(step)
+        """Execute long press action using AI-first approach."""
+        coords, error = self._resolve_coordinates_ai(step)
+        if error:
+            return error
         if coords is None:
-            return f"Element '{step.target}' not found"
+            return f"Could not resolve coordinates for long_press"
 
         duration = step.duration or 500  # Default 500ms
         self._device.long_press(coords[0], coords[1], duration)
         return None
 
     def _action_scroll_to(self, step: Step) -> str | None:
-        """Scroll until element is visible.
+        """Scroll until element is visible using AI-first approach.
 
         Note: direction refers to scroll direction (content movement).
         'down' scrolls content down (revealing content below).
@@ -351,15 +403,21 @@ class TestExecutor:
 
         direction = (step.direction or "down").lower()
         max_scrolls = step.max_scrolls or 10
+        width, height = self._get_screen_size()
 
-        for _ in range(max_scrolls):
-            # Check if element exists
+        for i in range(max_scrolls):
+            # First try device's element finder (faster)
             coords = self._device.find_element(target)
             if coords:
                 return None  # Found it
 
+            # Fall back to AI vision
+            screenshot = self._device.take_screenshot()
+            coords = self._ai.find_element(screenshot, target, width, height)
+            if coords:
+                return None  # Found it
+
             # Swipe in specified direction
-            width, height = self._get_screen_size()
             cx, cy = width // 2, height // 2
             distance = int(height * 0.3)  # 30% of screen
 
@@ -376,15 +434,33 @@ class TestExecutor:
 
         return f"Element '{target}' not found after {max_scrolls} scrolls"
 
+    def _is_element_present(self, target: str) -> bool:
+        """Check if element is present using device finder + AI fallback.
+
+        Args:
+            target: Element description
+
+        Returns:
+            True if element is found, False otherwise
+        """
+        # First try device's element finder (faster)
+        coords = self._device.find_element(target)
+        if coords:
+            return True
+
+        # Fall back to AI vision
+        width, height = self._get_screen_size()
+        screenshot = self._device.take_screenshot()
+        coords = self._ai.find_element(screenshot, target, width, height)
+        return coords is not None
+
     def _action_if_present(self, step: Step) -> str | None:
-        """Execute then/else based on element presence."""
+        """Execute then/else based on element presence (AI-assisted)."""
         target = step.condition_target
         if not target:
             return "No element specified for if_present"
 
-        coords = self._device.find_element(target)
-
-        if coords:
+        if self._is_element_present(target):
             # Element found, execute then branch
             return self._execute_nested_steps(step.then_steps)
         elif step.else_steps:
@@ -394,14 +470,12 @@ class TestExecutor:
         return None  # No else branch, just skip
 
     def _action_if_absent(self, step: Step) -> str | None:
-        """Execute then/else based on element absence."""
+        """Execute then/else based on element absence (AI-assisted)."""
         target = step.condition_target
         if not target:
             return "No element specified for if_absent"
 
-        coords = self._device.find_element(target)
-
-        if coords is None:
+        if not self._is_element_present(target):
             # Element not found, execute then branch
             return self._execute_nested_steps(step.then_steps)
         elif step.else_steps:

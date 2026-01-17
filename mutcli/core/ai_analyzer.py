@@ -189,6 +189,109 @@ Respond with JSON only (no markdown, no code blocks):
                 "error": str(e),
             }
 
+    def find_element(
+        self, screenshot: bytes, description: str, screen_width: int, screen_height: int
+    ) -> tuple[int, int] | None:
+        """Find element on screen by description.
+
+        Uses AI vision to locate an element matching the description.
+
+        Args:
+            screenshot: PNG image bytes
+            description: Element description (e.g., "login button", "email field")
+            screen_width: Screen width in pixels (for coordinate calculation)
+            screen_height: Screen height in pixels (for coordinate calculation)
+
+        Returns:
+            (x, y) pixel coordinates of element center, or None if not found
+        """
+        if not self.is_available or self._client is None:
+            logger.warning(f"find_element skipped (no API key): {description}")
+            return None
+
+        prompt = f'''Find the UI element described as "{description}" in this mobile app screenshot.
+
+The screen dimensions are {screen_width}x{screen_height} pixels.
+
+If you find the element, respond with its CENTER coordinates as percentages of screen dimensions.
+If you cannot find the element, respond with null coordinates.
+
+Respond with JSON only (no markdown, no code blocks):
+{{"found": true/false, "x_percent": 0-100 or null, "y_percent": 0-100 or null, "reason": "brief explanation"}}'''
+
+        try:
+            image_part = types.Part.from_bytes(
+                data=screenshot,
+                mime_type="image/png",
+            )
+
+            response = self._client.models.generate_content(
+                model=self._model,
+                contents=[image_part, prompt],  # type: ignore[arg-type]
+            )
+
+            response_text = response.text or ""
+            result = self._parse_json_response(response_text)
+
+            if result.get("found") and result.get("x_percent") and result.get("y_percent"):
+                x = int(float(result["x_percent"]) * screen_width / 100)
+                y = int(float(result["y_percent"]) * screen_height / 100)
+                logger.info(f"AI found '{description}' at ({x}, {y})")
+                return (x, y)
+
+            logger.info(f"AI could not find '{description}': {result.get('reason', 'unknown')}")
+            return None
+
+        except Exception as e:
+            logger.error(f"find_element failed: {e}")
+            return None
+
+    def validate_element_at(
+        self, screenshot: bytes, description: str, x_percent: float, y_percent: float
+    ) -> dict[str, Any]:
+        """Validate that element at coordinates matches description.
+
+        Used when 'at:' coordinates are provided with text description.
+
+        Args:
+            screenshot: PNG image bytes
+            description: Expected element description
+            x_percent: X coordinate as percentage (0-100)
+            y_percent: Y coordinate as percentage (0-100)
+
+        Returns:
+            Dict with valid (bool), reason (str)
+        """
+        if not self.is_available or self._client is None:
+            return {"valid": True, "reason": "Validation skipped (no API key)", "skipped": True}
+
+        prompt = f'''Look at the UI element at approximately ({x_percent:.0f}%, {y_percent:.0f}%) of the screen in this mobile app screenshot.
+
+The coordinates are percentages from the top-left corner.
+
+Question: Is there a "{description}" at or near those coordinates?
+
+Respond with JSON only (no markdown, no code blocks):
+{{"valid": true/false, "reason": "brief explanation of what is actually at those coordinates"}}'''
+
+        try:
+            image_part = types.Part.from_bytes(
+                data=screenshot,
+                mime_type="image/png",
+            )
+
+            response = self._client.models.generate_content(
+                model=self._model,
+                contents=[image_part, prompt],  # type: ignore[arg-type]
+            )
+
+            response_text = response.text or ""
+            return self._parse_json_response(response_text)
+
+        except Exception as e:
+            logger.error(f"validate_element_at failed: {e}")
+            return {"valid": False, "reason": f"Validation error: {str(e)}", "error": True}
+
     def analyze_image(self, image_data: bytes, prompt: str) -> str | None:
         """Analyze image with custom prompt.
 

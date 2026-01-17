@@ -172,10 +172,14 @@ class DeviceController:
         return self._parse_ui_xml(local_path)
 
     def find_element(self, text: str) -> tuple[int, int] | None:
-        """Find element by text and return center coordinates.
+        """Find element by text, content-desc, or resource-id.
 
         Args:
-            text: Text to find (matches text or content-desc)
+            text: Text to find. Matches against:
+                  - text attribute
+                  - content-desc (accessibility label)
+                  - resource-id (full or partial, e.g. "digit_1" matches
+                    "com.google.android.calculator:id/digit_1")
 
         Returns:
             (x, y) center coordinates or None if not found
@@ -183,13 +187,24 @@ class DeviceController:
         elements = self.list_elements()
 
         for el in elements:
+            # Match text or content-desc exactly
             if el.get("text") == text or el.get("content-desc") == text:
                 bounds = el.get("bounds")
                 if bounds:
-                    # Calculate center
                     x = (bounds[0] + bounds[2]) // 2
                     y = (bounds[1] + bounds[3]) // 2
                     return (x, y)
+
+            # Match resource-id (full or partial after last /)
+            resource_id = el.get("resource-id", "")
+            if resource_id:
+                # Full match or partial match (e.g. "digit_1" matches "...id/digit_1")
+                if resource_id == text or resource_id.endswith(f"/{text}"):
+                    bounds = el.get("bounds")
+                    if bounds:
+                        x = (bounds[0] + bounds[2]) // 2
+                        y = (bounds[1] + bounds[3]) // 2
+                        return (x, y)
 
         return None
 
@@ -205,6 +220,20 @@ class DeviceController:
         if match:
             return int(match.group(1)), int(match.group(2))
         raise RuntimeError("Could not determine screen size")
+
+    def take_screenshot(self) -> bytes:
+        """Capture screenshot from device.
+
+        Returns:
+            PNG image bytes
+        """
+        # Capture screenshot directly to stdout as PNG
+        result = subprocess.run(
+            ["adb", "-s", self._device_id, "exec-out", "screencap", "-p"],
+            capture_output=True,
+            check=True,
+        )
+        return result.stdout
 
     def launch_app(self, package: str) -> None:
         """Launch an app by package name.
