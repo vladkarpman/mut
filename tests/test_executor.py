@@ -389,6 +389,176 @@ class TestExecutorTypeAction:
         assert "no text" in result.error.lower()
 
 
+class TestExecutorLongPressActions:
+    """Test long_press action execution."""
+
+    @pytest.fixture
+    def mock_device(self):
+        """Mock DeviceController."""
+        device = MagicMock()
+        device.get_screen_size.return_value = (1080, 2340)
+        device.find_element.return_value = (540, 1200)
+        return device
+
+    @pytest.fixture
+    def executor(self, mock_device):
+        """Create executor with mocked device."""
+        with patch("mutcli.core.executor.DeviceController", return_value=mock_device):
+            return TestExecutor(device_id="test-device")
+
+    def test_long_press_action(self, executor, mock_device):
+        """long_press finds element by text and long presses with default duration."""
+        step = Step(action="long_press", target="Hold Me")
+
+        result = executor.execute_step(step)
+
+        assert result.status == "passed"
+        mock_device.find_element.assert_called_with("Hold Me")
+        mock_device.long_press.assert_called_with(540, 1200, 500)  # Default 500ms
+
+    def test_long_press_with_custom_duration(self, executor, mock_device):
+        """long_press respects custom duration."""
+        step = Step(action="long_press", target="Hold Me", duration=2000)
+
+        result = executor.execute_step(step)
+
+        assert result.status == "passed"
+        mock_device.long_press.assert_called_with(540, 1200, 2000)
+
+    def test_long_press_element_not_found(self, executor, mock_device):
+        """long_press fails when element not found."""
+        mock_device.find_element.return_value = None
+        step = Step(action="long_press", target="NonExistent")
+
+        result = executor.execute_step(step)
+
+        assert result.status == "failed"
+        assert "not found" in result.error.lower()
+
+    def test_long_press_by_coordinates(self, executor, mock_device):
+        """long_press works with coordinates."""
+        step = Step(
+            action="long_press",
+            coordinates=(100.0, 200.0),
+            coordinates_type="pixels",
+            duration=1000,
+        )
+
+        result = executor.execute_step(step)
+
+        assert result.status == "passed"
+        mock_device.long_press.assert_called_with(100, 200, 1000)
+
+
+class TestExecutorScrollToActions:
+    """Test scroll_to action execution."""
+
+    @pytest.fixture
+    def mock_device(self):
+        """Mock DeviceController."""
+        device = MagicMock()
+        device.get_screen_size.return_value = (1080, 2340)
+        return device
+
+    @pytest.fixture
+    def executor(self, mock_device):
+        """Create executor with mocked device."""
+        with patch("mutcli.core.executor.DeviceController", return_value=mock_device):
+            return TestExecutor(device_id="test-device")
+
+    def test_scroll_to_finds_element_immediately(self, executor, mock_device):
+        """scroll_to succeeds when element is already visible."""
+        mock_device.find_element.return_value = (540, 1200)
+        step = Step(action="scroll_to", target="Target Element")
+
+        result = executor.execute_step(step)
+
+        assert result.status == "passed"
+        mock_device.find_element.assert_called_with("Target Element")
+        # No swipe needed if element found immediately
+        mock_device.swipe.assert_not_called()
+
+    def test_scroll_to_finds_element_after_scrolls(self, executor, mock_device):
+        """scroll_to finds element after scrolling."""
+        # Element not found first 2 times, then found
+        mock_device.find_element.side_effect = [None, None, (540, 1500)]
+        step = Step(action="scroll_to", target="Target Element")
+
+        result = executor.execute_step(step)
+
+        assert result.status == "passed"
+        assert mock_device.find_element.call_count == 3
+        assert mock_device.swipe.call_count == 2
+
+    def test_scroll_to_max_scrolls_exceeded(self, executor, mock_device):
+        """scroll_to fails after max scroll attempts."""
+        mock_device.find_element.return_value = None
+        step = Step(action="scroll_to", target="Never Found", max_scrolls=5)
+
+        result = executor.execute_step(step)
+
+        assert result.status == "failed"
+        assert "not found after 5 scrolls" in result.error.lower()
+        assert mock_device.swipe.call_count == 5
+
+    def test_scroll_to_respects_direction_down(self, executor, mock_device):
+        """scroll_to scrolls down by default."""
+        mock_device.find_element.side_effect = [None, (540, 1500)]
+        step = Step(action="scroll_to", target="Target Element", direction="down")
+
+        result = executor.execute_step(step)
+
+        assert result.status == "passed"
+        # Swipe down: start_y > end_y
+        args = mock_device.swipe.call_args[0]
+        assert args[1] > args[3]  # cy > cy - distance
+
+    def test_scroll_to_respects_direction_up(self, executor, mock_device):
+        """scroll_to respects up direction."""
+        mock_device.find_element.side_effect = [None, (540, 1500)]
+        step = Step(action="scroll_to", target="Target Element", direction="up")
+
+        result = executor.execute_step(step)
+
+        assert result.status == "passed"
+        # Swipe up: start_y < end_y
+        args = mock_device.swipe.call_args[0]
+        assert args[1] < args[3]  # cy < cy + distance
+
+    def test_scroll_to_respects_direction_left(self, executor, mock_device):
+        """scroll_to respects left direction."""
+        mock_device.find_element.side_effect = [None, (540, 1500)]
+        step = Step(action="scroll_to", target="Target Element", direction="left")
+
+        result = executor.execute_step(step)
+
+        assert result.status == "passed"
+        # Swipe left: start_x < end_x
+        args = mock_device.swipe.call_args[0]
+        assert args[0] < args[2]  # cx < cx + distance
+
+    def test_scroll_to_respects_direction_right(self, executor, mock_device):
+        """scroll_to respects right direction."""
+        mock_device.find_element.side_effect = [None, (540, 1500)]
+        step = Step(action="scroll_to", target="Target Element", direction="right")
+
+        result = executor.execute_step(step)
+
+        assert result.status == "passed"
+        # Swipe right: start_x > end_x
+        args = mock_device.swipe.call_args[0]
+        assert args[0] > args[2]  # cx > cx - distance
+
+    def test_scroll_to_fails_without_target(self, executor, mock_device):
+        """scroll_to fails when no element specified."""
+        step = Step(action="scroll_to")
+
+        result = executor.execute_step(step)
+
+        assert result.status == "failed"
+        assert "no element specified" in result.error.lower()
+
+
 class TestStepResult:
     """Test StepResult dataclass."""
 

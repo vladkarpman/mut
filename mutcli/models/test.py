@@ -35,6 +35,12 @@ class Step:
     distance: float | None = None
     from_coords: tuple[float, float] | None = None
 
+    # For long_press action
+    duration: int | None = None  # Duration in milliseconds
+
+    # For scroll_to action
+    max_scrolls: int | None = None
+
     # For verify_screen
     description: str | None = None
 

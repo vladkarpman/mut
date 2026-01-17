@@ -304,3 +304,46 @@ class TestExecutor:
         """Hide keyboard by pressing back."""
         self._device.press_key("BACK")
         return None
+
+    def _action_long_press(self, step: Step) -> str | None:
+        """Execute long press action."""
+        coords = self._resolve_coordinates(step)
+        if coords is None:
+            return f"Element '{step.target}' not found"
+
+        duration = step.duration or 500  # Default 500ms
+        self._device.long_press(coords[0], coords[1], duration)
+        return None
+
+    def _action_scroll_to(self, step: Step) -> str | None:
+        """Scroll until element is visible."""
+        target = step.target
+        if not target:
+            return "No element specified for scroll_to"
+
+        direction = (step.direction or "down").lower()
+        max_scrolls = step.max_scrolls or 10
+
+        for _ in range(max_scrolls):
+            # Check if element exists
+            coords = self._device.find_element(target)
+            if coords:
+                return None  # Found it
+
+            # Swipe in specified direction
+            width, height = self._get_screen_size()
+            cx, cy = width // 2, height // 2
+            distance = int(height * 0.3)  # 30% of screen
+
+            if direction == "up":
+                self._device.swipe(cx, cy, cx, cy + distance)
+            elif direction == "down":
+                self._device.swipe(cx, cy, cx, cy - distance)
+            elif direction == "left":
+                distance = int(width * 0.3)
+                self._device.swipe(cx, cy, cx + distance, cy)
+            elif direction == "right":
+                distance = int(width * 0.3)
+                self._device.swipe(cx, cy, cx - distance, cy)
+
+        return f"Element '{target}' not found after {max_scrolls} scrolls"
