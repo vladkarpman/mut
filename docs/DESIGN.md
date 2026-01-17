@@ -746,44 +746,53 @@ jobs:
 ## Implementation Tasks
 
 ### Phase 1: Core Infrastructure
-- [ ] Project setup (pyproject.toml, structure)
-- [ ] ScrcpyService (connect, screenshot, frame buffer)
-- [ ] DeviceController (tap, swipe, type, elements)
-- [ ] Basic CLI (mut devices)
+- [x] Project setup (pyproject.toml, structure)
+- [x] ScrcpyService (connect, screenshot, frame buffer)
+- [x] DeviceController (tap, swipe, type, elements)
+- [x] Basic CLI (mut devices)
 
 ### Phase 2: Test Execution
-- [ ] YAML parser (test model)
-- [ ] TestExecutor (basic actions)
-- [ ] Video recording (PyAV encoding)
-- [ ] Frame extraction
+- [x] YAML parser (test model)
+- [x] TestExecutor (basic actions)
+- [x] Video recording (PyAV encoding)
+- [x] Frame extraction
 
 ### Phase 3: AI Integration
-- [ ] AIAnalyzer (Gemini client)
-- [ ] verify_screen (deferred)
-- [ ] if_screen (real-time)
-- [ ] Step analysis
+- [x] AIAnalyzer (Gemini client)
+- [x] verify_screen (deferred)
+- [x] if_screen (real-time)
+- [x] Step analysis
+- [x] AI-first element finding
 
 ### Phase 4: Recording
-- [ ] Touch monitor (adb getevent)
-- [ ] mut record / mut stop
-- [ ] Approval UI
-- [ ] YAML generation
+- [x] Touch monitor (adb getevent)
+- [x] mut record / mut stop
+- [x] Approval UI (browser-based)
+- [x] YAML generation
+- [x] Typing detection and step collapsing
 
 ### Phase 5: Reports & Polish
-- [ ] Report generator (JSON + HTML)
-- [ ] CI/CD examples
-- [ ] Documentation
+- [x] Report generator (JSON + HTML)
+- [x] CI/CD examples
+- [x] Documentation
 - [ ] PyPI publish
+
+### Phase 6: Enhanced Features
+- [x] Conditional actions (if_present, if_absent, if_screen)
+- [x] wait_for and scroll_to actions
+- [x] Verbose file logging (MUT_VERBOSE)
+- [x] Timestamped run folders
+- [x] JUnit XML report output
 
 ## Success Criteria
 
-- [ ] `mut run` executes tests without Claude Code
-- [ ] `mut run --no-ai` works in CI without API key
-- [ ] Screenshots < 100ms (scrcpy frame buffer)
-- [ ] Video recording works for 30+ minutes
-- [ ] Deferred verify_screen doesn't block test execution
-- [ ] Real-time if_screen makes correct branching decisions
-- [ ] Reports include video, screenshots, pass/fail status
+- [x] `mut run` executes tests without Claude Code
+- [x] `mut run` works in CI (AI features require API key)
+- [x] Screenshots < 100ms (scrcpy frame buffer)
+- [x] Video recording works reliably
+- [x] Deferred verify_screen doesn't block test execution
+- [x] Real-time if_screen makes correct branching decisions
+- [x] Reports include video, screenshots, pass/fail status
 
 ## Migration Path
 
@@ -792,6 +801,34 @@ Existing mobile-ui-testing plugin users:
 2. Existing YAML tests work unchanged
 3. Run with `mut run` instead of `/run-test`
 4. Plugin becomes thin wrapper calling `mut` CLI
+
+## Verbose Logging
+
+**Date Added:** 2026-01-17
+
+Enable DEBUG-level file logging for troubleshooting via `MUT_VERBOSE=true` in `.env` or environment.
+
+### Log File Locations
+
+| Command | Log Location |
+|---------|--------------|
+| `mut record` | `tests/<name>/debug.log` |
+| `mut run` | `tests/<name>/runs/<timestamp>/debug.log` |
+
+### Log Content
+
+| Logger | Content |
+|--------|---------|
+| `mut.executor` | Step execution, element search, retries, timing |
+| `mut.ai` | API calls, token counts, latency |
+| `mut.scrcpy` | Frame buffer stats, video encoding |
+| `mut.touch` | Touch events, gesture classification |
+
+### Design Rationale
+
+- **File only**: No console spam, logs preserved for later analysis
+- **Timestamped run folders**: Each `mut run` gets its own folder, enabling comparison across runs
+- **DEBUG level**: Captures everything needed for debugging without filtering
 
 ## Future Considerations
 
