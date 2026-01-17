@@ -1,5 +1,6 @@
 """Test report generation."""
 
+import base64
 import html
 import json
 from datetime import datetime
@@ -12,6 +13,28 @@ from mutcli.core.executor import TestResult
 class ReportGenerator:
     """Generate JSON and HTML test reports."""
 
+    # Status icons
+    STATUS_ICONS = {
+        "passed": "&#10003;",  # checkmark
+        "failed": "&#10007;",  # X mark
+        "skipped": "&#8212;",  # em dash
+    }
+
+    # Action CSS class mappings
+    ACTION_CLASSES = {
+        "tap": "tap",
+        "swipe": "swipe",
+        "verify_screen": "verify_screen",
+        "verify": "verify",
+        "wait": "wait",
+        "wait_for": "wait_for",
+        "type": "type",
+        "long_press": "long_press",
+        "scroll_to": "scroll_to",
+        "launch_app": "launch_app",
+        "terminate_app": "terminate_app",
+    }
+
     def __init__(self, output_dir: Path):
         """Initialize generator.
 
@@ -20,6 +43,27 @@ class ReportGenerator:
         """
         self._output_dir = Path(output_dir)
         self._output_dir.mkdir(parents=True, exist_ok=True)
+
+    def _load_template(self) -> str:
+        """Load HTML template from templates directory."""
+        template_path = Path(__file__).parent.parent / "templates" / "report.html"
+        return template_path.read_text()
+
+    def _encode_screenshot(self, data: bytes | None) -> str | None:
+        """Encode screenshot as base64 data URI."""
+        if data is None:
+            return None
+        return f"data:image/png;base64,{base64.b64encode(data).decode()}"
+
+    def _escape_json_for_html(self, json_str: str) -> str:
+        """Escape JSON string for safe embedding in HTML script tags.
+
+        Prevents XSS by escaping sequences that could close the script tag
+        or start an HTML comment.
+        """
+        # Escape </script> by replacing </ with <\/
+        # This is safe in JSON strings and prevents script tag injection
+        return json_str.replace("</", r"<\/").replace("<!--", r"<\!--")
 
     def generate_json(self, result: TestResult) -> Path:
         """Generate JSON report.
@@ -39,7 +83,7 @@ class ReportGenerator:
         return path
 
     def generate_html(self, result: TestResult) -> Path:
-        """Generate HTML report.
+        """Generate interactive HTML report.
 
         Args:
             result: Test execution result
@@ -48,12 +92,36 @@ class ReportGenerator:
             Path to generated report.html
         """
         data = self._result_to_dict(result)
-        html = self._render_html(data)
+
+        # Generate steps HTML
+        steps_html = self._generate_steps_html(data["steps"])
+
+        # Load and populate template
+        template = self._load_template()
+        html_content = template.replace("{{test_name}}", html.escape(data["test"]))
+        html_content = html_content.replace("{{status}}", data["status"])
+        html_content = html_content.replace("{{status_class}}", data["status"])
+        html_content = html_content.replace("{{duration}}", data["duration"])
+        html_content = html_content.replace("{{timestamp}}", data["timestamp"])
+        html_content = html_content.replace("{{steps_html}}", steps_html)
+        html_content = html_content.replace(
+            "{{summary_total}}", str(data["summary"]["total"])
+        )
+        html_content = html_content.replace(
+            "{{summary_passed}}", str(data["summary"]["passed"])
+        )
+        html_content = html_content.replace(
+            "{{summary_failed}}", str(data["summary"]["failed"])
+        )
+        html_content = html_content.replace(
+            "{{summary_skipped}}", str(data["summary"]["skipped"])
+        )
+        json_data = self._escape_json_for_html(json.dumps(data))
+        html_content = html_content.replace("{{json_data}}", json_data)
+        html_content = html_content.replace("{{video_html}}", self._generate_video_html())
 
         path = self._output_dir / "report.html"
-        with open(path, "w") as f:
-            f.write(html)
-
+        path.write_text(html_content)
         return path
 
     def _result_to_dict(self, result: TestResult) -> dict[str, Any]:
@@ -75,6 +143,8 @@ class ReportGenerator:
                     "status": s.status,
                     "duration": f"{s.duration:.1f}s",
                     "error": s.error,
+                    "screenshot_before": self._encode_screenshot(s.screenshot_before),
+                    "screenshot_after": self._encode_screenshot(s.screenshot_after),
                 }
                 for s in result.steps
             ],
@@ -86,129 +156,98 @@ class ReportGenerator:
             },
         }
 
-    def _render_html(self, data: dict[str, Any]) -> str:  # noqa: E501
-        """Render HTML report from data."""
-        status_color = {
-            "passed": "#22c55e",
-            "failed": "#ef4444",
-            "error": "#ef4444",
-            "skipped": "#f59e0b",
-        }
+    def _generate_steps_html(self, steps: list[dict[str, Any]]) -> str:
+        """Generate HTML for all steps."""
+        html_parts = []
+        for index, step in enumerate(steps):
+            step_html = self._generate_step_html(step, index)
+            html_parts.append(step_html)
+        return "\n".join(html_parts)
 
-        # Escape user-controlled values to prevent XSS
-        test_name = html.escape(data["test"])
+    def _generate_step_html(self, step: dict[str, Any], index: int) -> str:
+        """Generate HTML for a single step card."""
+        status = step["status"]
+        action = step["action"]
+        action_class = self.ACTION_CLASSES.get(action, action)
+        status_icon = self.STATUS_ICONS.get(status, "")
+        escaped_action = html.escape(action)
 
-        steps_html = ""
-        for step in data["steps"]:
-            color = status_color.get(step["status"], "#6b7280")
-            if step["status"] == "passed":
-                icon = "[PASS]"
-            elif step["status"] == "failed":
-                icon = "[FAIL]"
-            else:
-                icon = "[SKIP]"
-            error_html = ""
-            if step["error"]:
-                escaped_error = html.escape(step["error"])
-                error_html = f'<div class="error">{escaped_error}</div>'
-            escaped_action = html.escape(step["action"])
-            steps_html += f"""
-            <div class="step-wrapper">
-                <div class="step">
-                    <span class="icon">{icon}</span>
-                    <span class="action">Step {step["number"]}: {escaped_action}</span>
-                    <span class="duration">{step["duration"]}</span>
-                    <span class="status" style="color: {color}">{step["status"]}</span>
-                </div>
-                {error_html}
-            </div>
-            """
+        # Error message HTML (if any)
+        error_html = ""
+        if step["error"]:
+            escaped_error = html.escape(step["error"])
+            error_html = f'<div class="step-error">{escaped_error}</div>'
 
-        main_color = status_color.get(data["status"], "#6b7280")
-        status_upper = data["status"].upper()
-        skipped_count = data["summary"]["skipped"]
+        # Screenshots HTML (if any)
+        screenshots_html = self._generate_screenshots_html(step)
 
-        # Build HTML with CSS split across lines for readability
-        css = """
-        body {
-            font-family: -apple-system, BlinkMacSystemFont, sans-serif;
-            margin: 0; padding: 20px;
-            background: #0f172a; color: #e2e8f0;
-        }
-        .container { max-width: 900px; margin: 0 auto; }
-        h1 { color: #f8fafc; }
-        .summary {
-            background: #1e293b; padding: 20px;
-            border-radius: 8px; margin: 20px 0;
-        }
-        .summary-grid {
-            display: grid; grid-template-columns: repeat(4, 1fr);
-            gap: 16px; margin-top: 16px;
-        }
-        .stat { text-align: center; }
-        .stat-value { font-size: 2rem; font-weight: bold; }
-        .stat-label { color: #94a3b8; }
-        .status { font-weight: bold; }
-        .steps { background: #1e293b; padding: 20px; border-radius: 8px; }
-        .step-wrapper { padding: 12px 0; border-bottom: 1px solid #334155; }
-        .step-wrapper:last-child { border-bottom: none; }
-        .step {
-            display: flex; align-items: center; gap: 12px;
-        }
-        .icon { font-size: 1.2rem; }
-        .action { flex: 1; }
-        .duration { color: #94a3b8; }
-        .error { color: #fca5a5; font-size: 0.9rem; margin-top: 8px; padding-left: 32px; }
-        """
-
-        return f"""<!DOCTYPE html>
-<html>
-<head>
-    <meta charset="UTF-8">
-    <title>Test Report: {test_name}</title>
-    <style>{css}</style>
-</head>
-<body>
-    <div class="container">
-        <h1>Test Report</h1>
-
-        <div class="summary">
-            <div>
-                <strong>Test:</strong> {test_name}<br>
-                <strong>Status:</strong>
-                <span class="status" style="color: {main_color}">{status_upper}</span><br>
-                <strong>Duration:</strong> {data["duration"]}<br>
-                <strong>Time:</strong> {data["timestamp"]}
-            </div>
-
-            <div class="summary-grid">
-                <div class="stat">
-                    <div class="stat-value">{data["summary"]["total"]}</div>
-                    <div class="stat-label">Total</div>
-                </div>
-                <div class="stat">
-                    <div class="stat-value" style="color: #22c55e">
-                        {data["summary"]["passed"]}
-                    </div>
-                    <div class="stat-label">Passed</div>
-                </div>
-                <div class="stat">
-                    <div class="stat-value" style="color: #ef4444">
-                        {data["summary"]["failed"]}
-                    </div>
-                    <div class="stat-label">Failed</div>
-                </div>
-                <div class="stat">
-                    <div class="stat-value" style="color: #f59e0b">{skipped_count}</div>
-                    <div class="stat-label">Skipped</div>
-                </div>
-            </div>
+        return f"""<div class="step-card {status}" data-status="{status}" data-index="{index}" onclick="selectStep({index})">
+    <div class="step-header">
+        <div class="step-title">
+            <div class="step-number {status}">{step["number"]}</div>
+            <span class="action-badge {action_class}">{escaped_action}</span>
+            <span class="step-description">{html.escape(str(step.get("target", "")))}</span>
         </div>
-
-        <div class="steps">
-            <h2>Steps</h2>
-            {steps_html}
+        <div class="step-meta">
+            <span class="step-duration">{step["duration"]}</span>
+            <span class="step-status-icon {status}">{status_icon}</span>
         </div>
     </div>
-</body>
-</html>"""
+    {error_html}
+    {screenshots_html}
+</div>"""
+
+    def _generate_screenshots_html(self, step: dict[str, Any]) -> str:
+        """Generate HTML for before/after screenshots."""
+        before = step.get("screenshot_before")
+        after = step.get("screenshot_after")
+
+        if not before and not after:
+            return ""
+
+        before_html = self._generate_frame_html("before", "Before", before)
+        after_html = self._generate_frame_html("after", "After", after)
+
+        return f"""<div class="step-frames">
+    {before_html}
+    {after_html}
+</div>"""
+
+    def _generate_frame_html(
+        self, frame_type: str, label: str, image_data: str | None
+    ) -> str:
+        """Generate HTML for a single frame column."""
+        if image_data:
+            image_html = f'<img src="{image_data}" alt="{label}" onclick="openImageModal(this.src)">'
+        else:
+            image_html = '<div class="frame-placeholder">No screenshot</div>'
+
+        return f"""<div class="frame-column {frame_type}">
+    <div class="frame-column-header">{label}</div>
+    <div class="frame-image-container">
+        {image_html}
+    </div>
+</div>"""
+
+    def _generate_video_html(self) -> str:
+        """Generate video player HTML if video exists."""
+        video_path = self._output_dir / "recording" / "recording.mp4"
+        if not video_path.exists():
+            return ""
+
+        return """<div class="video-panel" id="videoPanel">
+    <div class="video-panel-header">Recording</div>
+    <div class="video-container">
+        <div class="video-wrapper">
+            <video id="reportVideo" preload="metadata">
+                <source src="recording/recording.mp4" type="video/mp4">
+                Your browser does not support video playback.
+            </video>
+        </div>
+        <div class="video-controls">
+            <button class="video-play-btn" id="videoPlayBtn">&#9658;</button>
+            <input type="range" class="video-scrubber" id="videoScrubber" value="0" min="0" max="100">
+            <span class="video-time" id="videoTime">0:00 / 0:00</span>
+        </div>
+    </div>
+</div>"""
