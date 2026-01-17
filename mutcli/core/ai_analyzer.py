@@ -56,14 +56,14 @@ class AIAnalyzer:
     - if_screen: Real-time (immediate AI call for branching decisions)
     """
 
-    DEFAULT_MODEL = "gemini-2.5-flash"
+    DEFAULT_MODEL = "gemini-3-flash-preview"
 
     def __init__(self, api_key: str | None = None, model: str | None = None):
         """Initialize analyzer.
 
         Args:
             api_key: Google API key. If not provided, reads from GOOGLE_API_KEY env var.
-            model: Model to use. Defaults to gemini-2.5-flash.
+            model: Model to use. Defaults to gemini-3-flash-preview.
         """
         self._api_key = api_key or os.environ.get("GOOGLE_API_KEY")
         self._model = model or self.DEFAULT_MODEL
