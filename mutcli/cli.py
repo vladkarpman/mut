@@ -44,7 +44,7 @@ def _create_run_folder(test_dir: Path) -> Path:
 
     timestamp = datetime.now().strftime("%Y-%m-%d_%H-%M-%S")
     run_folder = runs_dir / timestamp
-    run_folder.mkdir()
+    run_folder.mkdir(exist_ok=True)
 
     return run_folder
 
