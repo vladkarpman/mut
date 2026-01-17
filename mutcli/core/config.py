@@ -238,8 +238,9 @@ def setup_logging(verbose: bool, log_dir: Path | None) -> Path | None:
         datefmt="%Y-%m-%d %H:%M:%S"
     ))
 
-    # Configure root mut logger
+    # Configure root mut logger (clear existing handlers to prevent duplicates)
     mut_logger = logging.getLogger("mut")
+    mut_logger.handlers.clear()
     mut_logger.setLevel(logging.DEBUG)
     mut_logger.addHandler(handler)
 

@@ -47,3 +47,23 @@ class TestSetupLogging:
     def test_logging_does_nothing_when_log_dir_none(self):
         """No error when log_dir is None."""
         setup_logging(verbose=True, log_dir=None)  # Should not raise
+
+    def test_multiple_calls_no_duplicate_handlers(self, tmp_path):
+        """Calling setup_logging twice doesn't create duplicate handlers."""
+        dir1 = tmp_path / "run1"
+        dir2 = tmp_path / "run2"
+        dir1.mkdir()
+        dir2.mkdir()
+
+        # Call setup_logging twice
+        setup_logging(verbose=True, log_dir=dir1)
+        setup_logging(verbose=True, log_dir=dir2)
+
+        # Log a message
+        logger = logging.getLogger("mut.test")
+        logger.debug("Single message")
+
+        # Should only appear once in dir2 (the latest log)
+        content = (dir2 / "debug.log").read_text()
+        count = content.count("Single message")
+        assert count == 1, f"Expected 1 occurrence, found {count}"
