@@ -1,11 +1,16 @@
 """Video frame extraction using PyAV."""
 
+from __future__ import annotations
+
 import logging
 from io import BytesIO
 from pathlib import Path
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
 import av
+
+if TYPE_CHECKING:
+    from mutcli.core.step_collapsing import CollapsedStep
 
 logger = logging.getLogger("mut.frame_extractor")
 
@@ -14,8 +19,12 @@ class FrameExtractor:
     """Extract frames from recorded video at specific timestamps.
 
     Uses PyAV for efficient video seeking and frame extraction.
-    Designed to extract frames 100ms before touch events to capture
-    the UI state at the moment of tap decision.
+    Uses midpoint approach for non-overlapping time ranges.
+
+    Frame extraction by gesture type:
+    - tap: before, touch, after (3 frames)
+    - swipe: before, swipe_start, swipe_end, after (4 frames)
+    - long_press: before, press_start, press_held, after (4 frames)
 
     Usage:
         extractor = FrameExtractor("/path/to/video.mp4")
@@ -25,7 +34,9 @@ class FrameExtractor:
         paths = extractor.extract_for_touches(touch_events, output_dir)
     """
 
-    BEFORE_OFFSET_MS = 100  # Extract frame 100ms before touch
+    # Timing offsets
+    TOUCH_OFFSET = 0.05  # 50ms before touch for "touch" frame
+    PRESS_HELD_RATIO = 0.7  # Show press at 70% of duration for long_press
 
     def __init__(self, video_path: str | Path):
         """Initialize with video file path.
@@ -35,8 +46,30 @@ class FrameExtractor:
         """
         self._video_path = Path(video_path)
 
+    def get_duration(self) -> float:
+        """Get video duration in seconds.
+
+        Returns:
+            Duration in seconds, or 0.0 on error
+        """
+        try:
+            with av.open(str(self._video_path)) as container:
+                stream = container.streams.video[0]
+                if stream.duration and stream.time_base:
+                    return float(stream.duration * stream.time_base)
+                # Fallback: calculate from container duration
+                if container.duration:
+                    return container.duration / av.time_base
+                return 0.0
+        except Exception as e:
+            logger.error(f"Failed to get video duration: {e}")
+            return 0.0
+
     def extract_frame(self, timestamp_sec: float) -> bytes | None:
         """Extract single frame at timestamp as PNG bytes.
+
+        Uses accurate frame extraction by seeking to nearest keyframe
+        then decoding forward to the target timestamp.
 
         Args:
             timestamp_sec: Timestamp in seconds
@@ -47,22 +80,33 @@ class FrameExtractor:
         try:
             with av.open(str(self._video_path)) as container:
                 stream = container.streams.video[0]
+                time_base = float(stream.time_base) if stream.time_base else 1.0 / 30
 
-                # Calculate pts for seek
-                time_base = stream.time_base or 1
-                target_pts = int(timestamp_sec / float(time_base))
-                container.seek(target_pts, stream=stream)
+                # Seek to keyframe before target (backward=True seeks to keyframe)
+                target_pts = int(timestamp_sec / time_base)
+                container.seek(target_pts, stream=stream, backward=True)
 
-                # Get first frame after seek
+                # Decode frames until we reach or pass the target timestamp
+                best_frame = None
+                target_time = timestamp_sec
+
                 for frame in container.decode(video=0):
-                    img = frame.to_image()
+                    frame_time = float(frame.pts * time_base) if frame.pts else 0.0
 
-                    # Convert to PNG bytes
+                    # Keep the frame closest to target without going too far past
+                    if best_frame is None or frame_time <= target_time + 0.05:
+                        best_frame = frame
+
+                    # Stop if we've passed the target by more than 100ms
+                    if frame_time > target_time + 0.1:
+                        break
+
+                if best_frame is not None:
+                    img = best_frame.to_image()
                     buffer = BytesIO()
                     img.save(buffer, format="PNG")
                     return buffer.getvalue()
 
-                # No frames decoded
                 logger.warning(f"No frames found at timestamp {timestamp_sec}s")
                 return None
 
@@ -73,53 +117,457 @@ class FrameExtractor:
             logger.error(f"Failed to extract frame at {timestamp_sec}s: {e}")
             return None
 
+    def _calculate_frame_times(
+        self,
+        touch_events: list[dict[str, Any]],
+        video_duration: float,
+    ) -> list[dict[str, Any]]:
+        """Calculate frame extraction times using midpoint approach.
+
+        Uses midpoints between consecutive gestures to ensure no overlap.
+        Frame times vary by gesture type:
+
+        - tap: before, touch, after (3 frames)
+        - swipe/scroll: before, swipe_start, swipe_end, after (4 frames)
+        - long_press: before, press_start, press_held, after (4 frames)
+
+        Args:
+            touch_events: List of touch event dicts with 'timestamp', 'gesture', 'duration_ms'
+            video_duration: Video duration in seconds
+
+        Returns:
+            List of dicts with step_num, gesture, and frame times
+        """
+        frame_times = []
+        n = len(touch_events)
+
+        for i, event in enumerate(touch_events):
+            touch_end_time = event.get("timestamp", 0.0)
+            gesture = event.get("gesture", "tap")
+            duration_ms = event.get("duration_ms", 50)
+            duration_sec = duration_ms / 1000.0
+
+            # Touch start time = end time - duration
+            touch_start_time = touch_end_time - duration_sec
+
+            # Before: midpoint between previous gesture end and this gesture start
+            if i == 0:
+                prev_end_time = 0.0  # Video start
+            else:
+                prev_end_time = touch_events[i - 1].get("timestamp", 0.0)
+            before_time = (prev_end_time + touch_start_time) / 2
+
+            # After: midpoint between this gesture end and next gesture start
+            if i == n - 1:
+                next_start_time = video_duration  # Video end
+            else:
+                next_event = touch_events[i + 1]
+                next_end = next_event.get("timestamp", 0.0)
+                next_duration = next_event.get("duration_ms", 50) / 1000.0
+                next_start_time = next_end - next_duration
+            after_time = (touch_end_time + next_start_time) / 2
+
+            # Build frame times based on gesture type
+            ft: dict[str, Any] = {
+                "step_num": i + 1,
+                "gesture": gesture,
+                "before_time": before_time,
+                "after_time": after_time,
+            }
+
+            if gesture == "tap":
+                # tap: show target button just before touch
+                ft["touch_time"] = max(0.0, touch_start_time - self.TOUCH_OFFSET)
+
+            elif gesture == "swipe":
+                # swipe: show start position and end position
+                ft["swipe_start_time"] = touch_start_time
+                ft["swipe_end_time"] = max(touch_start_time, touch_end_time - 0.05)
+
+            elif gesture == "long_press":
+                # long_press: show press start and held state
+                ft["press_start_time"] = touch_start_time
+                # Show press at 70% of duration (finger still held)
+                held_time = touch_start_time + (duration_sec * self.PRESS_HELD_RATIO)
+                ft["press_held_time"] = held_time
+
+            else:
+                # Unknown gesture - treat as tap
+                ft["touch_time"] = max(0.0, touch_start_time - self.TOUCH_OFFSET)
+
+            frame_times.append(ft)
+
+        return frame_times
+
+    def _extract_and_save(
+        self,
+        timestamp: float,
+        output_path: Path,
+        step_num: int,
+        frame_name: str,
+    ) -> Path | None:
+        """Extract a frame and save it to disk.
+
+        Args:
+            timestamp: Video timestamp in seconds
+            output_path: Path to save the frame
+            step_num: Step number for logging
+            frame_name: Frame name for logging
+
+        Returns:
+            Path if successful, None otherwise
+        """
+        data = self.extract_frame(timestamp)
+        if data:
+            with open(output_path, "wb") as f:
+                f.write(data)
+            logger.debug(f"Step {step_num}: {frame_name} @ {timestamp:.2f}s")
+            return output_path
+        else:
+            logger.warning(f"Failed to extract {frame_name} frame for step {step_num}")
+            return None
+
     def extract_for_touches(
         self,
         touch_events: list[dict[str, Any]],
         output_dir: Path,
     ) -> list[Path]:
-        """Extract frames 100ms before each touch event.
+        """Extract frames for touch events using midpoint approach.
+
+        Uses midpoints between consecutive gestures to ensure non-overlapping
+        time ranges. Frame count varies by gesture type:
+        - tap: before, touch, after (3 frames)
+        - swipe: before, swipe_start, swipe_end, after (4 frames)
+        - long_press: before, press_start, press_held, after (4 frames)
 
         Args:
-            touch_events: List of dicts with 'timestamp' field (seconds)
-            output_dir: Directory to save frames as touch_001.png, touch_002.png, etc.
+            touch_events: List of dicts with 'timestamp', 'gesture', 'duration_ms'
+            output_dir: Directory to save frames
 
         Returns:
             List of paths to extracted frame files (only successful extractions)
         """
         output_dir.mkdir(parents=True, exist_ok=True)
 
-        if not touch_events:
-            return []
-
         extracted_paths: list[Path] = []
-        offset_sec = self.BEFORE_OFFSET_MS / 1000.0
 
-        for idx, event in enumerate(touch_events, start=1):
-            timestamp = event.get("timestamp", 0.0)
+        if not touch_events:
+            return extracted_paths
 
-            # Calculate extraction timestamp (100ms before touch)
-            extract_at = max(0.0, timestamp - offset_sec)
+        # Get video duration for boundary calculation
+        video_duration = self.get_duration()
+        if video_duration <= 0:
+            logger.warning("Could not get video duration, using fallback")
+            video_duration = touch_events[-1].get("timestamp", 0.0) + 2.0
 
-            # Extract frame
-            frame_data = self.extract_frame(extract_at)
+        # Calculate frame times using midpoint approach
+        frame_times = self._calculate_frame_times(touch_events, video_duration)
 
-            if frame_data is None:
-                logger.warning(f"Skipping touch {idx}: extraction failed")
-                continue
+        for ft in frame_times:
+            step_num = ft["step_num"]
+            gesture = ft["gesture"]
+            step_str = f"{step_num:03d}"
 
-            # Save to file
-            filename = f"touch_{idx:03d}.png"
-            file_path = output_dir / filename
+            # BEFORE frame (common to all gestures)
+            path = self._extract_and_save(
+                ft["before_time"],
+                output_dir / f"step_{step_str}_before.png",
+                step_num, "before"
+            )
+            if path:
+                extracted_paths.append(path)
 
-            with open(file_path, "wb") as f:
-                f.write(frame_data)
+            # Gesture-specific frames
+            if gesture == "tap":
+                path = self._extract_and_save(
+                    ft["touch_time"],
+                    output_dir / f"step_{step_str}_touch.png",
+                    step_num, "touch"
+                )
+                if path:
+                    extracted_paths.append(path)
 
-            extracted_paths.append(file_path)
-            logger.debug(f"Extracted frame for touch {idx} at {extract_at:.3f}s")
+            elif gesture == "swipe":
+                path = self._extract_and_save(
+                    ft["swipe_start_time"],
+                    output_dir / f"step_{step_str}_swipe_start.png",
+                    step_num, "swipe_start"
+                )
+                if path:
+                    extracted_paths.append(path)
+
+                path = self._extract_and_save(
+                    ft["swipe_end_time"],
+                    output_dir / f"step_{step_str}_swipe_end.png",
+                    step_num, "swipe_end"
+                )
+                if path:
+                    extracted_paths.append(path)
+
+            elif gesture == "long_press":
+                path = self._extract_and_save(
+                    ft["press_start_time"],
+                    output_dir / f"step_{step_str}_press_start.png",
+                    step_num, "press_start"
+                )
+                if path:
+                    extracted_paths.append(path)
+
+                path = self._extract_and_save(
+                    ft["press_held_time"],
+                    output_dir / f"step_{step_str}_press_held.png",
+                    step_num, "press_held"
+                )
+                if path:
+                    extracted_paths.append(path)
+
+            else:
+                # Unknown gesture - extract single touch frame
+                path = self._extract_and_save(
+                    ft.get("touch_time", ft["before_time"]),
+                    output_dir / f"step_{step_str}_touch.png",
+                    step_num, "touch"
+                )
+                if path:
+                    extracted_paths.append(path)
+
+            # AFTER frame (common to all gestures)
+            path = self._extract_and_save(
+                ft["after_time"],
+                output_dir / f"step_{step_str}_after.png",
+                step_num, "after"
+            )
+            if path:
+                extracted_paths.append(path)
 
         logger.info(
-            f"Extracted {len(extracted_paths)}/{len(touch_events)} frames to {output_dir}"
+            f"Extracted {len(extracted_paths)} frames for {len(touch_events)} gestures"
+        )
+
+        return extracted_paths
+
+    def _calculate_collapsed_frame_times(
+        self,
+        collapsed_steps: list[CollapsedStep],
+        touch_events: list[dict[str, Any]],
+        video_duration: float,
+    ) -> list[dict[str, Any]]:
+        """Calculate frame extraction times for collapsed steps.
+
+        Uses original_indices to find timestamps in raw touch_events.
+        For "type" action, extracts only before/after frames.
+
+        Args:
+            collapsed_steps: List of CollapsedStep objects
+            touch_events: Original raw touch events
+            video_duration: Video duration in seconds
+
+        Returns:
+            List of dicts with step_num, action, and frame times
+        """
+        frame_times = []
+        n = len(collapsed_steps)
+
+        for i, step in enumerate(collapsed_steps):
+            start_idx, end_idx = step.original_indices
+
+            # Get timestamps from raw touch_events
+            first_event = touch_events[start_idx]
+            last_event = touch_events[end_idx]
+
+            first_end_time = first_event.get("timestamp", 0.0)
+            first_duration_ms = first_event.get("duration_ms", 50)
+            first_start_time = first_end_time - (first_duration_ms / 1000.0)
+
+            last_end_time = last_event.get("timestamp", 0.0)
+
+            # Before: midpoint between previous step end and this step start
+            if i == 0:
+                prev_end_time = 0.0  # Video start
+            else:
+                prev_step = collapsed_steps[i - 1]
+                prev_event = touch_events[prev_step.original_indices[1]]
+                prev_end_time = prev_event.get("timestamp", 0.0)
+            before_time = (prev_end_time + first_start_time) / 2
+
+            # After: midpoint between this step end and next step start
+            if i == n - 1:
+                next_start_time = video_duration  # Video end
+            else:
+                next_step = collapsed_steps[i + 1]
+                next_event = touch_events[next_step.original_indices[0]]
+                next_end = next_event.get("timestamp", 0.0)
+                next_duration = next_event.get("duration_ms", 50) / 1000.0
+                next_start_time = next_end - next_duration
+            after_time = (last_end_time + next_start_time) / 2
+
+            ft: dict[str, Any] = {
+                "step_num": step.index,
+                "action": step.action,
+                "before_time": before_time,
+                "after_time": after_time,
+            }
+
+            if step.action == "type":
+                # "type" action: only before and after, no touch frame
+                pass  # No additional frame times needed
+
+            elif step.action == "tap":
+                # tap: show target button just before touch
+                ft["touch_time"] = max(0.0, first_start_time - self.TOUCH_OFFSET)
+
+            elif step.action == "swipe":
+                # swipe: show start position and end position
+                ft["swipe_start_time"] = first_start_time
+                ft["swipe_end_time"] = max(
+                    first_start_time, last_end_time - 0.05
+                )
+
+            elif step.action == "long_press":
+                # long_press: show press start and held state
+                # Use duration_ms from the event for accurate duration
+                duration_sec = first_duration_ms / 1000.0
+                ft["press_start_time"] = first_start_time
+                held_time = first_start_time + (duration_sec * self.PRESS_HELD_RATIO)
+                ft["press_held_time"] = held_time
+
+            else:
+                # Unknown action - treat as tap
+                ft["touch_time"] = max(0.0, first_start_time - self.TOUCH_OFFSET)
+
+            frame_times.append(ft)
+
+        return frame_times
+
+    def extract_for_collapsed_steps(
+        self,
+        collapsed_steps: list[CollapsedStep],
+        touch_events: list[dict[str, Any]],
+        output_dir: Path,
+    ) -> list[Path]:
+        """Extract frames for collapsed steps.
+
+        Uses collapsed step data with original_indices to find timestamps
+        in raw touch_events. For "type" action, extracts only before/after
+        frames (keyboard taps are not useful to show).
+
+        Frame count varies by action type:
+        - type: before, after (2 frames)
+        - tap: before, touch, after (3 frames)
+        - swipe: before, swipe_start, swipe_end, after (4 frames)
+        - long_press: before, press_start, press_held, after (4 frames)
+
+        Args:
+            collapsed_steps: List of CollapsedStep objects
+            touch_events: Original raw touch events for timestamp lookup
+            output_dir: Directory to save frames
+
+        Returns:
+            List of paths to extracted frame files (only successful extractions)
+        """
+        output_dir.mkdir(parents=True, exist_ok=True)
+
+        extracted_paths: list[Path] = []
+
+        if not collapsed_steps or not touch_events:
+            return extracted_paths
+
+        # Get video duration for boundary calculation
+        video_duration = self.get_duration()
+        if video_duration <= 0:
+            logger.warning("Could not get video duration, using fallback")
+            last_event = touch_events[-1]
+            video_duration = last_event.get("timestamp", 0.0) + 2.0
+
+        # Calculate frame times for collapsed steps
+        frame_times = self._calculate_collapsed_frame_times(
+            collapsed_steps, touch_events, video_duration
+        )
+
+        for ft in frame_times:
+            step_num = ft["step_num"]
+            action = ft["action"]
+            step_str = f"{step_num:03d}"
+
+            # BEFORE frame (common to all actions)
+            path = self._extract_and_save(
+                ft["before_time"],
+                output_dir / f"step_{step_str}_before.png",
+                step_num, "before"
+            )
+            if path:
+                extracted_paths.append(path)
+
+            # Action-specific frames
+            if action == "type":
+                # "type" action: no touch frame, only before and after
+                pass
+
+            elif action == "tap":
+                path = self._extract_and_save(
+                    ft["touch_time"],
+                    output_dir / f"step_{step_str}_touch.png",
+                    step_num, "touch"
+                )
+                if path:
+                    extracted_paths.append(path)
+
+            elif action == "swipe":
+                path = self._extract_and_save(
+                    ft["swipe_start_time"],
+                    output_dir / f"step_{step_str}_swipe_start.png",
+                    step_num, "swipe_start"
+                )
+                if path:
+                    extracted_paths.append(path)
+
+                path = self._extract_and_save(
+                    ft["swipe_end_time"],
+                    output_dir / f"step_{step_str}_swipe_end.png",
+                    step_num, "swipe_end"
+                )
+                if path:
+                    extracted_paths.append(path)
+
+            elif action == "long_press":
+                path = self._extract_and_save(
+                    ft["press_start_time"],
+                    output_dir / f"step_{step_str}_press_start.png",
+                    step_num, "press_start"
+                )
+                if path:
+                    extracted_paths.append(path)
+
+                path = self._extract_and_save(
+                    ft["press_held_time"],
+                    output_dir / f"step_{step_str}_press_held.png",
+                    step_num, "press_held"
+                )
+                if path:
+                    extracted_paths.append(path)
+
+            else:
+                # Unknown action - extract single touch frame
+                path = self._extract_and_save(
+                    ft.get("touch_time", ft["before_time"]),
+                    output_dir / f"step_{step_str}_touch.png",
+                    step_num, "touch"
+                )
+                if path:
+                    extracted_paths.append(path)
+
+            # AFTER frame (common to all actions)
+            path = self._extract_and_save(
+                ft["after_time"],
+                output_dir / f"step_{step_str}_after.png",
+                step_num, "after"
+            )
+            if path:
+                extracted_paths.append(path)
+
+        logger.info(
+            f"Extracted {len(extracted_paths)} frames for "
+            f"{len(collapsed_steps)} collapsed steps"
         )
 
         return extracted_paths
