@@ -30,6 +30,8 @@ class PreviewStep:
     frames: dict[str, str | None] = field(default_factory=dict)
     analysis: dict[str, str] = field(default_factory=dict)
     suggested_verification: str | None = None
+    tap_count: int | None = None  # Number of keyboard taps for type action
+    text: str | None = None  # User-entered text for type action
 
 
 @dataclass
@@ -242,6 +244,8 @@ class PreviewServer:
                 "analysis": analysis,
                 "suggestedVerification": step.suggested_verification,
                 "enabled": step.enabled,
+                "tapCount": step.tap_count,
+                "text": step.text,
             }
 
             steps_data.append(step_data)
