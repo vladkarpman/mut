@@ -427,7 +427,7 @@ def _process_recording(
         direction = event.get("direction")  # For swipe events
 
         # Build frames dict with both before and after
-        frames: dict[str, str] = {}
+        frames: dict[str, str | None] = {}
         if before_path.exists():
             frames["before"] = f"recording/screenshots/step_{step_num:03d}_before.png"
         if after_path.exists():
