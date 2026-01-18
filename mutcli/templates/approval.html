@@ -5770,13 +5770,22 @@
                     const endY = parseFloat(indicator.dataset.endY) || y;
 
                     const endLeft = endX * scaleX;
-                    const endTop = endY * scaleY;
+                    const endTop = (endY + yOffsetPixels) * scaleY;
+
+                    // Calculate line length and angle for trajectory
+                    const dx = endLeft - posLeft;
+                    const dy = endTop - posTop;
+                    const lineLength = Math.sqrt(dx * dx + dy * dy);
+                    const angle = Math.atan2(dy, dx) * (180 / Math.PI);
 
                     // Set CSS custom properties for trajectory line
-                    indicator.style.setProperty('--start-left', posLeft + 'px');
-                    indicator.style.setProperty('--start-top', posTop + 'px');
-                    indicator.style.setProperty('--end-left', endLeft + 'px');
-                    indicator.style.setProperty('--end-top', endTop + 'px');
+                    const trajectoryLine = indicator.querySelector('.swipe-trajectory-line');
+                    if (trajectoryLine) {
+                        trajectoryLine.style.setProperty('--start-x', posLeft + 'px');
+                        trajectoryLine.style.setProperty('--start-y', posTop + 'px');
+                        trajectoryLine.style.setProperty('--line-length', lineLength + 'px');
+                        trajectoryLine.style.setProperty('--line-angle', angle + 'deg');
+                    }
                 }
             });
         }
@@ -8537,10 +8546,20 @@
                     const endLeft = endX * scaleX;
                     const endTop = adjustedEndY * scaleY;
 
-                    indicator.style.setProperty('--start-left', startLeft + 'px');
-                    indicator.style.setProperty('--start-top', startTop + 'px');
-                    indicator.style.setProperty('--end-left', endLeft + 'px');
-                    indicator.style.setProperty('--end-top', endTop + 'px');
+                    // Calculate line length and angle for trajectory
+                    const dx = endLeft - startLeft;
+                    const dy = endTop - startTop;
+                    const lineLength = Math.sqrt(dx * dx + dy * dy);
+                    const angle = Math.atan2(dy, dx) * (180 / Math.PI);
+
+                    // Set CSS custom properties for trajectory line
+                    const trajectoryLine = indicator.querySelector('.swipe-trajectory-line');
+                    if (trajectoryLine) {
+                        trajectoryLine.style.setProperty('--start-x', startLeft + 'px');
+                        trajectoryLine.style.setProperty('--start-y', startTop + 'px');
+                        trajectoryLine.style.setProperty('--line-length', lineLength + 'px');
+                        trajectoryLine.style.setProperty('--line-angle', angle + 'deg');
+                    }
                 }
             });
         }

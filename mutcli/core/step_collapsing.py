@@ -89,10 +89,10 @@ def collapse_steps(
 
     Args:
         touch_events: List of raw touch event dicts with keys:
-            - x, y: coordinates
+            - x, y: END coordinates (final touch position)
+            - start_x, start_y: START coordinates (for swipe gestures)
             - timestamp: seconds from recording start
             - gesture: "tap", "swipe", or "long_press"
-            - end_x, end_y: for swipe gestures
             - duration_ms: for long_press gestures
         typing_sequences: List of TypingSequence objects identifying
             which touch event ranges are keyboard typing
@@ -155,10 +155,12 @@ def collapse_steps(
             ))
 
         elif gesture == "swipe":
-            start_x = event["x"]
-            start_y = event["y"]
-            end_x = event.get("end_x", start_x)
-            end_y = event.get("end_y", start_y)
+            # x, y are END position, start_x, start_y are START position
+            # (per touch_monitor.py coordinate convention)
+            start_x = event.get("start_x", event["x"])
+            start_y = event.get("start_y", event["y"])
+            end_x = event["x"]
+            end_y = event["y"]
             direction = _calculate_direction(start_x, start_y, end_x, end_y)
 
             steps.append(CollapsedStep(

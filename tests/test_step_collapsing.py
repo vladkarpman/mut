@@ -231,10 +231,12 @@ class TestCollapseStepsWithSwipe:
 
     def test_swipe_gesture_preserved(self):
         """Swipe gestures should preserve start/end coords and direction."""
+        # touch_monitor.py format: x,y = END position, start_x,start_y = START position
         touch_events = [
             {"x": 540, "y": 500, "timestamp": 1.0, "gesture": "tap"},
             {
-                "x": 540, "y": 1500, "end_x": 540, "end_y": 500,
+                "x": 540, "y": 500,  # END position (where finger lifted)
+                "start_x": 540, "start_y": 1500,  # START position (where finger touched)
                 "timestamp": 2.0, "gesture": "swipe", "duration_ms": 300
             },
             {"x": 300, "y": 600, "timestamp": 3.0, "gesture": "tap"},

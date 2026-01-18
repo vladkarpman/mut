@@ -585,11 +585,12 @@ class StepAnalyzer:
         swipe_start_data = swipe_start_path.read_bytes()
         swipe_end_data = swipe_end_path.read_bytes()
 
-        # Extract coordinates
-        start_x = int(event.get("x", 0))
-        start_y = int(event.get("y", 0))
-        end_x = int(event.get("end_x", start_x))
-        end_y = int(event.get("end_y", start_y))
+        # Extract coordinates - x, y are END position, start_x, start_y are START position
+        # (per touch_monitor.py: x/y = final position, start_x/start_y = initial position)
+        start_x = int(event.get("start_x", event.get("x", 0)))
+        start_y = int(event.get("start_y", event.get("y", 0)))
+        end_x = int(event.get("x", 0))
+        end_y = int(event.get("y", 0))
 
         result = await self._ai_analyzer.analyze_swipe(
             before=before_data,
