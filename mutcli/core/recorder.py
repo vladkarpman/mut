@@ -234,6 +234,17 @@ class Recorder:
             logger.error(f"Failed to save touch events: {e}")
             # Continue cleanup even if save fails
 
+        # Save screen dimensions
+        screen_size_path = self._output_dir / "screen_size.json"
+        try:
+            if self._touch_monitor:
+                screen_width, screen_height = self._touch_monitor.get_screen_size()
+                with open(screen_size_path, "w") as f:
+                    json.dump({"width": screen_width, "height": screen_height}, f, indent=2)
+                logger.info(f"Saved screen size: {screen_width}x{screen_height}")
+        except Exception as e:
+            logger.error(f"Failed to save screen size: {e}")
+
         # Save ADB state data
         if self._touch_monitor:
             try:

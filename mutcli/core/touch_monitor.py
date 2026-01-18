@@ -284,6 +284,17 @@ class TouchMonitor:
         with self._lock:
             self._events.clear()
 
+    def get_screen_size(self) -> tuple[int, int]:
+        """Get the device screen size.
+
+        Returns:
+            Tuple of (width, height) in pixels. Defaults to (1080, 2400) if not detected.
+        """
+        return (
+            self._screen_width or 1080,
+            self._screen_height or 2400,
+        )
+
     def _process_loop(self) -> None:
         """Process getevent output in background thread."""
         if not self._process or not self._process.stdout:

@@ -400,9 +400,23 @@ def _process_recording(
         console.print("[yellow]Warning:[/yellow] No touch events found in recording")
         console.print("The generated test will only contain app launch/terminate steps.")
 
-    # Get screen dimensions for typing detection and preview
-    screen_width = touch_events[0].get("screen_width", 1080) if touch_events else 1080
-    screen_height = touch_events[0].get("screen_height", 2400) if touch_events else 2400
+    # Load screen dimensions from screen_size.json (created by recorder)
+    screen_size_path = test_dir / "screen_size.json"
+    if screen_size_path.exists():
+        try:
+            with open(screen_size_path) as f:
+                screen_size = json.load(f)
+                screen_width = screen_size.get("width", 1080)
+                screen_height = screen_size.get("height", 2400)
+            console.print(f"  Loaded screen size: {screen_width}x{screen_height}")
+        except Exception as e:
+            console.print(f"  [dim]Could not load screen size: {e}[/dim]")
+            screen_width = 1080
+            screen_height = 2400
+    else:
+        # Fallback to defaults
+        screen_width = 1080
+        screen_height = 2400
 
     # Load keyboard states if available (from ADB monitoring)
     keyboard_states_path = test_dir / "keyboard_states.json"
@@ -576,25 +590,6 @@ def _build_preview_steps(
 
     preview_steps: list[PreviewStep] = []
 
-    # Add initial state (app launched) as step 0
-    initial_screenshot = screenshots_dir / "step_001_before.png"
-    preview_steps.append(PreviewStep(
-        index=0,
-        action="app_launched",
-        element_text=None,
-        coordinates=(0, 0),
-        screenshot_path=str(initial_screenshot) if initial_screenshot.exists() else None,
-        enabled=True,
-        action_description="App launched",
-        before_description="Initial app state after launch",
-        after_description="",
-        timestamp=0.0,
-        frames=(
-            {"before": "recording/screenshots/step_001_before.png"}
-            if initial_screenshot.exists() else {}
-        ),
-    ))
-
     # Build a lookup from step index to analyzed step
     analyzed_lookup = {a.index: a for a in analyzed_steps}
 
@@ -668,25 +663,6 @@ def _build_preview_steps_from_analysis(
 
     preview_steps: list[PreviewStep] = []
     screenshots_dir = test_dir / "screenshots"
-
-    # Add initial state (app launched) as step 0
-    initial_screenshot = screenshots_dir / "step_001_before.png"
-    preview_steps.append(PreviewStep(
-        index=0,
-        action="app_launched",
-        element_text=None,
-        coordinates=(0, 0),
-        screenshot_path=str(initial_screenshot) if initial_screenshot.exists() else None,
-        enabled=True,
-        action_description="App launched",
-        before_description="Initial app state after launch",
-        after_description="",
-        timestamp=0.0,
-        frames=(
-            {"before": "recording/screenshots/step_001_before.png"}
-            if initial_screenshot.exists() else {}
-        ),
-    ))
 
     # Add steps from analysis data
     for step_data in analysis_data.steps:

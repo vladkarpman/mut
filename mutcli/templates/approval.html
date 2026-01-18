@@ -5644,7 +5644,77 @@
             const panel = document.getElementById('stepsPanel');
             panel.innerHTML = steps.map((step, index) => renderStepCard(step, index)).join('');
             updateHeaderMeta();
+            // Position gesture indicators after DOM update
+            requestAnimationFrame(() => positionGestureIndicators());
         }
+
+        /**
+         * Position gesture indicators relative to actual rendered image bounds.
+         * This accounts for object-fit: contain scaling and centering.
+         */
+        function positionGestureIndicators() {
+            document.querySelectorAll('.frame-image-container').forEach(container => {
+                const img = container.querySelector('img');
+                const indicators = container.querySelectorAll('.gesture-indicator');
+                if (!img || indicators.length === 0) return;
+
+                // Wait for image to load if not already
+                if (!img.complete) {
+                    img.onload = () => positionIndicatorInContainer(container, img, indicators);
+                    return;
+                }
+
+                positionIndicatorInContainer(container, img, indicators);
+            });
+        }
+
+        function positionIndicatorInContainer(container, img, indicators) {
+            // Get actual rendered image dimensions and position within container
+            const containerRect = container.getBoundingClientRect();
+            const imgRect = img.getBoundingClientRect();
+
+            // Calculate offset from container to image (due to centering)
+            const offsetX = imgRect.left - containerRect.left;
+            const offsetY = imgRect.top - containerRect.top;
+
+            // Calculate scale factor (how much the image is scaled to fit)
+            const scaleX = imgRect.width / SCREEN_WIDTH;
+            const scaleY = imgRect.height / SCREEN_HEIGHT;
+
+            indicators.forEach(indicator => {
+                // Get original pixel coordinates from data attributes
+                const x = parseFloat(indicator.dataset.x) || 0;
+                const y = parseFloat(indicator.dataset.y) || 0;
+
+                // Calculate position relative to scaled image
+                const posLeft = offsetX + (x * scaleX);
+                const posTop = offsetY + (y * scaleY);
+
+                // Position indicator (centered on the point)
+                indicator.style.left = posLeft + 'px';
+                indicator.style.top = posTop + 'px';
+
+                // Handle swipe indicators - position trajectory line
+                if (indicator.classList.contains('swipe-indicator')) {
+                    const endX = parseFloat(indicator.dataset.endX) || x;
+                    const endY = parseFloat(indicator.dataset.endY) || y;
+
+                    const endLeft = offsetX + (endX * scaleX);
+                    const endTop = offsetY + (endY * scaleY);
+
+                    // Set CSS custom properties for trajectory line
+                    indicator.style.setProperty('--start-left', posLeft + 'px');
+                    indicator.style.setProperty('--start-top', posTop + 'px');
+                    indicator.style.setProperty('--end-left', endLeft + 'px');
+                    indicator.style.setProperty('--end-top', endTop + 'px');
+                }
+            });
+        }
+
+        // Reposition indicators on window resize
+        window.addEventListener('resize', () => {
+            requestAnimationFrame(() => positionGestureIndicators());
+        });
 
         function renderStepCard(step, index) {
             const actionClass = step.action.replace('_', '');
@@ -5782,23 +5852,21 @@
             const afterFrame = step.frames.after || '';
             const analysis = step.analysis || {};
 
-            // Calculate position as percentage for overlay
+            // Get raw pixel coordinates for overlay (will be positioned by JS after image loads)
             const posX = step.target?.x || Math.round(SCREEN_WIDTH / 2);
             const posY = step.target?.y || Math.round(SCREEN_HEIGHT / 2);
-            const posXPercent = (posX / SCREEN_WIDTH) * 100;
-            const posYPercent = (posY / SCREEN_HEIGHT) * 100;
 
-            // Render gesture-specific indicator
+            // Render gesture-specific indicator with data attributes for JS positioning
             function renderGestureIndicator() {
                 if (step.action === 'tap') {
-                    return `<div class="tap-indicator" style="left: ${posXPercent}%; top: ${posYPercent}%;"></div>`;
+                    return `<div class="tap-indicator gesture-indicator" data-x="${posX}" data-y="${posY}"></div>`;
                 }
                 if (step.action === 'long_press') {
-                    return `<div class="long-press-indicator" style="left: ${posXPercent}%; top: ${posYPercent}%;"></div>`;
+                    return `<div class="long-press-indicator gesture-indicator" data-x="${posX}" data-y="${posY}"></div>`;
                 }
                 if (step.action === 'double_tap') {
                     return `
-                        <div class="double-tap-indicator" style="left: ${posXPercent}%; top: ${posYPercent}%;">
+                        <div class="double-tap-indicator gesture-indicator" data-x="${posX}" data-y="${posY}">
                             <div class="tap-circle tap-1"></div>
                             <div class="tap-circle tap-2"></div>
                         </div>
@@ -5807,23 +5875,17 @@
                 if (step.action === 'swipe') {
                     const dir = step.direction || 'up';
                     const distance = step.distance || 400;
-                    const distPercent = (distance / SCREEN_HEIGHT) * 100;
-                    let endX = posXPercent, endY = posYPercent;
-                    if (dir === 'up') endY = Math.max(5, posYPercent - distPercent);
-                    if (dir === 'down') endY = Math.min(95, posYPercent + distPercent);
-                    if (dir === 'left') endX = Math.max(5, posXPercent - (distance / SCREEN_WIDTH) * 100);
-                    if (dir === 'right') endX = Math.min(95, posXPercent + (distance / SCREEN_WIDTH) * 100);
+                    // Calculate end coordinates based on direction
+                    let endX = posX, endY = posY;
+                    if (dir === 'up') endY = Math.max(50, posY - distance);
+                    if (dir === 'down') endY = Math.min(SCREEN_HEIGHT - 50, posY + distance);
+                    if (dir === 'left') endX = Math.max(50, posX - distance);
+                    if (dir === 'right') endX = Math.min(SCREEN_WIDTH - 50, posX + distance);
 
-                    // Calculate arrow rotation (accounting for phone aspect ratio ~9:19.5)
-                    const aspectRatio = SCREEN_WIDTH / SCREEN_HEIGHT; // ~0.46
-                    const dx = (endX - posXPercent) * aspectRatio;
-                    const dy = endY - posYPercent;
-                    const angle = Math.atan2(dy, dx) * (180 / Math.PI);
-
-                    return '<div class="swipe-indicator" data-start-x="' + posXPercent + '" data-start-y="' + posYPercent + '" data-end-x="' + endX + '" data-end-y="' + endY + '" data-angle="' + angle + '" style="left: 0; top: 0; width: 100%; height: 100%;">' +
-                        '<div class="swipe-trajectory-line"></div>' +
-                        '<div class="swipe-dot" style="--start-x: ' + posXPercent + '%; --start-y: ' + posYPercent + '%; --end-x: ' + endX + '%; --end-y: ' + endY + '%;"></div>' +
-                    '</div>';
+                    return `<div class="swipe-indicator gesture-indicator" data-x="${posX}" data-y="${posY}" data-end-x="${endX}" data-end-y="${endY}" data-direction="${dir}">
+                        <div class="swipe-trajectory-line"></div>
+                        <div class="swipe-dot"></div>
+                    </div>`;
                 }
                 return '';
             }
