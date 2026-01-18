@@ -94,6 +94,34 @@ class FrameExtractor:
             return idx - 1
         return idx
 
+    def _wall_clock_to_pts(self, wall_clock_time: float) -> float:
+        """Convert wall-clock timestamp to video PTS time for ffmpeg seeking.
+
+        Video timestamps (wall-clock) may drift from video PTS (frame_index / fps)
+        because the actual recording frame rate can vary. This method converts
+        wall-clock time to the corresponding PTS time that ffmpeg expects.
+
+        When timestamps file exists: looks up frame index, converts to PTS.
+        When timestamps file doesn't exist: returns wall-clock time unchanged.
+
+        Args:
+            wall_clock_time: Wall-clock timestamp in seconds
+
+        Returns:
+            PTS time in seconds for ffmpeg -ss seeking
+        """
+        if not self._frame_timestamps:
+            # No timestamps file - use wall-clock time directly (legacy behavior)
+            return wall_clock_time
+
+        frame_index = self._find_frame_index(wall_clock_time)
+        # Convert frame index to PTS time (30fps encoding)
+        pts_time = frame_index / 30.0
+        logger.debug(
+            f"Wall-clock {wall_clock_time:.3f}s -> frame {frame_index} -> PTS {pts_time:.3f}s"
+        )
+        return pts_time
+
     def _get_actual_duration(self) -> float:
         """Get actual recording duration from timestamps, with fallback to video.
 
@@ -140,13 +168,16 @@ class FrameExtractor:
         """Extract single frame at timestamp as PNG bytes using ffmpeg.
 
         Args:
-            timestamp_sec: Timestamp in seconds (video-relative time)
+            timestamp_sec: Timestamp in seconds (wall-clock time)
 
         Returns:
             PNG image bytes, or None on error
         """
         # Clamp timestamp to valid range
         timestamp_sec = max(0.0, timestamp_sec)
+
+        # Convert wall-clock time to PTS time for ffmpeg seeking
+        pts_time = self._wall_clock_to_pts(timestamp_sec)
 
         # Create temp file for output
         fd, tmp_path = tempfile.mkstemp(suffix=".png")
@@ -155,7 +186,7 @@ class FrameExtractor:
         try:
             cmd = [
                 "ffmpeg",
-                "-ss", f"{timestamp_sec:.3f}",  # Seek BEFORE input (fast)
+                "-ss", f"{pts_time:.3f}",  # Seek BEFORE input (fast)
                 "-i", str(self._video_path),
                 "-frames:v", "1",
                 "-q:v", "2",  # High quality
@@ -323,9 +354,11 @@ class FrameExtractor:
         def extract_single(timestamp: float, output_path: Path) -> Path | None:
             """Extract a single frame directly to output path."""
             timestamp = max(0.0, timestamp)
+            # Convert wall-clock time to PTS time for ffmpeg seeking
+            pts_time = self._wall_clock_to_pts(timestamp)
             cmd = [
                 "ffmpeg",
-                "-ss", f"{timestamp:.3f}",
+                "-ss", f"{pts_time:.3f}",
                 "-i", str(self._video_path),
                 "-frames:v", "1",
                 "-q:v", "2",

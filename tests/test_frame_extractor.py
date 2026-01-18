@@ -32,6 +32,125 @@ class TestFrameExtractorInitialization:
         assert FrameExtractor.PRESS_HELD_RATIO == 0.7
 
 
+class TestWallClockToPts:
+    """Test _wall_clock_to_pts method for timestamp conversion."""
+
+    def test_returns_wall_clock_when_no_timestamps_file(self):
+        """Should return wall-clock time unchanged when no timestamps loaded."""
+        extractor = FrameExtractor("/path/to/video.mp4")
+        # No timestamps file loaded
+        assert extractor._frame_timestamps is None
+
+        result = extractor._wall_clock_to_pts(3.417)
+
+        assert result == 3.417
+
+    def test_converts_wall_clock_to_pts_with_timestamps(self):
+        """Should convert wall-clock time to PTS using frame index."""
+        extractor = FrameExtractor("/path/to/video.mp4")
+        # Simulate loaded timestamps: 617 frames over ~18.9s wall-clock
+        # Frame rate varies, so frame 115 might be at wall-clock 3.417s
+        extractor._frame_timestamps = [i * 0.0306 for i in range(617)]  # ~30.6ms per frame
+
+        # Wall-clock 3.417s should map to frame index ~112
+        # PTS = frame_index / 30.0
+        result = extractor._wall_clock_to_pts(3.417)
+
+        # Frame index for 3.417s: bisect finds closest frame
+        # Expected: frame ~112, PTS = 112/30 = 3.733
+        assert isinstance(result, float)
+        # PTS should be frame_index / 30.0
+        expected_frame = extractor._find_frame_index(3.417)
+        expected_pts = expected_frame / 30.0
+        assert result == expected_pts
+
+    def test_handles_timestamp_at_video_start(self):
+        """Should handle timestamp at start of video."""
+        extractor = FrameExtractor("/path/to/video.mp4")
+        extractor._frame_timestamps = [0.0, 0.033, 0.066, 0.1, 0.133]
+
+        result = extractor._wall_clock_to_pts(0.0)
+
+        # Should return frame 0 -> PTS 0.0
+        assert result == 0.0
+
+    def test_handles_timestamp_at_video_end(self):
+        """Should handle timestamp at end of video."""
+        extractor = FrameExtractor("/path/to/video.mp4")
+        extractor._frame_timestamps = [0.0, 0.033, 0.066, 0.1, 0.133]
+
+        result = extractor._wall_clock_to_pts(10.0)  # Beyond video
+
+        # Should clamp to last frame (index 4) -> PTS 4/30 = 0.133
+        assert result == 4 / 30.0
+
+
+class TestExtractFramePtsConversion:
+    """Test that extract_frame uses PTS conversion for ffmpeg seeking."""
+
+    def test_extract_frame_uses_pts_time_for_ffmpeg(self, tmp_path):
+        """extract_frame should convert wall-clock to PTS when timestamps loaded."""
+        png_data = b"\x89PNG\r\n\x1a\n"
+        mock_result = MagicMock()
+        mock_result.returncode = 0
+
+        captured_cmd = []
+
+        def run_side_effect(cmd, **kwargs):
+            captured_cmd.clear()
+            captured_cmd.extend(cmd)
+            output_path = cmd[-1]
+            Path(output_path).write_bytes(png_data)
+            return mock_result
+
+        with patch("mutcli.core.frame_extractor.subprocess.run", side_effect=run_side_effect):
+            extractor = FrameExtractor("/path/to/video.mp4")
+            # Set up timestamps: frame 115 at wall-clock 3.417s
+            # PTS for frame 115 = 115/30 = 3.833s
+            extractor._frame_timestamps = [i * 0.0297 for i in range(200)]  # ~29.7ms per frame
+            # 3.417 / 0.0297 = ~115
+
+            extractor.extract_frame(3.417)  # Wall-clock time
+
+        # Verify ffmpeg was called with PTS time, not wall-clock
+        assert "-ss" in captured_cmd
+        ss_idx = captured_cmd.index("-ss")
+        pts_used = float(captured_cmd[ss_idx + 1])
+
+        # Frame index for 3.417s should be ~115
+        expected_frame = extractor._find_frame_index(3.417)
+        expected_pts = expected_frame / 30.0
+
+        assert abs(pts_used - expected_pts) < 0.001
+
+    def test_extract_frame_uses_wall_clock_without_timestamps(self, tmp_path):
+        """extract_frame should use wall-clock directly when no timestamps file."""
+        png_data = b"\x89PNG\r\n\x1a\n"
+        mock_result = MagicMock()
+        mock_result.returncode = 0
+
+        captured_cmd = []
+
+        def run_side_effect(cmd, **kwargs):
+            captured_cmd.clear()
+            captured_cmd.extend(cmd)
+            output_path = cmd[-1]
+            Path(output_path).write_bytes(png_data)
+            return mock_result
+
+        with patch("mutcli.core.frame_extractor.subprocess.run", side_effect=run_side_effect):
+            extractor = FrameExtractor("/path/to/video.mp4")
+            # No timestamps loaded
+            assert extractor._frame_timestamps is None
+
+            extractor.extract_frame(3.417)
+
+        # Verify ffmpeg was called with original wall-clock time
+        assert "-ss" in captured_cmd
+        ss_idx = captured_cmd.index("-ss")
+        assert captured_cmd[ss_idx + 1] == "3.417"
+
+
 class TestExtractFrame:
     """Test extract_frame method."""
 
