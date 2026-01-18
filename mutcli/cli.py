@@ -177,7 +177,9 @@ def run(
 @app.command()
 def record(
     name: str = typer.Argument(..., help="Test name"),
-    app: str = typer.Option(..., "--app", "-a", help="App package name (required for UI element capture)"),
+    app: str = typer.Option(
+        ..., "--app", "-a", help="App package name (required for UI element capture)"
+    ),
     device: str | None = typer.Option(None, "--device", "-d", help="Device ID"),
 ) -> None:
     """Start recording user interactions."""
@@ -637,9 +639,10 @@ def _build_preview_steps(
         # Find matching analyzed step if available
         analyzed = analyzed_lookup.get(step_num - 1)  # analyzed_steps use 0-based index
         element_text = analyzed.element_text if analyzed else None
-        action_desc = analyzed.action_description if analyzed else _build_default_action_description(
-            step.action, element_text
-        )
+        if analyzed:
+            action_desc = analyzed.action_description
+        else:
+            action_desc = _build_default_action_description(step.action, element_text)
         before_desc = analyzed.before_description if analyzed else ""
         after_desc = analyzed.after_description if analyzed else ""
         suggested_verification = analyzed.suggested_verification if analyzed else None
