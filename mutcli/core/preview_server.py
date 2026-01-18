@@ -71,7 +71,6 @@ class PreviewServer:
         self.result: ApprovalResult | None = None
         self._server: HTTPServer | None = None
         self._shutdown_event = threading.Event()
-        self._html_saved = False
 
     def start_and_wait(self) -> ApprovalResult | None:
         """Start server, open browser, wait for approval, return result."""
@@ -204,11 +203,12 @@ class PreviewServer:
 
         return Handler
 
-    def _generate_html(self, save_to_file: bool = True) -> str:
+    def _generate_html(self) -> str:
         """Generate the preview HTML page from template.
 
-        Args:
-            save_to_file: If True, saves the generated HTML to the recording directory.
+        Always generates fresh HTML from the template to ensure latest fixes
+        and features are applied. No static file is saved - the HTML is served
+        dynamically via the HTTP server.
         """
         # Build test data structure matching the template's expectations
         test_data = {
@@ -229,12 +229,6 @@ class PreviewServer:
         html = html.replace("TEST_DATA_PLACEHOLDER", json.dumps(test_data, indent=2))
         html = html.replace("SCREEN_WIDTH_PLACEHOLDER", str(self.screen_width))
         html = html.replace("SCREEN_HEIGHT_PLACEHOLDER", str(self.screen_height))
-
-        # Save to test folder for debugging/inspection (only once)
-        if save_to_file and not self._html_saved:
-            approval_path = self.recording_dir / "approval.html"
-            approval_path.write_text(html, encoding="utf-8")
-            self._html_saved = True
 
         return html
 

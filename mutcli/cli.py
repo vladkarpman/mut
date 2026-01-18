@@ -973,6 +973,130 @@ def _start_preview_and_generate_yaml(
 
 
 @app.command()
+def preview(
+    test_name_or_path: str = typer.Argument(..., help="Test name or path to preview"),
+) -> None:
+    """Open approval UI for an existing recording.
+
+    Opens the approval UI to view and edit test steps from a previous recording.
+    Uses the existing analysis.json file and always renders with the latest
+    approval UI template (ensuring bug fixes and improvements are applied).
+
+    Examples:
+        mut preview calculator-test    # Looks in tests/calculator-test/
+        mut preview ./my-tests/foo     # Uses path directly
+    """
+    from mutcli.core.analysis_io import load_analysis
+    from mutcli.core.preview_server import PreviewServer
+
+    # Resolve test directory
+    test_dir = Path(test_name_or_path)
+    if not test_dir.exists():
+        test_dir = Path("tests") / test_name_or_path
+
+    if not test_dir.exists():
+        console.print(f"[red]Error:[/red] Test not found: {test_name_or_path}")
+        console.print(f"  Tried: {Path(test_name_or_path)} and tests/{test_name_or_path}")
+        raise typer.Exit(1)
+
+    # Load analysis.json
+    analysis_path = test_dir / "analysis.json"
+    if not analysis_path.exists():
+        console.print(f"[red]Error:[/red] No analysis.json found in {test_dir}")
+        console.print("  Run 'mut analyze' first to create the analysis")
+        raise typer.Exit(1)
+
+    analysis = load_analysis(test_dir)
+    if analysis is None:
+        console.print(f"[red]Error:[/red] Failed to load analysis.json")
+        raise typer.Exit(1)
+
+    test_name = test_dir.name
+    app_package = analysis.app_package
+    screen_width = analysis.screen_width
+    screen_height = analysis.screen_height
+
+    # Build preview steps from analysis
+    preview_steps = _build_preview_steps_from_analysis(analysis, test_dir)
+
+    # Calculate video duration
+    steps_data = analysis.steps
+    if steps_data:
+        max_ts = max(s.get("timestamp", 0) for s in steps_data)
+        mins = int((max_ts + 2) // 60)
+        secs = int((max_ts + 2) % 60)
+        video_duration = f"{mins}:{secs:02d}"
+    else:
+        video_duration = "0:00"
+
+    console.print(f"[blue]Opening approval UI for:[/blue] {test_name}")
+    console.print(f"  Steps: {len(preview_steps)}")
+    console.print(f"  Screen: {screen_width}x{screen_height}")
+    console.print()
+    console.print("[dim]Review and edit steps, then click 'Generate YAML'[/dim]")
+    console.print("[dim]Waiting for approval... (Ctrl+C to cancel)[/dim]")
+
+    from mutcli.core.yaml_generator import YAMLGenerator
+
+    server = PreviewServer(
+        steps=preview_steps,
+        verifications=[],
+        test_name=test_name,
+        app_package=app_package,
+        recording_dir=test_dir,
+        screen_width=screen_width,
+        screen_height=screen_height,
+        video_duration=video_duration,
+    )
+
+    result = server.start_and_wait()
+
+    if result is None or not result.approved:
+        console.print("[yellow]Cancelled[/yellow] - no YAML generated")
+        return
+
+    # Generate YAML from approved steps
+    console.print()
+    console.print("[blue]Generating YAML from approved steps...[/blue]")
+
+    generator = YAMLGenerator(name=test_name, app_package=app_package)
+    generator.add_launch_app()
+
+    enabled_steps = [
+        s for s in result.steps
+        if s.get("enabled", True) and s.get("action") != "app_launched"
+    ]
+
+    for step_data in enabled_steps:
+        action = step_data.get("action", "tap")
+        target = step_data.get("target", {})
+        element = target.get("text")
+        coords = (target.get("x", 0), target.get("y", 0))
+
+        if action == "tap":
+            generator.add_tap(element=element, coords=coords if not element else None)
+        elif action == "type":
+            generator.add_type(text=step_data.get("text", ""))
+        elif action == "swipe":
+            direction = step_data.get("direction", "up")
+            generator.add_swipe(direction=direction)
+        elif action == "long_press":
+            generator.add_long_press(element=element, coords=coords if not element else None)
+
+    # Add verifications
+    for ver in result.verifications:
+        if ver.get("enabled", True):
+            generator.add_verification(ver.get("description", ""))
+
+    yaml_path = test_dir / "test.yaml"
+    generator.save(yaml_path)
+
+    console.print(f"[green]Generated:[/green] {yaml_path}")
+    console.print()
+    console.print(f"[dim]Run with: mut run {yaml_path}[/dim]")
+
+
+@app.command()
 def devices() -> None:
     """List connected devices."""
     from mutcli.core.device_controller import DeviceController
