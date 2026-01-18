@@ -644,14 +644,17 @@ def _build_preview_steps(
         else:
             coords = (0, 0)
 
-        # Screenshots use step_NNN_before.png and step_NNN_after.png
+        # Screenshots use step_NNN_before.png, step_NNN_touch.png, step_NNN_after.png
         before_path = screenshots_dir / f"step_{step_str}_before.png"
+        touch_path = screenshots_dir / f"step_{step_str}_touch.png"
         after_path = screenshots_dir / f"step_{step_str}_after.png"
 
         # Build frames dict
         frames: dict[str, str | None] = {}
         if before_path.exists():
             frames["before"] = f"screenshots/step_{step_str}_before.png"
+        if touch_path.exists():
+            frames["action"] = f"screenshots/step_{step_str}_touch.png"
         if after_path.exists():
             frames["after"] = f"screenshots/step_{step_str}_after.png"
 
@@ -703,14 +706,17 @@ def _build_preview_steps_from_analysis(
         elif isinstance(coords, list):
             coords = tuple(coords) if len(coords) >= 2 else (0, 0)
 
-        # Screenshots use step_NNN_before.png and step_NNN_after.png
+        # Screenshots use step_NNN_before.png, step_NNN_touch.png, step_NNN_after.png
         before_path = screenshots_dir / f"step_{step_str}_before.png"
+        touch_path = screenshots_dir / f"step_{step_str}_touch.png"
         after_path = screenshots_dir / f"step_{step_str}_after.png"
 
         # Build frames dict
         frames: dict[str, str | None] = {}
         if before_path.exists():
             frames["before"] = f"screenshots/step_{step_str}_before.png"
+        if touch_path.exists():
+            frames["action"] = f"screenshots/step_{step_str}_touch.png"
         if after_path.exists():
             frames["after"] = f"screenshots/step_{step_str}_after.png"
 
