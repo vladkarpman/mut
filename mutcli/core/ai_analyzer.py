@@ -377,6 +377,7 @@ Respond with JSON only (no markdown, no code blocks):
         after: bytes,
         x: int,
         y: int,
+        adb_context: dict[str, Any] | None = None,
     ) -> TapAnalysisResult:
         """Analyze a TAP gesture using 3 frames.
 
@@ -386,6 +387,8 @@ Respond with JSON only (no markdown, no code blocks):
             after: PNG image bytes - result after UI settled
             x: Tap X coordinate in pixels
             y: Tap Y coordinate in pixels
+            adb_context: Optional device context from ADB (keyboard_visible, activity,
+                        windows, element info)
 
         Returns:
             TapAnalysisResult with element info and descriptions
@@ -399,9 +402,12 @@ Respond with JSON only (no markdown, no code blocks):
                 suggested_verification=None,
             )
 
+        # Build enhanced prompt with ADB context
+        context_section = self._build_adb_context_section(adb_context)
+
         prompt = f"""Analyze this TAP interaction on a mobile app.
 
-Screenshots:
+{context_section}Screenshots:
 1. BEFORE - stable state before tap
 2. TOUCH - moment of tap (shows target element)
 3. AFTER - result after UI settled
@@ -458,6 +464,7 @@ Respond with JSON only (no markdown, no code blocks):
         start_y: int,
         end_x: int,
         end_y: int,
+        adb_context: dict[str, Any] | None = None,
     ) -> SwipeAnalysisResult:
         """Analyze a SWIPE gesture using 4 frames.
 
@@ -470,6 +477,8 @@ Respond with JSON only (no markdown, no code blocks):
             start_y: Swipe start Y coordinate in pixels
             end_x: Swipe end X coordinate in pixels
             end_y: Swipe end Y coordinate in pixels
+            adb_context: Optional device context from ADB (keyboard_visible, activity,
+                        windows, element info)
 
         Returns:
             SwipeAnalysisResult with direction and content change info
@@ -483,9 +492,12 @@ Respond with JSON only (no markdown, no code blocks):
                 suggested_verification=None,
             )
 
+        # Build enhanced prompt with ADB context
+        context_section = self._build_adb_context_section(adb_context)
+
         prompt = f"""Analyze this SWIPE gesture on a mobile app.
 
-Screenshots:
+{context_section}Screenshots:
 1. BEFORE - stable state before swipe
 2. SWIPE_START - finger down position
 3. SWIPE_END - finger up position
@@ -543,6 +555,7 @@ Respond with JSON only (no markdown, no code blocks):
         x: int,
         y: int,
         duration_ms: int,
+        adb_context: dict[str, Any] | None = None,
     ) -> LongPressAnalysisResult:
         """Analyze a LONG PRESS gesture using 4 frames.
 
@@ -554,6 +567,8 @@ Respond with JSON only (no markdown, no code blocks):
             x: Press X coordinate in pixels
             y: Press Y coordinate in pixels
             duration_ms: Press duration in milliseconds
+            adb_context: Optional device context from ADB (keyboard_visible, activity,
+                        windows, element info)
 
         Returns:
             LongPressAnalysisResult with element and result type info
@@ -568,9 +583,12 @@ Respond with JSON only (no markdown, no code blocks):
                 suggested_verification=None,
             )
 
+        # Build enhanced prompt with ADB context
+        context_section = self._build_adb_context_section(adb_context)
+
         prompt = f"""Analyze this LONG PRESS gesture on a mobile app.
 
-Screenshots:
+{context_section}Screenshots:
 1. BEFORE - stable state before press
 2. PRESS_START - finger down on element
 3. PRESS_HELD - during hold (may show visual feedback)
@@ -626,12 +644,15 @@ Respond with JSON only (no markdown, no code blocks):
         self,
         before: bytes,
         after: bytes,
+        adb_context: dict[str, Any] | None = None,
     ) -> TypeAnalysisResult:
         """Analyze a typing action using before and after frames.
 
         Args:
             before: PNG image bytes - screen state before typing (with keyboard)
             after: PNG image bytes - screen state after typing completed
+            adb_context: Optional device context from ADB (keyboard_visible, activity,
+                        windows, element info)
 
         Returns:
             TypeAnalysisResult with element info and descriptions
@@ -645,9 +666,12 @@ Respond with JSON only (no markdown, no code blocks):
                 suggested_verification=None,
             )
 
-        prompt = """Analyze this TYPING interaction on a mobile app.
+        # Build enhanced prompt with ADB context
+        context_section = self._build_adb_context_section(adb_context)
 
-Screenshots:
+        prompt = f"""Analyze this TYPING interaction on a mobile app.
+
+{context_section}Screenshots:
 1. BEFORE - screen state before/during typing (may show keyboard)
 2. AFTER - screen state after typing completed
 
@@ -656,13 +680,13 @@ Focus on:
 2. What does the screen look like after typing?
 
 Respond with JSON only (no markdown, no code blocks):
-{
+{{
   "element_text": "field name like 'Search field', 'Email input', 'Password field', or null",
   "element_type": "text_field|search_box|password_field|textarea|other",
   "before_description": "brief UI state before/during typing",
   "after_description": "brief UI state after typing",
   "suggested_verification": "verification phrase or null"
-}"""
+}}"""
 
         try:
             before_part = types.Part.from_bytes(data=before, mime_type="image/png")
@@ -693,6 +717,45 @@ Respond with JSON only (no markdown, no code blocks):
                 after_description=f"Analysis failed: {e}",
                 suggested_verification=None,
             )
+
+    def _build_adb_context_section(self, adb_context: dict[str, Any] | None) -> str:
+        """Build context section for AI prompts from ADB device context.
+
+        Args:
+            adb_context: Optional dict containing keyboard_visible, activity,
+                        windows, and element info from ADB
+
+        Returns:
+            Formatted context section string (empty if no context provided)
+        """
+        if not adb_context:
+            return ""
+
+        context_section = "Device Context:\n"
+
+        if "activity" in adb_context:
+            context_section += f"- Current app activity: {adb_context['activity']}\n"
+
+        if "keyboard_visible" in adb_context:
+            context_section += f"- Keyboard visible: {adb_context['keyboard_visible']}\n"
+
+        if "windows" in adb_context:
+            windows = adb_context["windows"]
+            if isinstance(windows, list):
+                context_section += f"- Active dialogs: {', '.join(windows) or 'None'}\n"
+            else:
+                context_section += f"- Active dialogs: {windows}\n"
+
+        if adb_context.get("element"):
+            elem = adb_context["element"]
+            context_section += "\nTapped Element (from UI hierarchy):\n"
+            context_section += f"- class: {elem.get('class', 'Unknown')}\n"
+            context_section += f"- text: {elem.get('text') or 'None'}\n"
+            context_section += f"- resource-id: {elem.get('resource_id') or 'None'}\n"
+            context_section += f"- content-desc: {elem.get('content_desc') or 'None'}\n"
+
+        context_section += "\n"
+        return context_section
 
     def _parse_json_response(self, text: str) -> dict[str, Any]:
         """Parse JSON from model response, handling markdown code blocks."""
