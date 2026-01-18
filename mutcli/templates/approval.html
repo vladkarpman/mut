@@ -5652,6 +5652,48 @@
          * Position gesture indicators relative to actual rendered image bounds.
          * This accounts for object-fit: contain scaling and centering.
          */
+        /**
+         * Calculate the actual rendered image bounds for an img with object-fit: contain.
+         * Returns { x, y, width, height } of the actual image content within the element.
+         */
+        function getRenderedImageBounds(img) {
+            const imgRect = img.getBoundingClientRect();
+            const naturalWidth = img.naturalWidth;
+            const naturalHeight = img.naturalHeight;
+
+            if (!naturalWidth || !naturalHeight) {
+                // Image not loaded yet, return element bounds
+                return { x: 0, y: 0, width: imgRect.width, height: imgRect.height };
+            }
+
+            // Calculate how the image is scaled to fit (object-fit: contain)
+            const elementAspect = imgRect.width / imgRect.height;
+            const imageAspect = naturalWidth / naturalHeight;
+
+            let renderedWidth, renderedHeight, offsetX, offsetY;
+
+            if (imageAspect > elementAspect) {
+                // Image is wider than container - constrained by width
+                renderedWidth = imgRect.width;
+                renderedHeight = imgRect.width / imageAspect;
+                offsetX = 0;
+                offsetY = (imgRect.height - renderedHeight) / 2;
+            } else {
+                // Image is taller than container - constrained by height
+                renderedHeight = imgRect.height;
+                renderedWidth = imgRect.height * imageAspect;
+                offsetX = (imgRect.width - renderedWidth) / 2;
+                offsetY = 0;
+            }
+
+            return {
+                x: offsetX,
+                y: offsetY,
+                width: renderedWidth,
+                height: renderedHeight
+            };
+        }
+
         function positionGestureIndicators() {
             document.querySelectorAll('.frame-image-container').forEach(container => {
                 const img = container.querySelector('img');
@@ -5669,20 +5711,28 @@
         }
 
         function positionIndicatorInContainer(container, img, indicators) {
-            // Get actual rendered image dimensions
-            const imgRect = img.getBoundingClientRect();
+            // Get the actual rendered image bounds (accounting for object-fit: contain)
+            const bounds = getRenderedImageBounds(img);
 
-            // Calculate scale factor (how much the image is scaled to fit)
-            const scaleX = imgRect.width / SCREEN_WIDTH;
-            const scaleY = imgRect.height / SCREEN_HEIGHT;
+            // Position the wrapper to match actual rendered content
+            const wrapper = indicators[0]?.parentElement;
+            if (wrapper && wrapper.classList.contains('gesture-indicator-wrapper')) {
+                wrapper.style.left = bounds.x + 'px';
+                wrapper.style.top = bounds.y + 'px';
+                wrapper.style.width = bounds.width + 'px';
+                wrapper.style.height = bounds.height + 'px';
+            }
+
+            // Calculate scale factor from original screen size to actual rendered size
+            const scaleX = bounds.width / SCREEN_WIDTH;
+            const scaleY = bounds.height / SCREEN_HEIGHT;
 
             indicators.forEach(indicator => {
                 // Get original pixel coordinates from data attributes
                 const x = parseFloat(indicator.dataset.x) || 0;
                 const y = parseFloat(indicator.dataset.y) || 0;
 
-                // Position relative to scaled image dimensions only
-                // (wrapper is already positioned to match image bounds via positionIndicator)
+                // Position relative to wrapper (which is now at rendered content bounds)
                 const posLeft = x * scaleX;
                 const posTop = y * scaleY;
 
@@ -8405,33 +8455,56 @@
             }
         }
 
-        // Position gesture indicator wrapper to match actual image bounds (accounting for object-fit: contain)
+        // Position gesture indicator wrapper to match actual rendered image bounds (accounting for object-fit: contain)
         function positionIndicator(img, stepId) {
             const wrapper = img.parentElement.querySelector(`.gesture-indicator-wrapper[data-step-id="${stepId}"]`);
             if (!wrapper) return;
 
-            const containerWidth = img.parentElement.clientWidth;
-            const containerHeight = img.parentElement.clientHeight;
+            // Get the actual rendered image bounds (accounting for object-fit: contain)
+            const bounds = getRenderedImageBounds(img);
 
-            // Use getBoundingClientRect to get actual rendered image size
+            // Get position of img element relative to container
             const imgRect = img.getBoundingClientRect();
             const containerRect = img.parentElement.getBoundingClientRect();
+            const imgOffsetX = imgRect.left - containerRect.left;
+            const imgOffsetY = imgRect.top - containerRect.top;
 
-            // Calculate offset relative to container
-            const offsetX = imgRect.left - containerRect.left;
-            const offsetY = imgRect.top - containerRect.top;
+            // Position wrapper to match actual rendered content within the element
+            // Add both the element offset and the letterbox offset
+            wrapper.style.left = (imgOffsetX + bounds.x) + 'px';
+            wrapper.style.top = (imgOffsetY + bounds.y) + 'px';
+            wrapper.style.width = bounds.width + 'px';
+            wrapper.style.height = bounds.height + 'px';
 
-            // Position wrapper to match image bounds exactly
-            wrapper.style.left = offsetX + 'px';
-            wrapper.style.top = offsetY + 'px';
-            wrapper.style.width = imgRect.width + 'px';
-            wrapper.style.height = imgRect.height + 'px';
+            // Position gesture indicators within the wrapper
+            const indicators = wrapper.querySelectorAll('.gesture-indicator');
+            const scaleX = bounds.width / SCREEN_WIDTH;
+            const scaleY = bounds.height / SCREEN_HEIGHT;
 
-            // Position swipe trajectory if this is a swipe indicator
-            const swipeIndicator = wrapper.querySelector('.swipe-indicator');
-            if (swipeIndicator) {
-                positionSwipeTrajectory(swipeIndicator, imgRect.width, imgRect.height);
-            }
+            indicators.forEach(indicator => {
+                const x = parseFloat(indicator.dataset.x) || 0;
+                const y = parseFloat(indicator.dataset.y) || 0;
+
+                // Position relative to wrapper origin (no offset needed since wrapper is at rendered content bounds)
+                indicator.style.left = (x * scaleX) + 'px';
+                indicator.style.top = (y * scaleY) + 'px';
+
+                // Handle swipe indicators
+                if (indicator.classList.contains('swipe-indicator')) {
+                    const endX = parseFloat(indicator.dataset.endX) || x;
+                    const endY = parseFloat(indicator.dataset.endY) || y;
+
+                    const startLeft = x * scaleX;
+                    const startTop = y * scaleY;
+                    const endLeft = endX * scaleX;
+                    const endTop = endY * scaleY;
+
+                    indicator.style.setProperty('--start-left', startLeft + 'px');
+                    indicator.style.setProperty('--start-top', startTop + 'px');
+                    indicator.style.setProperty('--end-left', endLeft + 'px');
+                    indicator.style.setProperty('--end-top', endTop + 'px');
+                }
+            });
         }
 
         // Position swipe trajectory line and arrow based on actual rendered dimensions
