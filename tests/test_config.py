@@ -296,3 +296,96 @@ verbose: "maybe"
 
         assert config.timeouts.tap == 5.0
         assert config.retry.count == 2
+
+
+class TestResilienceConfig:
+    """Test resilience configuration."""
+
+    def test_resilience_defaults(self):
+        """Verify all resilience defaults are set correctly."""
+        with patch.object(Path, "exists", return_value=False):
+            config = ConfigLoader.load()
+
+        assert config.resilience.implicit_wait == 5.0
+        assert config.resilience.poll_interval == 0.5
+        assert config.resilience.stability_frames == 2
+        assert config.resilience.ai_recovery is True
+        assert config.resilience.ai_retry_limit == 1
+
+    def test_resilience_from_yaml(self, tmp_path):
+        """Should parse resilience config from YAML."""
+        config_file = tmp_path / ".mut.yaml"
+        config_file.write_text("""
+resilience:
+  implicit_wait: 10
+  poll_interval: 0.3
+  stability_frames: 3
+  ai_recovery: false
+  ai_retry_limit: 2
+""")
+
+        with patch("mutcli.core.config.PROJECT_CONFIG", config_file):
+            with patch("mutcli.core.config.GLOBAL_CONFIG", Path("/nonexistent")):
+                config = ConfigLoader.load()
+
+        assert config.resilience.implicit_wait == 10.0
+        assert config.resilience.poll_interval == 0.3
+        assert config.resilience.stability_frames == 3
+        assert config.resilience.ai_recovery is False
+        assert config.resilience.ai_retry_limit == 2
+
+    def test_resilience_duration_string_parsing(self, tmp_path):
+        """Should parse duration strings like '5s' and '500ms'."""
+        config_file = tmp_path / ".mut.yaml"
+        config_file.write_text("""
+resilience:
+  implicit_wait: 3s
+  poll_interval: 200ms
+""")
+
+        with patch("mutcli.core.config.PROJECT_CONFIG", config_file):
+            with patch("mutcli.core.config.GLOBAL_CONFIG", Path("/nonexistent")):
+                config = ConfigLoader.load()
+
+        assert config.resilience.implicit_wait == 3.0
+        assert config.resilience.poll_interval == 0.2
+
+    def test_resilience_env_overrides(self, tmp_path):
+        """Environment variables should override resilience config."""
+        config_file = tmp_path / ".mut.yaml"
+        config_file.write_text("""
+resilience:
+  implicit_wait: 10
+  ai_recovery: true
+""")
+
+        env_vars = {
+            "MUT_IMPLICIT_WAIT": "2",
+            "MUT_AI_RECOVERY": "false",
+        }
+
+        with patch("mutcli.core.config.PROJECT_CONFIG", config_file):
+            with patch("mutcli.core.config.GLOBAL_CONFIG", Path("/nonexistent")):
+                with patch.dict(os.environ, env_vars, clear=True):
+                    config = ConfigLoader.load()
+
+        assert config.resilience.implicit_wait == 2.0
+        assert config.resilience.ai_recovery is False
+
+    def test_resilience_partial_override(self, tmp_path):
+        """Partial resilience config should use defaults for missing fields."""
+        config_file = tmp_path / ".mut.yaml"
+        config_file.write_text("""
+resilience:
+  implicit_wait: 8
+""")
+
+        with patch("mutcli.core.config.PROJECT_CONFIG", config_file):
+            with patch("mutcli.core.config.GLOBAL_CONFIG", Path("/nonexistent")):
+                config = ConfigLoader.load()
+
+        # Overridden value
+        assert config.resilience.implicit_wait == 8.0
+        # Default values
+        assert config.resilience.poll_interval == 0.5
+        assert config.resilience.ai_recovery is True

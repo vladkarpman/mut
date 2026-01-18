@@ -79,6 +79,54 @@ class RetryConfig:
     delay: float = 1.0
 
 
+def _parse_duration(value: Any, default: float) -> float:
+    """Parse duration value from string (e.g., '5s', '500ms') or number.
+
+    Args:
+        value: Duration as string ('5s', '500ms', '1.5s') or number (seconds)
+        default: Default value if parsing fails
+
+    Returns:
+        Duration in seconds as float
+    """
+    if value is None:
+        return default
+    if isinstance(value, (int, float)):
+        return float(value)
+    if isinstance(value, str):
+        value = value.strip().lower()
+        if value.endswith("ms"):
+            try:
+                return float(value[:-2]) / 1000
+            except ValueError:
+                return default
+        if value.endswith("s"):
+            try:
+                return float(value[:-1])
+            except ValueError:
+                return default
+        # Try parsing as plain number
+        try:
+            return float(value)
+        except ValueError:
+            return default
+    return default
+
+
+@dataclass
+class ResilienceConfig:
+    """Resilience settings for intelligent test execution."""
+
+    # Layer 1: Smart waits
+    implicit_wait: float = 5.0  # Seconds to wait for elements
+    poll_interval: float = 0.5  # Seconds between retry attempts
+    stability_frames: int = 2  # Consecutive identical frames before action
+
+    # Layer 2: AI recovery
+    ai_recovery: bool = True  # Enable AI-powered failure recovery
+    ai_retry_limit: int = 1  # Max AI-suggested retries
+
+
 @dataclass
 class MutConfig:
     """Main configuration for mut CLI."""
@@ -92,6 +140,7 @@ class MutConfig:
     # Nested configs with defaults
     timeouts: TimeoutConfig = field(default_factory=TimeoutConfig)
     retry: RetryConfig = field(default_factory=RetryConfig)
+    resilience: ResilienceConfig = field(default_factory=ResilienceConfig)
 
 
 class ConfigLoader:
@@ -165,6 +214,15 @@ class ConfigLoader:
         if "MUT_VERBOSE" in os.environ:
             overrides["verbose"] = _parse_bool(os.environ["MUT_VERBOSE"])
 
+        # Resilience overrides
+        resilience_overrides: dict[str, Any] = {}
+        if "MUT_IMPLICIT_WAIT" in os.environ:
+            resilience_overrides["implicit_wait"] = os.environ["MUT_IMPLICIT_WAIT"]
+        if "MUT_AI_RECOVERY" in os.environ:
+            resilience_overrides["ai_recovery"] = os.environ["MUT_AI_RECOVERY"]
+        if resilience_overrides:
+            overrides["resilience"] = resilience_overrides
+
         return overrides
 
     @classmethod
@@ -186,6 +244,7 @@ class ConfigLoader:
         # Extract nested configs
         timeouts_dict = config_dict.get("timeouts", {})
         retry_dict = config_dict.get("retry", {})
+        resilience_dict = config_dict.get("resilience", {})
 
         # Build TimeoutConfig
         timeouts = TimeoutConfig(
@@ -202,6 +261,15 @@ class ConfigLoader:
             delay=_safe_float(retry_dict.get("delay"), 1.0),
         )
 
+        # Build ResilienceConfig
+        resilience = ResilienceConfig(
+            implicit_wait=_parse_duration(resilience_dict.get("implicit_wait"), 5.0),
+            poll_interval=_parse_duration(resilience_dict.get("poll_interval"), 0.5),
+            stability_frames=_safe_int(resilience_dict.get("stability_frames"), 2),
+            ai_recovery=_parse_bool(resilience_dict.get("ai_recovery"), True),
+            ai_retry_limit=_safe_int(resilience_dict.get("ai_retry_limit"), 1),
+        )
+
         # Build main config
         return MutConfig(
             app=config_dict.get("app"),
@@ -210,6 +278,7 @@ class ConfigLoader:
             verbose=_parse_bool(config_dict.get("verbose"), False),
             timeouts=timeouts,
             retry=retry,
+            resilience=resilience,
         )
 
 

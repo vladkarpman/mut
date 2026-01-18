@@ -833,12 +833,19 @@ class TestExecutorConditionalActions:
 
     def test_conditional_propagates_nested_step_failure(self, executor, mock_device, mock_ai):
         """Conditional returns error when nested step fails (element not found by device or AI)."""
-        mock_device.find_element.side_effect = [
-            (540, 1200),  # Condition check - found
-            None,  # Tap target not found by device
-        ]
+        # First call returns coords (condition check), all subsequent calls return None
+        call_count = [0]
+
+        def find_element_side_effect(target):
+            call_count[0] += 1
+            if call_count[0] == 1:
+                return (540, 1200)  # Condition check - found
+            return None  # All subsequent calls - not found
+
+        mock_device.find_element.side_effect = find_element_side_effect
         mock_ai.find_element.return_value = None  # AI also doesn't find tap target
-        then_step = Step(action="tap", target="NonExistent Button")
+        # Use short timeout to avoid long wait during test
+        then_step = Step(action="tap", target="NonExistent Button", timeout=0.5)
         step = Step(
             action="if_present",
             condition_target="Login Button",
@@ -983,12 +990,14 @@ class TestExecutorScreenshots:
         result = executor.execute_step(step)
 
         assert result.screenshot_after == b"fake_screenshot_bytes"
-        # take_screenshot should be called 3 times (before, action, after) for tap
-        assert mock_device.take_screenshot.call_count == 3
+        # take_screenshot called multiple times: before, during smart wait, action, after
+        assert mock_device.take_screenshot.call_count >= 3
 
     def test_screenshot_failure_does_not_fail_step(self, executor, mock_device):
-        """Screenshot capture failure should not fail the step."""
+        """Screenshot capture failure should not fail the step when element found via accessibility."""
         mock_device.take_screenshot.side_effect = RuntimeError("Screenshot failed")
+        # Element is found via accessibility tree (doesn't need screenshot)
+        mock_device.find_element.return_value = (540, 1200)
         step = Step(action="tap", target="Button")
 
         result = executor.execute_step(step)
@@ -1041,8 +1050,8 @@ class TestExecutorScreenshots:
 
         assert result.status == "failed"
         assert result.screenshot_before == b"fake_screenshot_bytes"
-        # Before captured, but after not captured due to exception
-        assert mock_device.take_screenshot.call_count == 1
+        # Screenshots captured during smart wait + before step execution
+        assert mock_device.take_screenshot.call_count >= 1
 
 
 class TestExecuteTestMethod:
@@ -1162,3 +1171,292 @@ class TestExecuteTestMethod:
         assert result1.steps[1].step_number == 2
         # Second test: step should be numbered 1 (reset), not 3
         assert result2.steps[0].step_number == 1
+
+
+class TestVideoFrameExtraction:
+    """Tests for video-based frame extraction during test execution."""
+
+    @pytest.fixture
+    def mock_device(self):
+        """Mock DeviceController."""
+        device = MagicMock()
+        device.get_screen_size.return_value = (1080, 2340)
+        device.find_element.return_value = (540, 1200)
+        device.take_screenshot.return_value = b"fallback_screenshot"
+        device.get_show_touches.return_value = False
+        device.set_show_touches.return_value = None
+        mock_process = MagicMock()
+        mock_process.wait.return_value = None
+        device.swipe_async.return_value = mock_process
+        device.long_press_async.return_value = mock_process
+        return device
+
+    @pytest.fixture
+    def mock_scrcpy(self):
+        """Mock ScrcpyService."""
+        scrcpy = MagicMock()
+        scrcpy.is_connected = True
+        scrcpy.connect.return_value = True
+        scrcpy.screenshot.return_value = b"scrcpy_screenshot"
+        scrcpy.start_recording.return_value = {"success": True}
+        scrcpy.stop_recording.return_value = {
+            "success": True,
+            "output_path": "/tmp/test/video.mp4",
+            "duration_seconds": 10.0,
+            "frame_count": 300,
+        }
+        return scrcpy
+
+    @pytest.fixture
+    def executor(self, mock_device, mock_scrcpy):
+        """Create executor with mocked device and scrcpy."""
+        with patch("mutcli.core.executor.DeviceController", return_value=mock_device):
+            exec_ = TestExecutor(device_id="test-device", scrcpy=mock_scrcpy)
+            return exec_
+
+    def test_get_recording_timestamp_returns_none_when_not_recording(self, executor):
+        """_get_recording_timestamp returns None when not recording."""
+        assert executor._get_recording_timestamp() is None
+
+    def test_get_recording_timestamp_returns_elapsed_time_when_recording(self, executor):
+        """_get_recording_timestamp returns elapsed time when recording."""
+        import time
+
+        executor._recording_video = True
+        executor._recording_start_time = time.time() - 1.5  # Started 1.5s ago
+
+        result = executor._get_recording_timestamp()
+
+        assert result is not None
+        assert 1.4 <= result <= 1.6  # Should be around 1.5s
+
+    def test_capture_screenshot_or_timestamp_returns_both(self, executor, mock_device):
+        """_capture_screenshot_or_timestamp returns screenshot and timestamp."""
+        import time
+
+        executor._recording_video = True
+        executor._recording_start_time = time.time() - 2.0
+
+        screenshot, timestamp = executor._capture_screenshot_or_timestamp()
+
+        assert screenshot == b"scrcpy_screenshot"
+        assert timestamp is not None
+        assert 1.9 <= timestamp <= 2.1
+
+    def test_capture_screenshot_or_timestamp_returns_none_timestamp_when_not_recording(
+        self, executor, mock_device
+    ):
+        """_capture_screenshot_or_timestamp returns None timestamp when not recording."""
+        screenshot, timestamp = executor._capture_screenshot_or_timestamp()
+
+        assert screenshot == b"scrcpy_screenshot"
+        assert timestamp is None
+
+    def test_step_result_has_timestamp_fields_when_recording(
+        self, executor, mock_device, mock_scrcpy, tmp_path
+    ):
+        """StepResult includes timestamp fields when video recording is active."""
+        import time
+
+        # Set up recording state
+        executor._recording_video = True
+        executor._recording_start_time = time.time()
+        executor._recording_video_path = tmp_path / "video.mp4"
+
+        step = Step(action="tap", target="Button")
+        result = executor.execute_step(step)
+
+        # Should have timestamp fields populated
+        assert result._ts_before is not None
+        assert result._ts_after is not None
+        assert result._ts_action is not None
+        # _ts_action_end is only for swipe/long_press
+        assert result._ts_action_end is None
+
+    def test_swipe_has_action_end_timestamp(self, executor, mock_device, mock_scrcpy, tmp_path):
+        """Swipe action populates _ts_action_end timestamp."""
+        import time
+
+        executor._recording_video = True
+        executor._recording_start_time = time.time()
+        executor._recording_video_path = tmp_path / "video.mp4"
+
+        step = Step(action="swipe", direction="up")
+        result = executor.execute_step(step)
+
+        assert result._ts_action is not None
+        assert result._ts_action_end is not None
+        # action_end should be after action (captured 90% through swipe)
+        assert result._ts_action_end > result._ts_action
+
+    def test_long_press_has_action_end_timestamp(
+        self, executor, mock_device, mock_scrcpy, tmp_path
+    ):
+        """Long press action populates _ts_action_end timestamp."""
+        import time
+
+        executor._recording_video = True
+        executor._recording_start_time = time.time()
+        executor._recording_video_path = tmp_path / "video.mp4"
+
+        step = Step(action="long_press", target="Button", duration=500)
+        result = executor.execute_step(step)
+
+        assert result._ts_action is not None
+        assert result._ts_action_end is not None
+        assert result._ts_action_end > result._ts_action
+
+    def test_extract_frames_applies_timing_offsets(self, executor, mock_device, tmp_path):
+        """_extract_frames_from_video applies correct timing offsets."""
+        # Create a fake video file
+        video_path = tmp_path / "video.mp4"
+        video_path.write_bytes(b"fake video data")
+        executor._recording_video_path = video_path
+
+        # Create step results with timestamps
+        step_result = StepResult(
+            step_number=1,
+            action="tap",
+            status="passed",
+            _ts_before=1.0,
+            _ts_after=1.5,
+            _ts_action=1.2,
+            _ts_action_end=None,
+        )
+
+        # Mock FrameExtractor to capture the timestamps it receives
+        extracted_timestamps = []
+
+        def mock_extract_frame(timestamp):
+            extracted_timestamps.append(timestamp)
+            return b"frame_data"
+
+        with patch("mutcli.core.frame_extractor.FrameExtractor") as MockExtractor:
+            mock_extractor = MagicMock()
+            mock_extractor.extract_frame.side_effect = mock_extract_frame
+            MockExtractor.return_value = mock_extractor
+
+            executor._extract_frames_from_video([step_result])
+
+        # Verify offsets were applied:
+        # - before: no offset (1.0)
+        # - action: +50ms (1.25)
+        # - after: +200ms (1.7)
+        assert 1.0 in extracted_timestamps  # before
+        assert 1.25 in extracted_timestamps  # action + 0.05
+        assert 1.7 in extracted_timestamps  # after + 0.20
+
+    def test_extract_frames_extracts_multiple_steps(self, executor, mock_device, tmp_path):
+        """_extract_frames_from_video extracts frames for multiple steps."""
+        video_path = tmp_path / "video.mp4"
+        video_path.write_bytes(b"fake video data")
+        executor._recording_video_path = video_path
+
+        # Create multiple step results
+        step_results = [
+            StepResult(
+                step_number=i,
+                action="tap",
+                status="passed",
+                _ts_before=float(i),
+                _ts_after=float(i) + 0.5,
+                _ts_action=float(i) + 0.2,
+            )
+            for i in range(3)
+        ]
+
+        with patch("mutcli.core.frame_extractor.FrameExtractor") as MockExtractor:
+            mock_extractor = MagicMock()
+            mock_extractor.extract_frame.return_value = b"frame_data"
+            MockExtractor.return_value = mock_extractor
+
+            executor._extract_frames_from_video(step_results)
+
+            # Should have called extract_frame for each timestamp
+            # 3 steps × 3 timestamps (before, after, action) = 9 calls
+            assert mock_extractor.extract_frame.call_count == 9
+
+            # All steps should have screenshots populated
+            for step in step_results:
+                assert step.screenshot_before == b"frame_data"
+                assert step.screenshot_after == b"frame_data"
+                assert step.screenshot_action == b"frame_data"
+
+    def test_extract_frames_maps_fields_correctly(self, executor, mock_device, tmp_path):
+        """_extract_frames_from_video maps _ts_* fields to screenshot_* fields."""
+        video_path = tmp_path / "video.mp4"
+        video_path.write_bytes(b"fake video data")
+        executor._recording_video_path = video_path
+
+        step_result = StepResult(
+            step_number=1,
+            action="tap",
+            status="passed",
+            _ts_before=1.0,
+            _ts_after=1.5,
+            _ts_action=1.2,
+        )
+
+        with patch("mutcli.core.frame_extractor.FrameExtractor") as MockExtractor:
+            mock_extractor = MagicMock()
+            mock_extractor.extract_frame.return_value = b"extracted_frame"
+            MockExtractor.return_value = mock_extractor
+
+            executor._extract_frames_from_video([step_result])
+
+        # Verify screenshots were populated from extracted frames
+        assert step_result.screenshot_before == b"extracted_frame"
+        assert step_result.screenshot_after == b"extracted_frame"
+        assert step_result.screenshot_action == b"extracted_frame"
+
+    def test_extract_frames_handles_missing_video_gracefully(self, executor, mock_device, tmp_path):
+        """_extract_frames_from_video handles missing video file gracefully."""
+        executor._recording_video_path = tmp_path / "nonexistent.mp4"
+
+        step_result = StepResult(
+            step_number=1,
+            action="tap",
+            status="passed",
+            _ts_before=1.0,
+            _ts_after=1.5,
+        )
+
+        # Should not raise, just log warning
+        executor._extract_frames_from_video([step_result])
+
+        # Screenshots should remain None
+        assert step_result.screenshot_before is None
+
+    def test_extract_frames_handles_extraction_failure(self, executor, mock_device, tmp_path):
+        """_extract_frames_from_video handles extraction failures gracefully."""
+        video_path = tmp_path / "video.mp4"
+        video_path.write_bytes(b"fake video data")
+        executor._recording_video_path = video_path
+
+        step_result = StepResult(
+            step_number=1,
+            action="tap",
+            status="passed",
+            _ts_before=1.0,
+            _ts_after=1.5,
+        )
+
+        with patch("mutcli.core.frame_extractor.FrameExtractor") as MockExtractor:
+            mock_extractor = MagicMock()
+            mock_extractor.extract_frame.return_value = None  # Extraction fails
+            MockExtractor.return_value = mock_extractor
+
+            # Should not raise
+            executor._extract_frames_from_video([step_result])
+
+        # Screenshots should remain None since extraction failed
+        assert step_result.screenshot_before is None
+        assert step_result.screenshot_after is None
+
+    def test_frame_offset_constants_are_reasonable(self, executor):
+        """Verify timing offset constants are reasonable values."""
+        # Action offset should account for ADB latency (typically 30-100ms)
+        assert 0.03 <= executor.FRAME_OFFSET_ACTION <= 0.15
+
+        # After offset should account for UI render time (typically 100-300ms)
+        assert 0.10 <= executor.FRAME_OFFSET_AFTER <= 0.35

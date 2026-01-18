@@ -23,8 +23,9 @@ class Step:
     target: str | None = None
     coordinates: tuple[float, float] | None = None
     coordinates_type: Literal["percent", "pixels"] | None = None
-    timeout: float | None = None
+    timeout: float | None = None  # Per-step timeout override (seconds)
     retry: int | None = None
+    ai_recovery: bool | None = None  # Per-step AI recovery override (None = use config)
 
     # For type action
     text: str | None = None

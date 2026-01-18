@@ -9,6 +9,7 @@ from pathlib import Path
 from typing import TYPE_CHECKING, Any
 
 from mutcli.core.ai_analyzer import AIAnalyzer
+from mutcli.core.ai_recovery import AIRecovery
 from mutcli.core.config import ConfigLoader, MutConfig
 from mutcli.core.device_controller import DeviceController
 from mutcli.models.test import Step, TestFile
@@ -89,6 +90,7 @@ class TestExecutor:
         self._device = DeviceController(device_id)
         self._config = config or ConfigLoader.load()
         self._ai = ai_analyzer or AIAnalyzer()
+        self._ai_recovery = AIRecovery(self._ai)
         self._scrcpy = scrcpy
         self._output_dir = output_dir or Path.cwd()
         self._screen_size: tuple[int, int] | None = None
@@ -96,14 +98,18 @@ class TestExecutor:
         self._test_start: float = 0.0  # Track test start time for timestamps
         self._test_app: str | None = None  # App from test file config
         self._recording_video = False  # Whether video recording is active
+        self._recording_start_time: float | None = None  # When video recording started
+        self._recording_video_path: Path | None = None  # Path to video file for extraction
         self._step_coords: tuple[int, int] | None = None  # Track coords for report gestures
         self._step_end_coords: tuple[int, int] | None = None  # End coords for swipes
         self._step_direction: str | None = None  # Direction for swipes
         self._step_trajectory: list[dict[str, float]] | None = None  # Trajectory for swipes
         self._original_show_touches: bool | None = None  # Original show_touches setting
-        # Action screenshots captured during step execution
+        # Action screenshots/timestamps captured during step execution
         self._step_action_screenshot: bytes | None = None
         self._step_action_end_screenshot: bytes | None = None
+        self._step_action_timestamp: float | None = None
+        self._step_action_end_timestamp: float | None = None
 
     def execute_test(self, test: TestFile, *, record_video: bool = False) -> TestResult:
         """Execute a complete test file.
@@ -187,9 +193,11 @@ class TestExecutor:
             logger.exception("Test execution error: %s", e)
 
         finally:
-            # Stop video recording if active
+            # Stop video recording if active and extract precise frames
             if self._recording_video:
                 self._stop_video_recording()
+                # Extract frames from video at stored timestamps for precise captures
+                self._extract_frames_from_video(results)
 
         duration = time.time() - start
         logger.info(
@@ -227,13 +235,15 @@ class TestExecutor:
         self._step_trajectory = None
         self._step_action_screenshot = None
         self._step_action_end_screenshot = None
+        self._step_action_timestamp = None
+        self._step_action_end_timestamp = None
 
         # Build step description for logging
         step_desc = self._format_step_description(step)
         logger.debug("Step %d: Starting %s", self._step_number, step_desc)
 
-        # Capture before screenshot
-        screenshot_before = self._capture_screenshot()
+        # Capture before screenshot and timestamp
+        screenshot_before, ts_before = self._capture_screenshot_or_timestamp()
 
         try:
             # Dispatch to action handler
@@ -266,8 +276,8 @@ class TestExecutor:
                     )
                     time.sleep(0.5)  # Brief pause between retries
 
-            # Capture after screenshot
-            screenshot_after = self._capture_screenshot()
+            # Capture after screenshot and timestamp
+            screenshot_after, ts_after = self._capture_screenshot_or_timestamp()
             elapsed = time.time() - start
 
             if error:
@@ -302,12 +312,15 @@ class TestExecutor:
                     details["trajectory"] = self._step_trajectory
                     details["duration_ms"] = 300  # Default swipe duration
 
+            # Use explicit description if provided, otherwise generate from step data
+            description = step.description or self._format_step_description(step)
+
             return StepResult(
                 step_number=self._step_number,
                 action=step.action,
                 status="failed" if error else "passed",
                 target=step.target or step.condition_target,
-                description=step.description,
+                description=description,
                 duration=elapsed,
                 error=error,
                 screenshot_before=screenshot_before,
@@ -315,6 +328,10 @@ class TestExecutor:
                 screenshot_action=self._step_action_screenshot,
                 screenshot_action_end=self._step_action_end_screenshot,
                 details=details,
+                _ts_before=ts_before,
+                _ts_after=ts_after,
+                _ts_action=self._step_action_timestamp,
+                _ts_action_end=self._step_action_end_timestamp,
             )
 
         except Exception as e:
@@ -322,12 +339,14 @@ class TestExecutor:
             logger.exception(
                 "Step %d: Exception in %s after %.2fs", self._step_number, step.action, elapsed
             )
+            # Use explicit description if provided, otherwise generate from step data
+            description = step.description or self._format_step_description(step)
             return StepResult(
                 step_number=self._step_number,
                 action=step.action,
                 status="failed",
                 target=step.target or step.condition_target,
-                description=step.description,
+                description=description,
                 duration=elapsed,
                 error=str(e),
                 screenshot_before=screenshot_before,
@@ -355,6 +374,16 @@ class TestExecutor:
             parts.append(f"text='{text}'")
         return " ".join(parts)
 
+    def _get_recording_timestamp(self) -> float | None:
+        """Get current timestamp relative to recording start.
+
+        Returns:
+            Elapsed seconds since recording started, or None if not recording
+        """
+        if self._recording_video and self._recording_start_time is not None:
+            return time.time() - self._recording_start_time
+        return None
+
     def _capture_screenshot(self) -> bytes | None:
         """Capture screenshot from device if available.
 
@@ -371,6 +400,19 @@ class TestExecutor:
             return self._device.take_screenshot()
         except Exception:
             return None
+
+    def _capture_screenshot_or_timestamp(self) -> tuple[bytes | None, float | None]:
+        """Capture screenshot and/or timestamp for later frame extraction.
+
+        When video recording is active, captures timestamp for precise frame
+        extraction later. Also captures screenshot for immediate use.
+
+        Returns:
+            Tuple of (screenshot_bytes, timestamp_relative_to_recording)
+        """
+        timestamp = self._get_recording_timestamp()
+        screenshot = self._capture_screenshot()
+        return screenshot, timestamp
 
     def _start_video_recording(self) -> None:
         """Start video recording for test execution."""
@@ -399,6 +441,8 @@ class TestExecutor:
         result = self._scrcpy.start_recording(str(video_path))
         if result.get("success"):
             self._recording_video = True
+            self._recording_start_time = time.time()
+            self._recording_video_path = video_path
             logger.info("Video recording started: %s", video_path)
         else:
             logger.error("Failed to start video recording: %s", result.get("error"))
@@ -429,6 +473,112 @@ class TestExecutor:
             )
         else:
             logger.error("Failed to stop video recording: %s", result.get("error"))
+
+    # Timing offsets for frame extraction (in seconds)
+    # These account for ADB command latency and UI rendering time
+    # Values determined empirically based on typical Android device behavior
+    FRAME_OFFSET_ACTION = 0.05  # 50ms offset for action frames (ADB latency)
+    FRAME_OFFSET_AFTER = 0.20  # 200ms offset for "after" frames (UI render time)
+
+    def _extract_frames_from_video(self, results: list[StepResult]) -> None:
+        """Extract precise frames from video using stored timestamps.
+
+        Uses FrameExtractor to extract frames at the timestamps stored during
+        execution. Applies timing offsets to account for ADB latency and UI
+        update time. Uses parallel extraction for performance.
+
+        Timing offsets:
+        - before: no offset (captured before action starts)
+        - action/action_end: +50ms (ADB command latency)
+        - after: +200ms (UI needs time to render result)
+
+        Args:
+            results: List of StepResult objects with _ts_* timestamps populated
+        """
+        if not self._recording_video_path or not self._recording_video_path.exists():
+            logger.warning("No video file available for frame extraction")
+            return
+
+        # Build extraction list with timing offsets
+        # Format: (step, ts_field, adjusted_timestamp)
+        extractions: list[tuple[StepResult, str, float]] = []
+        for step in results:
+            for ts_field in ["_ts_before", "_ts_after", "_ts_action", "_ts_action_end"]:
+                ts = getattr(step, ts_field, None)
+                if ts is not None:
+                    # Apply timing offsets based on frame type
+                    if ts_field == "_ts_after":
+                        ts = ts + self.FRAME_OFFSET_AFTER
+                    elif ts_field in ("_ts_action", "_ts_action_end"):
+                        ts = ts + self.FRAME_OFFSET_ACTION
+                    # _ts_before: no offset needed
+                    extractions.append((step, ts_field, ts))
+
+        if not extractions:
+            logger.debug("No timestamps to extract from video")
+            return
+
+        logger.info(
+            "Extracting %d frames from video at %s (parallel)",
+            len(extractions),
+            self._recording_video_path,
+        )
+
+        try:
+            from concurrent.futures import ThreadPoolExecutor, as_completed
+
+            from mutcli.core.frame_extractor import FrameExtractor
+
+            extractor = FrameExtractor(self._recording_video_path)
+
+            # Parallel extraction using ThreadPoolExecutor
+            max_workers = min(16, len(extractions))
+            extracted_count = 0
+
+            def extract_single(
+                item: tuple[StepResult, str, float],
+            ) -> tuple[StepResult, str, bytes | None]:
+                """Extract a single frame and return with metadata."""
+                step, ts_field, timestamp = item
+                frame_bytes = extractor.extract_frame(timestamp)
+                return step, ts_field, frame_bytes
+
+            with ThreadPoolExecutor(max_workers=max_workers) as executor:
+                futures = {
+                    executor.submit(extract_single, item): item for item in extractions
+                }
+
+                for future in as_completed(futures):
+                    item = futures[future]
+                    try:
+                        step, ts_field, frame_bytes = future.result()
+                        if frame_bytes:
+                            # Map timestamp field to screenshot field
+                            screenshot_field = ts_field.replace("_ts_", "screenshot_")
+                            setattr(step, screenshot_field, frame_bytes)
+                            extracted_count += 1
+                        else:
+                            logger.warning(
+                                "Failed to extract frame at %.3fs for step %d (%s)",
+                                item[2],
+                                item[0].step_number,
+                                ts_field,
+                            )
+                    except Exception as e:
+                        logger.warning(
+                            "Exception extracting frame for step %d: %s",
+                            item[0].step_number,
+                            e,
+                        )
+
+            logger.info(
+                "Extracted %d/%d frames from video",
+                extracted_count,
+                len(extractions),
+            )
+
+        except Exception as e:
+            logger.exception("Failed to extract frames from video: %s", e)
 
     def _get_screen_size(self) -> tuple[int, int]:
         """Get cached screen size."""
@@ -496,18 +646,100 @@ class TestExecutor:
 
         return points
 
+    def _find_element_with_wait(
+        self, target: str, timeout: float | None = None
+    ) -> tuple[int, int] | None:
+        """Find element with implicit wait and screen stability detection.
+
+        Layer 1 of resilience: polls for element with stability checks.
+
+        Args:
+            target: Element text/description to find
+            timeout: Override timeout (uses config.resilience.implicit_wait if None)
+
+        Returns:
+            (x, y) coordinates if found, None if timeout reached
+        """
+        timeout = timeout if timeout is not None else self._config.resilience.implicit_wait
+        poll_interval = self._config.resilience.poll_interval
+        stability_threshold = self._config.resilience.stability_frames
+        width, height = self._get_screen_size()
+
+        start = time.time()
+        last_screenshot_hash: int | None = None
+        stable_count = 0
+        attempt = 0
+        screenshots_working = True  # Track if screenshots are available
+
+        logger.debug(
+            "Finding element '%s' with wait (timeout=%.1fs, poll=%.2fs, stability=%d)",
+            target, timeout, poll_interval, stability_threshold,
+        )
+
+        while time.time() - start < timeout:
+            attempt += 1
+            screenshot = self._capture_screenshot()
+
+            # Check screen stability using hash comparison
+            if screenshot:
+                current_hash = hash(screenshot)
+                if current_hash == last_screenshot_hash:
+                    stable_count += 1
+                else:
+                    stable_count = 0
+                    last_screenshot_hash = current_hash
+            else:
+                # Screenshots not working - mark and skip stability check
+                screenshots_working = False
+
+            # Search when screen is stable OR when screenshots aren't working
+            # (if screenshots fail, we can't check stability, so just try finding)
+            should_search = (
+                stable_count >= stability_threshold - 1 or not screenshots_working
+            )
+
+            if should_search:
+                # Try accessibility tree first (fast)
+                coords = self._device.find_element(target)
+                if coords:
+                    elapsed = time.time() - start
+                    logger.debug(
+                        "Element '%s' found via accessibility at %s (%.2fs, %d attempts)",
+                        target, coords, elapsed, attempt,
+                    )
+                    return coords
+
+                # Try AI vision if screenshot available
+                if screenshot:
+                    coords = self._ai.find_element(screenshot, target, width, height)
+                    if coords:
+                        elapsed = time.time() - start
+                        logger.debug(
+                            "Element '%s' found via AI at %s (%.2fs, %d attempts)",
+                            target, coords, elapsed, attempt,
+                        )
+                        return coords
+
+            time.sleep(poll_interval)
+
+        elapsed = time.time() - start
+        logger.debug(
+            "Element '%s' not found after %.2fs (%d attempts)",
+            target, elapsed, attempt,
+        )
+        return None
+
     def _resolve_coordinates_ai(self, step: Step) -> tuple[tuple[int, int] | None, str | None]:
-        """Resolve coordinates using AI-first approach.
+        """Resolve coordinates using AI-first approach with smart waits.
 
         Strategy:
         1. coordinates only (no text) → use coordinates directly
-        2. text + coordinates → validate with AI, use coordinates
-        3. text only → AI finds element
+        2. text + coordinates → find element by text, use recorded coords as fallback
+        3. text only → find element with smart wait (Layer 1)
 
         Returns:
             (coordinates, error) - coordinates are (x, y) or None, error is message or None
         """
-        width, height = self._get_screen_size()
         has_text = bool(step.target)
         has_coords = bool(step.coordinates)
 
@@ -517,65 +749,85 @@ class TestExecutor:
             logger.debug("Using direct coordinates: %s", coords)
             return coords, None
 
-        # Case 2: Text + coordinates - validate with AI, use coordinates
+        # Case 2: Text + coordinates - find element by text, use recorded coords as fallback
+        # Note: We don't validate that text is at recorded coords - that would be overly strict.
+        # Recorded coordinates are hints from recording, not assertions.
         if has_text and has_coords and step.coordinates and step.target:
-            coords = self._coordinates_to_pixels(step)
+            # First try to find element by text (more resilient to UI changes)
+            coords = self._find_element_with_wait(step.target, step.timeout)
             if coords:
                 logger.debug(
-                    "Validating element '%s' at coordinates %s with AI", step.target, coords
+                    "Element '%s' found at %s (ignoring recorded coords)", step.target, coords
                 )
-                screenshot = self._device.take_screenshot()
-                if step.coordinates_type == "percent":
-                    x_pct = step.coordinates[0]
-                    y_pct = step.coordinates[1]
-                else:
-                    x_pct = coords[0] * 100 / width
-                    y_pct = coords[1] * 100 / height
+                return coords, None
 
-                validation = self._ai.validate_element_at(
-                    screenshot, step.target, x_pct, y_pct
-                )
-                if not validation.get("valid") and not validation.get("skipped"):
-                    reason = validation.get("reason", "unknown")
-                    logger.debug(
-                        "AI validation failed for '%s' at (%.0f%%, %.0f%%): %s",
-                        step.target,
-                        x_pct,
-                        y_pct,
-                        reason,
-                    )
-                    return None, (
-                        f"Validation failed: expected '{step.target}' "
-                        f"at ({x_pct:.0f}%, {y_pct:.0f}%), but: {reason}"
-                    )
-
+            # Element not found by text - fall back to recorded coordinates
+            fallback_coords = self._coordinates_to_pixels(step)
+            if fallback_coords:
                 logger.debug(
-                    "AI validation passed for '%s' at (%.0f%%, %.0f%%)",
+                    "Element '%s' not found by text, using recorded coords as fallback: %s",
                     step.target,
-                    x_pct,
-                    y_pct,
+                    fallback_coords,
                 )
-                return coords, None
-            return None, f"Invalid coordinates for '{step.target}'"
+                return fallback_coords, None
+            return None, f"Element '{step.target}' not found and invalid fallback coordinates"
 
-        # Case 3: Text only - AI finds element
+        # Case 3: Text only - find element with smart wait (Layer 1)
         if has_text and step.target:
-            # First try device's element finder (faster, uses accessibility tree)
-            logger.debug("Searching for element '%s' using accessibility tree", step.target)
-            coords = self._device.find_element(step.target)
+            coords = self._find_element_with_wait(step.target, step.timeout)
             if coords:
-                logger.debug("Element '%s' found via accessibility at %s", step.target, coords)
                 return coords, None
 
-            # Fall back to AI vision
-            logger.debug("Element '%s' not in accessibility tree, trying AI vision", step.target)
-            screenshot = self._device.take_screenshot()
-            coords = self._ai.find_element(screenshot, step.target, width, height)
-            if coords:
-                logger.debug("Element '%s' found via AI vision at %s", step.target, coords)
-                return coords, None
+            # Layer 1 exhausted - try Layer 2 (AI recovery) if enabled
+            ai_recovery_enabled = (
+                step.ai_recovery if step.ai_recovery is not None
+                else self._config.resilience.ai_recovery
+            )
 
-            logger.debug("Element '%s' not found by any method", step.target)
+            if ai_recovery_enabled and self._ai_recovery.is_available:
+                logger.debug("Layer 1 failed, trying AI recovery for '%s'", step.target)
+                screenshot = self._capture_screenshot()
+                if screenshot:
+                    recovery = self._ai_recovery.analyze_element_not_found(
+                        screenshot=screenshot,
+                        target=step.target,
+                        action=step.action,
+                        screen_size=self._get_screen_size(),
+                    )
+                    logger.debug(
+                        "AI recovery result: action=%s, reason=%s",
+                        recovery.action, recovery.reason,
+                    )
+
+                    if recovery.action == "retry" and recovery.wait_seconds:
+                        # AI suggests waiting more
+                        logger.debug("AI suggests retry after %.1fs", recovery.wait_seconds)
+                        time.sleep(recovery.wait_seconds)
+                        coords = self._find_element_with_wait(step.target, 2.0)  # Short retry
+                        if coords:
+                            return coords, None
+
+                    elif recovery.action == "alternative":
+                        # AI found alternative target or coordinates
+                        if recovery.alternative_coords:
+                            logger.debug(
+                                "AI suggests coordinates: %s", recovery.alternative_coords
+                            )
+                            return recovery.alternative_coords, None
+                        elif recovery.alternative_target:
+                            logger.debug(
+                                "AI suggests alternative target: '%s'",
+                                recovery.alternative_target,
+                            )
+                            coords = self._find_element_with_wait(
+                                recovery.alternative_target, 2.0
+                            )
+                            if coords:
+                                return coords, None
+
+                    # AI recovery failed or suggested fail
+                    return None, f"Element '{step.target}' not found (AI: {recovery.reason})"
+
             return None, f"Element '{step.target}' not found"
 
         return None, "No target or coordinates specified"
@@ -592,8 +844,10 @@ class TestExecutor:
 
         self._step_coords = coords  # Store for report gesture indicator
         self._device.tap(coords[0], coords[1])
-        # Capture action screenshot immediately after tap (shows touch feedback)
-        self._step_action_screenshot = self._capture_screenshot()
+        # Capture action screenshot and timestamp immediately after tap
+        screenshot, timestamp = self._capture_screenshot_or_timestamp()
+        self._step_action_screenshot = screenshot
+        self._step_action_timestamp = timestamp
         return None
 
     def _action_double_tap(self, step: Step) -> str | None:
@@ -606,8 +860,10 @@ class TestExecutor:
 
         self._step_coords = coords  # Store for report gesture indicator
         self._device.double_tap(coords[0], coords[1])
-        # Capture action screenshot after double tap
-        self._step_action_screenshot = self._capture_screenshot()
+        # Capture action screenshot and timestamp after double tap
+        screenshot, timestamp = self._capture_screenshot_or_timestamp()
+        self._step_action_screenshot = screenshot
+        self._step_action_timestamp = timestamp
         return None
 
     def _action_type(self, step: Step) -> str | None:
@@ -655,8 +911,10 @@ class TestExecutor:
 
         self._step_end_coords = (end_x, end_y)  # Store end coords for report
 
-        # Capture swipe_start screenshot before swipe begins
-        self._step_action_screenshot = self._capture_screenshot()
+        # Capture swipe_start screenshot and timestamp before swipe begins
+        screenshot, timestamp = self._capture_screenshot_or_timestamp()
+        self._step_action_screenshot = screenshot
+        self._step_action_timestamp = timestamp
 
         # Execute swipe asynchronously to capture mid-action
         duration_ms = 300
@@ -669,7 +927,9 @@ class TestExecutor:
 
         # Wait 90% of duration, then capture swipe_end
         time.sleep(duration_ms * 0.9 / 1000)
-        self._step_action_end_screenshot = self._capture_screenshot()
+        screenshot, timestamp = self._capture_screenshot_or_timestamp()
+        self._step_action_end_screenshot = screenshot
+        self._step_action_end_timestamp = timestamp
 
         # Wait for swipe to complete
         process.wait()
@@ -683,33 +943,17 @@ class TestExecutor:
         return None
 
     def _action_wait_for(self, step: Step) -> str | None:
-        """Wait for element to appear."""
+        """Wait for element to appear using smart wait with stability detection."""
         target = step.target
         if not target:
             return "No element to wait for"
 
+        # Use step timeout, fall back to config wait_for timeout
         timeout = step.timeout or self._config.timeouts.wait_for
-        start = time.time()
-        attempt = 0
+        coords = self._find_element_with_wait(target, timeout)
 
-        logger.debug("Waiting for element '%s' (timeout=%.1fs)", target, timeout)
-
-        while time.time() - start < timeout:
-            attempt += 1
-            if self._device.find_element(target):
-                elapsed = time.time() - start
-                logger.debug(
-                    "Element '%s' found after %.2fs (%d attempts)", target, elapsed, attempt
-                )
-                return None
-            time.sleep(0.5)
-
-        logger.debug(
-            "Timeout waiting for element '%s' after %.1fs (%d attempts)",
-            target,
-            timeout,
-            attempt,
-        )
+        if coords:
+            return None
         return f"Timeout waiting for '{target}'"
 
     def _action_launch_app(self, step: Step) -> str | None:
@@ -736,9 +980,11 @@ class TestExecutor:
         return None
 
     def _action_verify_screen(self, step: Step) -> str | None:
-        """Verify screen matches description using AI.
+        """Verify screen matches description using AI with Layer 2 recovery.
 
         Takes a screenshot and asks AI to verify it matches the expected state.
+        If verification fails, Layer 2 AI recovery may suggest waiting for
+        screen transitions to complete.
 
         Returns:
             None if verification passes, error message if it fails
@@ -761,6 +1007,41 @@ class TestExecutor:
 
         reason = result.get("reason", "Screen does not match expected state")
         logger.debug("Screen verification failed: %s - %s", description, reason)
+
+        # Layer 2: AI recovery for verify_screen failures
+        ai_recovery_enabled = (
+            step.ai_recovery if step.ai_recovery is not None
+            else self._config.resilience.ai_recovery
+        )
+
+        if ai_recovery_enabled and self._ai_recovery.is_available and screenshot:
+            logger.debug("Trying AI recovery for verify_screen failure")
+            recovery = self._ai_recovery.analyze_verify_screen_failed(
+                screenshot=screenshot,
+                description=description,
+                failure_reason=reason,
+            )
+            logger.debug(
+                "AI recovery result: action=%s, reason=%s",
+                recovery.action, recovery.reason,
+            )
+
+            if recovery.action == "retry" and recovery.wait_seconds:
+                # AI suggests waiting for transition to complete
+                logger.debug("AI suggests retry after %.1fs", recovery.wait_seconds)
+                time.sleep(recovery.wait_seconds)
+
+                # Retry verification
+                screenshot = self._device.take_screenshot()
+                result = self._ai.verify_screen(screenshot, description)
+                if result.get("pass"):
+                    logger.debug("Screen verification passed after AI-suggested wait")
+                    return None
+
+                reason = result.get("reason", reason)
+
+            return f"verify_screen failed: {reason} (AI: {recovery.reason})"
+
         return f"verify_screen failed: {reason}"
 
     def _action_hide_keyboard(self, step: Step) -> str | None:
@@ -779,15 +1060,19 @@ class TestExecutor:
         self._step_coords = coords  # Store for report gesture indicator
         duration_ms = step.duration or 500  # Default 500ms
 
-        # Capture press_start screenshot before press begins
-        self._step_action_screenshot = self._capture_screenshot()
+        # Capture press_start screenshot and timestamp before press begins
+        screenshot, timestamp = self._capture_screenshot_or_timestamp()
+        self._step_action_screenshot = screenshot
+        self._step_action_timestamp = timestamp
 
         # Execute long press asynchronously to capture mid-action
         process = self._device.long_press_async(coords[0], coords[1], duration_ms)
 
         # Wait 70% of duration, then capture press_held
         time.sleep(duration_ms * 0.7 / 1000)
-        self._step_action_end_screenshot = self._capture_screenshot()
+        screenshot, timestamp = self._capture_screenshot_or_timestamp()
+        self._step_action_end_screenshot = screenshot
+        self._step_action_end_timestamp = timestamp
 
         # Wait for press to complete
         process.wait()
@@ -795,7 +1080,7 @@ class TestExecutor:
         return None
 
     def _action_scroll_to(self, step: Step) -> str | None:
-        """Scroll until element is visible using AI-first approach.
+        """Scroll until element is visible using AI-first approach with stability waits.
 
         Note: direction refers to scroll direction (content movement).
         'down' scrolls content down (revealing content below).
@@ -807,6 +1092,7 @@ class TestExecutor:
         direction = (step.direction or "down").lower()
         max_scrolls = step.max_scrolls or 10
         width, height = self._get_screen_size()
+        poll_interval = self._config.resilience.poll_interval
 
         logger.debug(
             "Scrolling to find element '%s' (direction=%s, max_scrolls=%d)",
@@ -846,6 +1132,9 @@ class TestExecutor:
             elif direction == "right":
                 distance = int(width * 0.3)
                 self._device.swipe(cx, cy, cx - distance, cy)
+
+            # Wait for scroll animation to settle
+            time.sleep(poll_interval)
 
         logger.debug(
             "Element '%s' not found after %d scroll attempts", target, max_scrolls
