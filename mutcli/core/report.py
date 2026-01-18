@@ -434,7 +434,7 @@ class ReportGenerator:
     data-x="{x:.1f}" data-y="{y:.1f}"
     data-end-x="{end_x:.1f}" data-end-y="{end_y:.1f}"
     data-trajectory="{traj_json}"
-    data-direction="{direction}">
+    data-direction="{html.escape(direction)}">
     <div class="swipe-trajectory-line"></div>
     <div class="swipe-dot"></div>
 </div>
