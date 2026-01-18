@@ -1059,7 +1059,12 @@ def preview(
     console.print()
     console.print("[blue]Generating YAML from approved steps...[/blue]")
 
-    generator = YAMLGenerator(name=test_name, app_package=app_package)
+    generator = YAMLGenerator(
+        name=test_name,
+        app_package=app_package,
+        screen_width=screen_width,
+        screen_height=screen_height,
+    )
     generator.add_launch_app()
 
     enabled_steps = [
@@ -1081,7 +1086,8 @@ def preview(
             direction = step_data.get("direction", "up")
             generator.add_swipe(direction=direction)
         elif action == "long_press":
-            generator.add_long_press(element=element, coords=coords if not element else None)
+            # Use add_tap for long_press (no separate method)
+            generator.add_tap(element=element, coords=coords if not element else None)
 
     # Add verifications
     for ver in result.verifications:

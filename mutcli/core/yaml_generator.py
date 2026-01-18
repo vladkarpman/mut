@@ -17,7 +17,7 @@ class YAMLGenerator:
     setup, steps, and teardown sections.
 
     Usage:
-        gen = YAMLGenerator("login_test", "com.example.app")
+        gen = YAMLGenerator("login_test", "com.example.app", 1080, 1920)
         gen.add_launch_app()
         gen.add_tap(540, 1200, element="Login")
         gen.add_type("user@test.com")
@@ -25,33 +25,59 @@ class YAMLGenerator:
         gen.save(Path("tests/login.yaml"))
     """
 
-    def __init__(self, name: str, app_package: str):
+    def __init__(
+        self,
+        name: str,
+        app_package: str,
+        screen_width: int | None = None,
+        screen_height: int | None = None,
+    ):
         """Initialize generator.
 
         Args:
             name: Test name
             app_package: Android app package name
+            screen_width: Screen width in pixels (for percentage conversion)
+            screen_height: Screen height in pixels (for percentage conversion)
         """
         self._name = name
         self._app_package = app_package
+        self._screen_width = screen_width
+        self._screen_height = screen_height
         self._steps: list[dict[str, Any]] = []
         self._setup: list[Any] = []
         self._teardown: list[Any] = []
 
-    def add_tap(self, x: int, y: int, element: str | None = None) -> None:
+    def add_tap(
+        self,
+        x: int = 0,
+        y: int = 0,
+        element: str | None = None,
+        coords: tuple[int, int] | None = None,
+    ) -> None:
         """Add tap action.
 
         Element text preferred over coordinates when available.
+        Coordinates are converted to percentages if screen dimensions are set.
 
         Args:
-            x: X coordinate in pixels
-            y: Y coordinate in pixels
+            x: X coordinate in pixels (deprecated, use coords)
+            y: Y coordinate in pixels (deprecated, use coords)
             element: Element text (optional, preferred over coordinates)
+            coords: Coordinates as (x, y) tuple in pixels
         """
         if element:
             self._steps.append({"tap": element})
         else:
-            self._steps.append({"tap": [x, y]})
+            # Use coords if provided, otherwise fall back to x, y
+            px, py = coords if coords else (x, y)
+            # Convert to percentages if screen dimensions are available
+            if self._screen_width and self._screen_height:
+                x_pct = round(px / self._screen_width * 100, 1)
+                y_pct = round(py / self._screen_height * 100, 1)
+                self._steps.append({"tap": [f"{x_pct}%", f"{y_pct}%"]})
+            else:
+                self._steps.append({"tap": [px, py]})
 
     def add_type(
         self, text: str, field: str | None = None, submit: bool = False
