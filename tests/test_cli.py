@@ -126,8 +126,8 @@ class TestStopCommand:
             )
 
         assert result.exit_code == 0
-        # Verify TypingDetector was called with correct screen height
-        mock_detector_class.assert_called_once_with(2400)
+        # Verify TypingDetector was called with correct screen height and keyboard_states
+        mock_detector_class.assert_called_once_with(2400, keyboard_states=None)
         mock_detector.detect.assert_called_once()
 
     def test_stop_prompts_for_typed_text(

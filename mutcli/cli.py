@@ -404,9 +404,20 @@ def _process_recording(
     screen_width = touch_events[0].get("screen_width", 1080) if touch_events else 1080
     screen_height = touch_events[0].get("screen_height", 2400) if touch_events else 2400
 
+    # Load keyboard states if available (from ADB monitoring)
+    keyboard_states_path = test_dir / "keyboard_states.json"
+    keyboard_states: list[tuple[float, bool]] | None = None
+    if keyboard_states_path.exists():
+        try:
+            with open(keyboard_states_path) as f:
+                keyboard_states = [tuple(item) for item in json.load(f)]
+            console.print(f"  Loaded {len(keyboard_states)} keyboard states")
+        except Exception as e:
+            console.print(f"  [dim]Could not load keyboard states: {e}[/dim]")
+
     # 3. Detect typing sequences
     console.print("  [dim]Detecting typing patterns...[/dim]")
-    typing_detector = TypingDetector(screen_height)
+    typing_detector = TypingDetector(screen_height, keyboard_states=keyboard_states)
     typing_sequences = typing_detector.detect(touch_events)
 
     if typing_sequences:
@@ -550,7 +561,7 @@ def _build_preview_steps(
         after_description="",
         timestamp=0.0,
         frames=(
-            {"before": "screenshots/step_001_before.png"}
+            {"before": "recording/screenshots/step_001_before.png"}
             if initial_screenshot.exists() else {}
         ),
     ))
@@ -585,9 +596,9 @@ def _build_preview_steps(
         # Build frames dict
         frames: dict[str, str | None] = {}
         if before_path.exists():
-            frames["before"] = f"screenshots/step_{step_str}_before.png"
+            frames["before"] = f"recording/screenshots/step_{step_str}_before.png"
         if after_path.exists():
-            frames["after"] = f"screenshots/step_{step_str}_after.png"
+            frames["after"] = f"recording/screenshots/step_{step_str}_after.png"
 
         preview_steps.append(PreviewStep(
             index=step_num,
@@ -638,7 +649,7 @@ def _build_preview_steps_from_analysis(
         after_description="",
         timestamp=0.0,
         frames=(
-            {"before": "screenshots/step_001_before.png"}
+            {"before": "recording/screenshots/step_001_before.png"}
             if initial_screenshot.exists() else {}
         ),
     ))
@@ -661,9 +672,9 @@ def _build_preview_steps_from_analysis(
         # Build frames dict
         frames: dict[str, str | None] = {}
         if before_path.exists():
-            frames["before"] = f"screenshots/step_{step_str}_before.png"
+            frames["before"] = f"recording/screenshots/step_{step_str}_before.png"
         if after_path.exists():
-            frames["after"] = f"screenshots/step_{step_str}_after.png"
+            frames["after"] = f"recording/screenshots/step_{step_str}_after.png"
 
         preview_steps.append(PreviewStep(
             index=step_num,
