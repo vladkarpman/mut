@@ -234,6 +234,31 @@ class Recorder:
             logger.error(f"Failed to save touch events: {e}")
             # Continue cleanup even if save fails
 
+        # Save ADB state data
+        if self._touch_monitor:
+            try:
+                keyboard_states = self._touch_monitor.get_keyboard_states()
+                keyboard_path = self._output_dir / "keyboard_states.json"
+                with open(keyboard_path, "w") as f:
+                    json.dump(keyboard_states, f, indent=2)
+
+                activity_states = self._touch_monitor.get_activity_states()
+                activity_path = self._output_dir / "activity_states.json"
+                with open(activity_path, "w") as f:
+                    json.dump(activity_states, f, indent=2)
+
+                window_states = self._touch_monitor.get_window_states()
+                window_path = self._output_dir / "window_states.json"
+                with open(window_path, "w") as f:
+                    json.dump(window_states, f, indent=2)
+
+                logger.info(
+                    f"Saved ADB state: {len(keyboard_states)} keyboard, "
+                    f"{len(activity_states)} activity, {len(window_states)} window states"
+                )
+            except Exception as e:
+                logger.warning(f"Error saving ADB state data: {e}")
+
         # Clean up state file with exception handling (Issue 4)
         try:
             if self.STATE_FILE.exists():
