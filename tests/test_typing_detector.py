@@ -331,3 +331,171 @@ class TestDetectTypingSequences:
         sequences = detector.detect(touch_events)
 
         assert len(sequences) == 2
+
+
+class TestKeyboardStatesIntegration:
+    """Test keyboard visibility states from ADB monitoring."""
+
+    def test_typing_detector_uses_keyboard_states(self):
+        """Test that typing is only detected when keyboard was visible."""
+        # Keyboard states: visible from 1.0s to 3.0s
+        keyboard_states = [
+            (0.0, False),
+            (1.0, True),
+            (3.0, False),
+        ]
+
+        detector = TypingDetector(screen_height=2400, keyboard_states=keyboard_states)
+
+        # Touch events - some during keyboard visible, some not
+        touch_events = [
+            {"x": 500, "y": 2000, "timestamp": 0.5},  # keyboard hidden
+            {"x": 500, "y": 2000, "timestamp": 1.2},  # keyboard visible
+            {"x": 500, "y": 2000, "timestamp": 1.4},  # keyboard visible
+            {"x": 500, "y": 2000, "timestamp": 1.6},  # keyboard visible
+            {"x": 500, "y": 2000, "timestamp": 3.5},  # keyboard hidden
+        ]
+
+        sequences = detector.detect(touch_events)
+
+        # Should only detect sequence during keyboard visible (indices 1-3)
+        assert len(sequences) == 1
+        assert sequences[0].start_index == 1
+        assert sequences[0].end_index == 3
+
+    def test_typing_detector_no_keyboard_states_uses_heuristics(self):
+        """Test fallback to heuristics when no keyboard states."""
+        # No keyboard states provided
+        detector = TypingDetector(screen_height=2400, keyboard_states=None)
+
+        # Touch events in bottom 40% of screen
+        touch_events = [
+            {"x": 500, "y": 2000, "timestamp": 0.0},
+            {"x": 500, "y": 2000, "timestamp": 0.2},
+            {"x": 500, "y": 2000, "timestamp": 0.4},
+        ]
+
+        sequences = detector.detect(touch_events)
+
+        # Should use heuristics (bottom 40% = keyboard area)
+        assert len(sequences) == 1
+
+    def test_keyboard_states_empty_list_uses_heuristics(self):
+        """Test that empty keyboard_states list still uses heuristics."""
+        detector = TypingDetector(screen_height=2400, keyboard_states=[])
+
+        # Touch events in bottom 40% of screen
+        touch_events = [
+            {"x": 500, "y": 2000, "timestamp": 0.0},
+            {"x": 500, "y": 2000, "timestamp": 0.2},
+            {"x": 500, "y": 2000, "timestamp": 0.4},
+        ]
+
+        sequences = detector.detect(touch_events)
+
+        # Should fall back to heuristics since no keyboard state data
+        assert len(sequences) == 1
+
+    def test_keyboard_visibility_at_exact_timestamp(self):
+        """Test keyboard visibility check at exact state change timestamp."""
+        keyboard_states = [
+            (0.0, False),
+            (1.0, True),
+        ]
+
+        detector = TypingDetector(screen_height=2400, keyboard_states=keyboard_states)
+
+        # Tap exactly at the moment keyboard becomes visible
+        touch_events = [
+            {"x": 500, "y": 2000, "timestamp": 1.0},
+            {"x": 500, "y": 2000, "timestamp": 1.2},
+            {"x": 500, "y": 2000, "timestamp": 1.4},
+        ]
+
+        sequences = detector.detect(touch_events)
+
+        # All taps should be detected (keyboard visible at 1.0s)
+        assert len(sequences) == 1
+        assert sequences[0].tap_count == 3
+
+    def test_keyboard_hidden_ignores_bottom_taps(self):
+        """Test that keyboard hidden state ignores taps even in bottom area."""
+        # Keyboard never visible
+        keyboard_states = [
+            (0.0, False),
+        ]
+
+        detector = TypingDetector(screen_height=2400, keyboard_states=keyboard_states)
+
+        # Taps in keyboard area, but keyboard not visible according to ADB
+        touch_events = [
+            {"x": 500, "y": 2000, "timestamp": 0.5},
+            {"x": 500, "y": 2000, "timestamp": 0.7},
+            {"x": 500, "y": 2000, "timestamp": 0.9},
+        ]
+
+        sequences = detector.detect(touch_events)
+
+        # No typing detected - keyboard was never visible
+        assert len(sequences) == 0
+
+    def test_keyboard_visible_detects_top_taps(self):
+        """Test that keyboard visible state detects taps even outside bottom 40%."""
+        # Keyboard always visible
+        keyboard_states = [
+            (0.0, True),
+        ]
+
+        detector = TypingDetector(screen_height=2400, keyboard_states=keyboard_states)
+
+        # Taps in top area (above normal keyboard threshold)
+        # This could happen with floating keyboards or custom keyboard positions
+        touch_events = [
+            {"x": 500, "y": 1000, "timestamp": 0.0},
+            {"x": 500, "y": 1000, "timestamp": 0.2},
+            {"x": 500, "y": 1000, "timestamp": 0.4},
+        ]
+
+        sequences = detector.detect(touch_events)
+
+        # Typing detected because keyboard is actually visible (per ADB)
+        assert len(sequences) == 1
+        assert sequences[0].tap_count == 3
+
+    def test_is_keyboard_visible_at_returns_none_without_data(self):
+        """Test _is_keyboard_visible_at returns None when no data."""
+        detector = TypingDetector(screen_height=2400, keyboard_states=None)
+
+        result = detector._is_keyboard_visible_at(1.0)
+
+        assert result is None
+
+    def test_is_keyboard_visible_at_finds_closest_state(self):
+        """Test _is_keyboard_visible_at finds closest state before timestamp."""
+        keyboard_states = [
+            (0.0, False),
+            (2.0, True),
+            (4.0, False),
+        ]
+
+        detector = TypingDetector(screen_height=2400, keyboard_states=keyboard_states)
+
+        # Before any state - should use first state
+        assert detector._is_keyboard_visible_at(0.0) is False
+        # Between states
+        assert detector._is_keyboard_visible_at(1.0) is False
+        assert detector._is_keyboard_visible_at(2.0) is True
+        assert detector._is_keyboard_visible_at(3.0) is True
+        assert detector._is_keyboard_visible_at(4.0) is False
+        assert detector._is_keyboard_visible_at(5.0) is False
+
+    def test_stores_keyboard_states(self):
+        """Should store keyboard states for later use."""
+        keyboard_states = [
+            (0.0, False),
+            (1.0, True),
+        ]
+
+        detector = TypingDetector(screen_height=2400, keyboard_states=keyboard_states)
+
+        assert detector._keyboard_states == keyboard_states

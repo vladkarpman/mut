@@ -31,24 +31,41 @@ class TypingDetector:
     - Taps occur within 1 second of each other
     - At least 3 consecutive keyboard taps form a sequence
 
+    When keyboard_states from ADB monitoring are provided, uses actual
+    keyboard visibility instead of the bottom 40% heuristic.
+
     Usage:
         detector = TypingDetector(screen_height=2400)
         sequences = detector.detect(touch_events)
         for seq in sequences:
             print(f"Typing at taps {seq.start_index}-{seq.end_index}")
+
+        # With ADB keyboard states (preferred when available):
+        detector = TypingDetector(
+            screen_height=2400,
+            keyboard_states=[(0.0, False), (1.0, True), (3.0, False)]
+        )
     """
 
     KEYBOARD_THRESHOLD = 0.4  # Bottom 40% of screen
     MAX_TAP_INTERVAL = 1.0    # Max seconds between keyboard taps
     MIN_SEQUENCE_LENGTH = 3   # Minimum taps to consider typing
 
-    def __init__(self, screen_height: int):
-        """Initialize with screen height for keyboard detection.
+    def __init__(
+        self,
+        screen_height: int,
+        keyboard_states: list[tuple[float, bool]] | None = None,
+    ):
+        """Initialize with screen height and optional keyboard states.
 
         Args:
             screen_height: Screen height in pixels
+            keyboard_states: Optional list of (timestamp, is_visible) tuples
+                from ADB monitoring. When provided, uses actual keyboard
+                visibility instead of heuristics.
         """
         self._screen_height = screen_height
+        self._keyboard_states = keyboard_states or []
 
     def is_keyboard_tap(self, y: int) -> bool:
         """Check if Y coordinate is in keyboard area (bottom 40%).
@@ -61,6 +78,29 @@ class TypingDetector:
         """
         keyboard_boundary = self._screen_height * (1 - self.KEYBOARD_THRESHOLD)
         return y > keyboard_boundary
+
+    def _is_keyboard_visible_at(self, timestamp: float) -> bool | None:
+        """Check if keyboard was visible at given timestamp.
+
+        Uses ADB keyboard state data to determine actual keyboard visibility.
+
+        Args:
+            timestamp: Touch event timestamp
+
+        Returns:
+            True/False if known from ADB data, None if no data available
+        """
+        if not self._keyboard_states:
+            return None  # No data - signal to use heuristics
+
+        # Find closest state before or at timestamp
+        result = None
+        for ts, visible in self._keyboard_states:
+            if ts <= timestamp:
+                result = visible
+            else:
+                break
+        return result
 
     def detect(self, touch_events: list[dict]) -> list[TypingSequence]:
         """Detect typing sequences in touch events.
@@ -86,7 +126,13 @@ class TypingDetector:
             y = event["y"]
             timestamp = event["timestamp"]
 
-            is_keyboard = self.is_keyboard_tap(y)
+            # Use actual keyboard visibility if available, fall back to heuristics
+            keyboard_visible = self._is_keyboard_visible_at(timestamp)
+            if keyboard_visible is not None:
+                is_keyboard = keyboard_visible
+            else:
+                is_keyboard = self.is_keyboard_tap(y)
+
             time_gap_ok = (
                 prev_timestamp is None
                 or timestamp - prev_timestamp <= self.MAX_TAP_INTERVAL
