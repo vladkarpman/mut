@@ -423,27 +423,21 @@ class ReportGenerator:
             end_coords = step.get("end_coords", {})
             end_x = end_coords.get("x", x)
             end_y = end_coords.get("y", y)
+            trajectory = step.get("trajectory", [])
+            direction = step.get("direction", "up")
 
-            # Calculate line length and angle for trajectory
-            dx = end_x - x
-            dy = end_y - y
-            # Length in percentage units, convert to approximate pixels
-            length_pct = math.sqrt(dx**2 + dy**2)
-            line_length = max(30, length_pct * 5)  # Scale for visibility
-            angle = math.degrees(math.atan2(dy, dx))
+            # Encode trajectory as JSON for JavaScript
+            traj_json = html.escape(json.dumps(trajectory)) if trajectory else "[]"
 
             return f"""<div class="gesture-indicator-container">
-    <div class="swipe-indicator" style="
-        --start-x: {x:.1f}%;
-        --start-y: {y:.1f}%;
-        --end-x: {end_x:.1f}%;
-        --end-y: {end_y:.1f}%;
-        --line-length: {line_length:.0f}px;
-        --line-angle: {angle:.1f}deg;
-    ">
-        <div class="swipe-trajectory-line"></div>
-        <div class="swipe-dot"></div>
-    </div>
+<div class="swipe-indicator"
+    data-x="{x:.1f}" data-y="{y:.1f}"
+    data-end-x="{end_x:.1f}" data-end-y="{end_y:.1f}"
+    data-trajectory="{traj_json}"
+    data-direction="{direction}">
+    <div class="swipe-trajectory-line"></div>
+    <div class="swipe-dot"></div>
+</div>
 </div>"""
 
         return ""
