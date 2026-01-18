@@ -24,8 +24,8 @@ class TestFrameExtractorInitialization:
         assert extractor._video_path == Path("/path/to/video.mp4")
 
     def test_touch_offset_constant(self):
-        """TOUCH_OFFSET should be 50ms (0.05s)."""
-        assert FrameExtractor.TOUCH_OFFSET == 0.05
+        """TOUCH_OFFSET should be -30ms (-0.03s) to capture during touch."""
+        assert FrameExtractor.TOUCH_OFFSET == -0.03
 
     def test_press_held_ratio_constant(self):
         """PRESS_HELD_RATIO should be 0.7 (70%)."""
@@ -135,8 +135,8 @@ class TestCalculateFrameTimes:
         assert ft["gesture"] == "tap"
         # before: midpoint(0.0, 1.9) = 0.95 (touch_start = 2.0 - 0.1)
         assert ft["before_time"] == 0.95
-        # touch: touch_start - 50ms = 1.9 - 0.05 = 1.85
-        assert abs(ft["touch_time"] - 1.85) < 0.001  # Float precision tolerance
+        # touch: touch_start + 30ms = 1.9 + 0.03 = 1.93 (30ms into touch)
+        assert abs(ft["touch_time"] - 1.93) < 0.001  # Float precision tolerance
         # after: midpoint(2.0, 5.0) = 3.5
         assert ft["after_time"] == 3.5
 
@@ -213,7 +213,8 @@ class TestCalculateFrameTimes:
         ft = result[0]
         assert ft["gesture"] == "tap"
         # duration defaults to 50ms, so start = 2.0 - 0.05 = 1.95
-        assert ft["touch_time"] == 1.9  # 1.95 - 0.05 = 1.9
+        # touch_time = 1.95 + 0.03 = 1.98 (30ms into touch)
+        assert abs(ft["touch_time"] - 1.98) < 0.001
 
 
 class TestExtractForTouches:
@@ -511,8 +512,8 @@ class TestCalculateCollapsedFrameTimes:
         ft = result[0]
         assert ft["action"] == "tap"
         assert "touch_time" in ft
-        # touch_time: first_start - 0.05 = 1.9 - 0.05 = 1.85
-        assert abs(ft["touch_time"] - 1.85) < 0.001
+        # touch_time: first_start + 0.03 = 1.9 + 0.03 = 1.93 (30ms into touch)
+        assert abs(ft["touch_time"] - 1.93) < 0.001
 
     def test_type_followed_by_tap(self):
         """Type step followed by tap should calculate midpoints correctly."""

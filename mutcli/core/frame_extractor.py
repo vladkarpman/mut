@@ -38,7 +38,7 @@ class FrameExtractor:
     """
 
     # Timing offsets
-    TOUCH_OFFSET = 0.05  # 50ms before touch for "touch" frame
+    TOUCH_OFFSET = -0.03  # 30ms INTO the touch for "touch" frame (negative = after start)
     PRESS_HELD_RATIO = 0.7  # Show press at 70% of duration for long_press
 
     def __init__(self, video_path: str | Path):
@@ -252,7 +252,7 @@ class FrameExtractor:
             }
 
             if gesture == "tap":
-                # tap: show target button just before touch
+                # tap: show target button during touch (30ms into the gesture)
                 ft["touch_time"] = max(0.0, touch_start_time - self.TOUCH_OFFSET)
 
             elif gesture == "swipe":
@@ -522,7 +522,7 @@ class FrameExtractor:
                 pass  # No additional frame times needed
 
             elif step.action == "tap":
-                # tap: show target button just before touch
+                # tap: show target button during touch (30ms into the gesture)
                 ft["touch_time"] = max(0.0, first_start_time - self.TOUCH_OFFSET)
 
             elif step.action == "swipe":
