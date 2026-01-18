@@ -1,9 +1,0 @@
-name: calculator_cleared
-description: "Calculator app with cleared display"
-
-steps:
-  - launch_app
-  - tap: "AC"
-
-verify:
-  element: "0"
