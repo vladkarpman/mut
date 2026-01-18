@@ -492,16 +492,32 @@ class TestExecutor:
         return None
 
     def _action_verify_screen(self, step: Step) -> str | None:
-        """Verify screen with AI.
+        """Verify screen matches description using AI.
 
-        Note: Full implementation requires ScrcpyService for screenshots.
-        For now, skip if no AI available.
+        Takes a screenshot and asks AI to verify it matches the expected state.
+
+        Returns:
+            None if verification passes, error message if it fails
         """
+        description = step.target or step.description
+        if not description:
+            return "No description provided for verify_screen"
+
         if not self._ai.is_available:
+            logger.warning("AI not available, skipping verify_screen: %s", description)
             return None
 
-        # TODO: Integrate with ScrcpyService for screenshots
-        return None
+        logger.debug("Verifying screen: %s", description)
+        screenshot = self._device.take_screenshot()
+        result = self._ai.verify_screen(screenshot, description)
+
+        if result.get("pass"):
+            logger.debug("Screen verification passed: %s", description)
+            return None
+
+        reason = result.get("reason", "Screen does not match expected state")
+        logger.debug("Screen verification failed: %s - %s", description, reason)
+        return f"verify_screen failed: {reason}"
 
     def _action_hide_keyboard(self, step: Step) -> str | None:
         """Hide keyboard by pressing back."""
