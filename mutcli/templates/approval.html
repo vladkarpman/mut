@@ -3074,6 +3074,11 @@
         .gesture-indicator-wrapper {
             position: absolute;
             pointer-events: none;
+            /* Initial size covers container, adjusted by positionIndicator on image load */
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
         }
 
         .frame-description {
@@ -5565,6 +5570,17 @@
             initVideo();
             updateHeaderMeta();
             setTimeout(startFrameAnimations, 200);
+
+            // Reposition gesture indicators after images may have loaded from cache
+            setTimeout(() => {
+                document.querySelectorAll('.gesture-indicator-wrapper').forEach(wrapper => {
+                    const stepId = wrapper.dataset.stepId;
+                    const img = wrapper.parentElement.querySelector('img');
+                    if (img && stepId) {
+                        positionIndicator(img, stepId);
+                    }
+                });
+            }, 100);
 
             // Update header meta when video metadata loads
             const video = document.getElementById('video');
