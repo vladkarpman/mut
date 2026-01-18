@@ -5301,7 +5301,7 @@
             </div>
         </div>
         <div class="header-center">
-            <h1>Image Enhance Preset Selection</h1>
+            <h1>TEST_NAME_PLACEHOLDER</h1>
         </div>
         <div class="header-right">
             <button class="export-btn-minimal" id="generateYamlBtn" onclick="generateAndSaveYAML()">
@@ -6122,7 +6122,7 @@
                         <div class="frame-image-container clickable" onclick="openFramePickerForStep('${step.id}', 'action'); event.stopPropagation();" title="Click to change frame">
                             ${actionFrame && showActionFrame ? `
                                 <img src="${actionFrame}" onload="positionIndicator(this, '${step.id}')">
-                                <div class="gesture-indicator-wrapper" data-step-id="${step.id}" data-x="${posXPercent}" data-y="${posYPercent}" data-action="${step.action}" data-direction="${step.direction || 'up'}">
+                                <div class="gesture-indicator-wrapper" data-step-id="${step.id}" data-x="${posX}" data-y="${posY}" data-action="${step.action}" data-direction="${step.direction || 'up'}">
                                     ${renderGestureIndicator()}
                                 </div>
                             ` : '<em>Click to select</em>'}
