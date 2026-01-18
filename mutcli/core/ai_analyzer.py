@@ -19,6 +19,7 @@ class TapAnalysisResult(TypedDict):
 
     element_text: str | None
     element_type: str  # button|text_field|link|icon|checkbox|other
+    action_description: str  # Human-readable: "User taps on 5"
     before_description: str
     after_description: str
     suggested_verification: str | None
@@ -29,6 +30,7 @@ class SwipeAnalysisResult(TypedDict):
 
     direction: str  # up|down|left|right
     content_changed: str
+    action_description: str  # Human-readable: "User swipes up to scroll"
     before_description: str
     after_description: str
     suggested_verification: str | None
@@ -40,6 +42,7 @@ class LongPressAnalysisResult(TypedDict):
     element_text: str | None
     element_type: str  # list_item|text|image|icon|other
     result_type: str  # context_menu|selection|drag_start|other
+    action_description: str  # Human-readable: "User long-presses on item"
     before_description: str
     after_description: str
     suggested_verification: str | None
@@ -50,6 +53,7 @@ class TypeAnalysisResult(TypedDict):
 
     element_text: str | None  # e.g., "Search field", "Email input"
     element_type: str  # text_field|search_box|password_field|textarea|other
+    action_description: str  # Human-readable: "User types in search field"
     before_description: str
     after_description: str
     suggested_verification: str | None
@@ -397,6 +401,7 @@ Respond with JSON only (no markdown, no code blocks):
             return TapAnalysisResult(
                 element_text=None,
                 element_type="other",
+                action_description="User taps on element",
                 before_description="Unknown (AI unavailable)",
                 after_description="Unknown (AI unavailable)",
                 suggested_verification=None,
@@ -418,10 +423,16 @@ Respond with JSON only (no markdown, no code blocks):
 {{
   "element_text": "button/field text or null",
   "element_type": "button|text_field|link|icon|checkbox|other",
+  "action_description": "User taps on [element name/text]",
   "before_description": "brief UI state before",
   "after_description": "brief UI state after",
   "suggested_verification": "verification phrase or null"
-}}"""
+}}
+
+IMPORTANT for action_description:
+- Use format: "User taps on [element]" where [element] is the button text, label, or icon name
+- Examples: "User taps on 5", "User taps on + button", "User taps on Login", "User taps on search icon"
+- Be specific about what was tapped, not what it does"""
 
         try:
             before_part = types.Part.from_bytes(data=before, mime_type="image/png")
@@ -439,6 +450,7 @@ Respond with JSON only (no markdown, no code blocks):
             return TapAnalysisResult(
                 element_text=result.get("element_text"),
                 element_type=result.get("element_type", "other"),
+                action_description=result.get("action_description", "User taps on element"),
                 before_description=result.get("before_description", ""),
                 after_description=result.get("after_description", ""),
                 suggested_verification=result.get("suggested_verification"),
@@ -449,6 +461,7 @@ Respond with JSON only (no markdown, no code blocks):
             return TapAnalysisResult(
                 element_text=None,
                 element_type="other",
+                action_description="User taps on element",
                 before_description=f"Analysis failed: {e}",
                 after_description=f"Analysis failed: {e}",
                 suggested_verification=None,
@@ -487,6 +500,7 @@ Respond with JSON only (no markdown, no code blocks):
             return SwipeAnalysisResult(
                 direction="unknown",
                 content_changed="Unknown (AI unavailable)",
+                action_description="User swipes",
                 before_description="Unknown (AI unavailable)",
                 after_description="Unknown (AI unavailable)",
                 suggested_verification=None,
@@ -509,10 +523,16 @@ Respond with JSON only (no markdown, no code blocks):
 {{
   "direction": "up|down|left|right",
   "content_changed": "what scrolled into/out of view",
+  "action_description": "User swipes [direction] [context]",
   "before_description": "brief UI state before",
   "after_description": "brief UI state after",
   "suggested_verification": "verification phrase or null"
-}}"""
+}}
+
+IMPORTANT for action_description:
+- Use format: "User swipes [direction]" or "User swipes [direction] to [purpose]"
+- Examples: "User swipes up", "User swipes down to scroll list", "User swipes left to dismiss"
+- Be descriptive about the swipe action"""
 
         try:
             before_part = types.Part.from_bytes(data=before, mime_type="image/png")
@@ -528,9 +548,11 @@ Respond with JSON only (no markdown, no code blocks):
             response_text = response.text or ""
             result = self._parse_json_response(response_text)
 
+            direction = result.get("direction", "unknown")
             return SwipeAnalysisResult(
-                direction=result.get("direction", "unknown"),
+                direction=direction,
                 content_changed=result.get("content_changed", ""),
+                action_description=result.get("action_description", f"User swipes {direction}"),
                 before_description=result.get("before_description", ""),
                 after_description=result.get("after_description", ""),
                 suggested_verification=result.get("suggested_verification"),
@@ -541,6 +563,7 @@ Respond with JSON only (no markdown, no code blocks):
             return SwipeAnalysisResult(
                 direction="unknown",
                 content_changed=f"Analysis failed: {e}",
+                action_description="User swipes",
                 before_description=f"Analysis failed: {e}",
                 after_description=f"Analysis failed: {e}",
                 suggested_verification=None,
@@ -578,6 +601,7 @@ Respond with JSON only (no markdown, no code blocks):
                 element_text=None,
                 element_type="other",
                 result_type="other",
+                action_description="User long-presses on element",
                 before_description="Unknown (AI unavailable)",
                 after_description="Unknown (AI unavailable)",
                 suggested_verification=None,
@@ -601,10 +625,16 @@ Respond with JSON only (no markdown, no code blocks):
   "element_text": "pressed element text or null",
   "element_type": "list_item|text|image|icon|other",
   "result_type": "context_menu|selection|drag_start|other",
+  "action_description": "User long-presses on [element]",
   "before_description": "brief UI state before",
   "after_description": "brief UI state after",
   "suggested_verification": "verification phrase or null"
-}}"""
+}}
+
+IMPORTANT for action_description:
+- Use format: "User long-presses on [element]"
+- Examples: "User long-presses on message", "User long-presses on item", "User long-presses on image"
+- Be specific about what was pressed"""
 
         try:
             before_part = types.Part.from_bytes(data=before, mime_type="image/png")
@@ -624,6 +654,7 @@ Respond with JSON only (no markdown, no code blocks):
                 element_text=result.get("element_text"),
                 element_type=result.get("element_type", "other"),
                 result_type=result.get("result_type", "other"),
+                action_description=result.get("action_description", "User long-presses on element"),
                 before_description=result.get("before_description", ""),
                 after_description=result.get("after_description", ""),
                 suggested_verification=result.get("suggested_verification"),
@@ -635,6 +666,7 @@ Respond with JSON only (no markdown, no code blocks):
                 element_text=None,
                 element_type="other",
                 result_type="other",
+                action_description="User long-presses on element",
                 before_description=f"Analysis failed: {e}",
                 after_description=f"Analysis failed: {e}",
                 suggested_verification=None,
@@ -661,6 +693,7 @@ Respond with JSON only (no markdown, no code blocks):
             return TypeAnalysisResult(
                 element_text=None,
                 element_type="other",
+                action_description="User types in text field",
                 before_description="Unknown (AI unavailable)",
                 after_description="Unknown (AI unavailable)",
                 suggested_verification=None,
@@ -683,10 +716,16 @@ Respond with JSON only (no markdown, no code blocks):
 {{
   "element_text": "field name like 'Search field', 'Email input', 'Password field', or null",
   "element_type": "text_field|search_box|password_field|textarea|other",
+  "action_description": "User types in [field name]",
   "before_description": "brief UI state before/during typing",
   "after_description": "brief UI state after typing",
   "suggested_verification": "verification phrase or null"
-}}"""
+}}
+
+IMPORTANT for action_description:
+- Use format: "User types in [field name]"
+- Examples: "User types in search field", "User types in email input", "User types in password field"
+- Be specific about where the user is typing"""
 
         try:
             before_part = types.Part.from_bytes(data=before, mime_type="image/png")
@@ -703,6 +742,7 @@ Respond with JSON only (no markdown, no code blocks):
             return TypeAnalysisResult(
                 element_text=result.get("element_text"),
                 element_type=result.get("element_type", "other"),
+                action_description=result.get("action_description", "User types in text field"),
                 before_description=result.get("before_description", ""),
                 after_description=result.get("after_description", ""),
                 suggested_verification=result.get("suggested_verification"),
@@ -713,6 +753,7 @@ Respond with JSON only (no markdown, no code blocks):
             return TypeAnalysisResult(
                 element_text=None,
                 element_type="other",
+                action_description="User types in text field",
                 before_description=f"Analysis failed: {e}",
                 after_description=f"Analysis failed: {e}",
                 suggested_verification=None,

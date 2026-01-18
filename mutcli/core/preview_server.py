@@ -23,6 +23,7 @@ class PreviewStep:
     coordinates: tuple[int, int]
     screenshot_path: str | None
     enabled: bool = True
+    action_description: str = ""  # Human-readable: "User taps on 5"
     before_description: str = ""
     after_description: str = ""
     direction: str | None = None
@@ -241,10 +242,10 @@ class PreviewServer:
                 # Legacy: single screenshot becomes before frame
                 frames["before"] = f"recording/screenshots/before_{step.index:03d}.png"
 
-            # Build analysis dict
+            # Build analysis dict - action is the step description like "User taps on 5"
             analysis = step.analysis if step.analysis else {
                 "before": step.before_description or "",
-                "action": "",
+                "action": step.action_description or "",  # "User taps on 5"
                 "after": step.after_description or "",
             }
 

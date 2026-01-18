@@ -55,6 +55,7 @@ class AnalyzedStep:
         index: Step index (0-based)
         original_tap: Original touch event data
         element_text: AI-extracted element text (None if unavailable)
+        action_description: Human-readable action description (e.g., "User taps on 5")
         before_description: Description of screen state before tap
         after_description: Description of screen state after tap
         suggested_verification: Optional verification suggestion
@@ -63,9 +64,10 @@ class AnalyzedStep:
     index: int
     original_tap: dict[str, Any]
     element_text: str | None
-    before_description: str
-    after_description: str
-    suggested_verification: str | None
+    action_description: str = ""
+    before_description: str = ""
+    after_description: str = ""
+    suggested_verification: str | None = None
 
 
 class StepAnalyzer:
@@ -164,10 +166,14 @@ class StepAnalyzer:
         # Analyze before/after to get descriptions
         step_analysis = self._ai_analyzer.analyze_step(before_screenshot, after_screenshot)
 
+        # Build action description from element text
+        action_desc = f"User taps on {element_text}" if element_text else "User taps on element"
+
         return AnalyzedStep(
             index=0,
             original_tap={},
             element_text=element_text,
+            action_description=action_desc,
             before_description=step_analysis.get("before", "Unknown"),
             after_description=step_analysis.get("after", "Unknown"),
             suggested_verification=step_analysis.get("suggested_verification"),
@@ -204,6 +210,7 @@ class StepAnalyzer:
                     index=i,
                     original_tap=tap,
                     element_text=None,
+                    action_description="User taps on element",
                     before_description="Screenshot missing",
                     after_description="Screenshot missing",
                     suggested_verification=None,
@@ -233,6 +240,7 @@ class StepAnalyzer:
                     index=i,
                     original_tap=tap,
                     element_text=None,
+                    action_description="User taps on element",
                     before_description=f"Analysis failed: {e}",
                     after_description=f"Analysis failed: {e}",
                     suggested_verification=None,
@@ -482,6 +490,7 @@ class StepAnalyzer:
             index=index,
             original_tap=event,
             element_text=result.get("element_text"),
+            action_description=result.get("action_description", "User taps on element"),
             before_description=result.get("before_description", ""),
             after_description=result.get("after_description", ""),
             suggested_verification=result.get("suggested_verification"),
@@ -548,6 +557,7 @@ class StepAnalyzer:
             index=index,
             original_tap=event,
             element_text=element_text,
+            action_description=result.get("action_description", f"User swipes {direction}"),
             before_description=result.get("before_description", ""),
             after_description=result.get("after_description", ""),
             suggested_verification=result.get("suggested_verification"),
@@ -607,6 +617,7 @@ class StepAnalyzer:
             index=index,
             original_tap=event,
             element_text=result.get("element_text"),
+            action_description=result.get("action_description", "User long-presses on element"),
             before_description=result.get("before_description", ""),
             after_description=result.get("after_description", ""),
             suggested_verification=result.get("suggested_verification"),
@@ -661,6 +672,7 @@ class StepAnalyzer:
             index=index,
             original_tap=original_event,
             element_text=result.get("element_text"),
+            action_description=result.get("action_description", "User types in text field"),
             before_description=result.get("before_description", ""),
             after_description=result.get("after_description", ""),
             suggested_verification=result.get("suggested_verification"),
@@ -682,10 +694,22 @@ class StepAnalyzer:
         Returns:
             AnalyzedStep with error information
         """
+        # Determine action type from event for default action_description
+        action = event.get("action", event.get("gesture", "tap"))
+        if action == "swipe":
+            action_desc = "User swipes"
+        elif action == "long_press":
+            action_desc = "User long-presses on element"
+        elif action == "type":
+            action_desc = "User types in text field"
+        else:
+            action_desc = "User taps on element"
+
         return AnalyzedStep(
             index=index,
             original_tap=event,
             element_text=None,
+            action_description=action_desc,
             before_description=f"Analysis failed: {error_message}",
             after_description=f"Analysis failed: {error_message}",
             suggested_verification=None,

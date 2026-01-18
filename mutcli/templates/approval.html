@@ -3348,7 +3348,7 @@
         .verification-item {
             display: flex;
             justify-content: space-between;
-            align-items: center;
+            align-items: flex-start;
             padding: 10px 12px;
             padding-top: 16px;
             font-size: 0.875rem;
@@ -3379,7 +3379,7 @@
         .verification-item-text {
             color: var(--md-on-surface);
             display: flex;
-            align-items: center;
+            align-items: flex-start;
             gap: 8px;
             flex: 1;
             min-width: 0;
@@ -3392,9 +3392,8 @@
 
         .verification-item-value {
             color: var(--md-on-surface);
-            overflow: hidden;
-            text-overflow: ellipsis;
-            white-space: nowrap;
+            word-wrap: break-word;
+            overflow-wrap: break-word;
         }
 
         .verification-item-remove {
@@ -6686,18 +6685,16 @@
 
         // Suggestion Functions
         function acceptSuggestion(stepId) {
-            const stepIndex = steps.findIndex(s => s.id === stepId);
-            const step = steps[stepIndex];
+            const step = steps.find(s => s.id === stepId);
             if (!step || !step.suggestedVerification) return;
 
-            const newStep = {
-                id: 'verify_' + Date.now() + '_' + (++stepIdCounter),
-                action: 'verify_screen',
-                description: step.suggestedVerification,
-                timestamp: step.timestamp
-            };
+            // Initialize verifications array if needed
+            if (!step.verifications) {
+                step.verifications = [];
+            }
 
-            steps.splice(stepIndex + 1, 0, newStep);
+            // Add the suggested verification to the step's verifications
+            step.verifications.push({ description: step.suggestedVerification });
             step.verificationAdded = true;
             renderSteps();
         }

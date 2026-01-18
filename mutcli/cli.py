@@ -585,6 +585,7 @@ def _build_preview_steps(
         coordinates=(0, 0),
         screenshot_path=str(initial_screenshot) if initial_screenshot.exists() else None,
         enabled=True,
+        action_description="App launched",
         before_description="Initial app state after launch",
         after_description="",
         timestamp=0.0,
@@ -605,6 +606,9 @@ def _build_preview_steps(
         # Find matching analyzed step if available
         analyzed = analyzed_lookup.get(step_num - 1)  # analyzed_steps use 0-based index
         element_text = analyzed.element_text if analyzed else None
+        action_desc = analyzed.action_description if analyzed else _build_default_action_description(
+            step.action, element_text
+        )
         before_desc = analyzed.before_description if analyzed else ""
         after_desc = analyzed.after_description if analyzed else ""
         suggested_verification = analyzed.suggested_verification if analyzed else None
@@ -635,6 +639,7 @@ def _build_preview_steps(
             coordinates=coords,
             screenshot_path=str(before_path) if before_path.exists() else None,
             enabled=True,
+            action_description=action_desc,
             before_description=before_desc,
             after_description=after_desc,
             direction=step.direction,
@@ -673,6 +678,7 @@ def _build_preview_steps_from_analysis(
         coordinates=(0, 0),
         screenshot_path=str(initial_screenshot) if initial_screenshot.exists() else None,
         enabled=True,
+        action_description="App launched",
         before_description="Initial app state after launch",
         after_description="",
         timestamp=0.0,
@@ -704,6 +710,11 @@ def _build_preview_steps_from_analysis(
         if after_path.exists():
             frames["after"] = f"recording/screenshots/step_{step_str}_after.png"
 
+        # Get action_description from data or build default
+        action_desc = step_data.get("action_description") or _build_default_action_description(
+            step_data.get("action", "tap"), step_data.get("element_text")
+        )
+
         preview_steps.append(PreviewStep(
             index=step_num,
             action=step_data.get("action", "tap"),
@@ -711,6 +722,7 @@ def _build_preview_steps_from_analysis(
             coordinates=coords,
             screenshot_path=str(before_path) if before_path.exists() else None,
             enabled=step_data.get("enabled", True),
+            action_description=action_desc,
             before_description=step_data.get("before_description", ""),
             after_description=step_data.get("after_description", ""),
             direction=step_data.get("direction"),
@@ -720,6 +732,32 @@ def _build_preview_steps_from_analysis(
         ))
 
     return preview_steps
+
+
+def _build_default_action_description(action: str, element_text: str | None) -> str:
+    """Build a default action description based on action type and element.
+
+    Args:
+        action: The action type (tap, swipe, long_press, type)
+        element_text: The element text if available
+
+    Returns:
+        Human-readable action description like "User taps on 5"
+    """
+    if action == "tap":
+        if element_text:
+            return f"User taps on {element_text}"
+        return "User taps on element"
+    elif action == "swipe":
+        return "User swipes"
+    elif action == "long_press":
+        if element_text:
+            return f"User long-presses on {element_text}"
+        return "User long-presses on element"
+    elif action == "type":
+        return "User types in text field"
+    else:
+        return f"User performs {action}"
 
 
 def _build_analysis_data(
@@ -759,6 +797,11 @@ def _build_analysis_data(
         # Find matching analyzed step (analyzed_steps use 0-based index)
         analyzed = analyzed_lookup.get(step.index - 1)
 
+        # Build default action description if not from AI
+        default_action_desc = _build_default_action_description(
+            step.action, analyzed.element_text if analyzed else None
+        )
+
         step_dict = {
             "index": step.index,
             "action": step.action,
@@ -766,6 +809,7 @@ def _build_analysis_data(
             "coordinates": coords,
             "direction": step.direction,
             "element_text": analyzed.element_text if analyzed else None,
+            "action_description": analyzed.action_description if analyzed else default_action_desc,
             "before_description": analyzed.before_description if analyzed else "",
             "after_description": analyzed.after_description if analyzed else "",
             "suggested_verification": analyzed.suggested_verification if analyzed else None,
