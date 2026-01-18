@@ -1008,7 +1008,7 @@ def preview(
 
     analysis = load_analysis(test_dir)
     if analysis is None:
-        console.print(f"[red]Error:[/red] Failed to load analysis.json")
+        console.print("[red]Error:[/red] Failed to load analysis.json")
         raise typer.Exit(1)
 
     test_name = test_dir.name
@@ -1069,9 +1069,9 @@ def preview(
 
     for step_data in enabled_steps:
         action = step_data.get("action", "tap")
-        target = step_data.get("target", {})
-        element = target.get("text")
-        coords = (target.get("x", 0), target.get("y", 0))
+        element = step_data.get("element_text")
+        coordinates = step_data.get("coordinates", [0, 0])
+        coords = (coordinates[0], coordinates[1]) if coordinates else (0, 0)
 
         if action == "tap":
             generator.add_tap(element=element, coords=coords if not element else None)
