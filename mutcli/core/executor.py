@@ -5,12 +5,16 @@ from __future__ import annotations
 import logging
 import time
 from dataclasses import dataclass, field
-from typing import Any
+from pathlib import Path
+from typing import TYPE_CHECKING, Any
 
 from mutcli.core.ai_analyzer import AIAnalyzer
 from mutcli.core.config import ConfigLoader, MutConfig
 from mutcli.core.device_controller import DeviceController
 from mutcli.models.test import Step, TestFile
+
+if TYPE_CHECKING:
+    from mutcli.core.scrcpy_service import ScrcpyService
 
 logger = logging.getLogger("mut.executor")
 
@@ -22,11 +26,30 @@ class StepResult:
     step_number: int
     action: str
     status: str  # "passed", "failed", "skipped"
+    target: str | None = None  # Element text or screen description
+    description: str | None = None  # Human-readable step description
     duration: float = 0.0
     error: str | None = None
     screenshot_before: bytes | None = None
     screenshot_after: bytes | None = None
+    # Action screenshots (varies by gesture type)
+    # tap/double_tap: screenshot_action = touch moment
+    # swipe: screenshot_action = swipe_start, screenshot_action_end = swipe_end
+    # long_press: screenshot_action = press_start, screenshot_action_end = press_held
+    screenshot_action: bytes | None = None
+    screenshot_action_end: bytes | None = None
     details: dict[str, Any] = field(default_factory=dict)
+    # AI analysis results (populated by StepVerifier after execution)
+    ai_verified: bool | None = None  # AI confirms step succeeded visually
+    ai_outcome: str | None = None  # AI description of what happened
+    ai_suggestion: str | None = None  # AI suggested fix if failed
+    # Internal: timestamps for video-based frame extraction (relative to recording start)
+    # These are populated during execution when video recording is active,
+    # then used to extract precise frames from the video after recording stops.
+    _ts_before: float | None = field(default=None, repr=False)
+    _ts_after: float | None = field(default=None, repr=False)
+    _ts_action: float | None = field(default=None, repr=False)
+    _ts_action_end: float | None = field(default=None, repr=False)
 
 
 @dataclass
@@ -51,6 +74,8 @@ class TestExecutor:
         device_id: str,
         config: MutConfig | None = None,
         ai_analyzer: AIAnalyzer | None = None,
+        scrcpy: ScrcpyService | None = None,
+        output_dir: Path | None = None,
     ):
         """Initialize executor.
 
@@ -58,20 +83,34 @@ class TestExecutor:
             device_id: ADB device identifier
             config: Configuration (loads from files if not provided)
             ai_analyzer: AI analyzer (creates new if not provided)
+            scrcpy: Optional ScrcpyService for fast screenshots and video recording
+            output_dir: Output directory for reports and recordings
         """
         self._device = DeviceController(device_id)
         self._config = config or ConfigLoader.load()
         self._ai = ai_analyzer or AIAnalyzer()
+        self._scrcpy = scrcpy
+        self._output_dir = output_dir or Path.cwd()
         self._screen_size: tuple[int, int] | None = None
         self._step_number = 0
         self._test_start: float = 0.0  # Track test start time for timestamps
         self._test_app: str | None = None  # App from test file config
+        self._recording_video = False  # Whether video recording is active
+        self._step_coords: tuple[int, int] | None = None  # Track coords for report gestures
+        self._step_end_coords: tuple[int, int] | None = None  # End coords for swipes
+        self._step_direction: str | None = None  # Direction for swipes
+        self._step_trajectory: list[dict[str, float]] | None = None  # Trajectory for swipes
+        self._original_show_touches: bool | None = None  # Original show_touches setting
+        # Action screenshots captured during step execution
+        self._step_action_screenshot: bytes | None = None
+        self._step_action_end_screenshot: bytes | None = None
 
-    def execute_test(self, test: TestFile) -> TestResult:
+    def execute_test(self, test: TestFile, *, record_video: bool = False) -> TestResult:
         """Execute a complete test file.
 
         Args:
             test: Parsed test file
+            record_video: If True and ScrcpyService is available, record video
 
         Returns:
             TestResult with all step results
@@ -93,6 +132,10 @@ class TestExecutor:
             len(test.steps),
             len(test.teardown),
         )
+
+        # Start video recording if requested
+        if record_video and self._scrcpy:
+            self._start_video_recording()
 
         try:
             # Setup
@@ -143,6 +186,11 @@ class TestExecutor:
             error = str(e)
             logger.exception("Test execution error: %s", e)
 
+        finally:
+            # Stop video recording if active
+            if self._recording_video:
+                self._stop_video_recording()
+
         duration = time.time() - start
         logger.info(
             "Test completed: %s - status=%s, duration=%.2fs, steps=%d",
@@ -172,6 +220,14 @@ class TestExecutor:
         self._step_number += 1
         start = time.time()
 
+        # Clear step state from previous step
+        self._step_coords = None
+        self._step_end_coords = None
+        self._step_direction = None
+        self._step_trajectory = None
+        self._step_action_screenshot = None
+        self._step_action_end_screenshot = None
+
         # Build step description for logging
         step_desc = self._format_step_description(step)
         logger.debug("Step %d: Starting %s", self._step_number, step_desc)
@@ -192,7 +248,23 @@ class TestExecutor:
                     screenshot_before=screenshot_before,
                 )
 
-            error = handler(step)
+            # Execute with retry logic
+            max_attempts = (step.retry or 0) + 1  # retry=2 means 3 total attempts
+            error = None
+
+            for attempt in range(1, max_attempts + 1):
+                error = handler(step)
+                if error is None:
+                    break  # Success
+                if attempt < max_attempts:
+                    logger.debug(
+                        "Step %d: Attempt %d/%d failed, retrying: %s",
+                        self._step_number,
+                        attempt,
+                        max_attempts,
+                        error,
+                    )
+                    time.sleep(0.5)  # Brief pause between retries
 
             # Capture after screenshot
             screenshot_after = self._capture_screenshot()
@@ -211,15 +283,38 @@ class TestExecutor:
                     "Step %d: Completed %s in %.2fs", self._step_number, step.action, elapsed
                 )
 
+            # Build details including gesture coordinates for report visualization
+            details: dict[str, Any] = {"timestamp": time.time() - self._test_start}
+            if self._step_coords and self._screen_size:
+                # Store coordinates as percentages for responsive rendering
+                details["coords"] = {
+                    "x": self._step_coords[0] / self._screen_size[0] * 100,
+                    "y": self._step_coords[1] / self._screen_size[1] * 100,
+                }
+                if self._step_end_coords:
+                    details["end_coords"] = {
+                        "x": self._step_end_coords[0] / self._screen_size[0] * 100,
+                        "y": self._step_end_coords[1] / self._screen_size[1] * 100,
+                    }
+                if self._step_direction:
+                    details["direction"] = self._step_direction
+                if self._step_trajectory:
+                    details["trajectory"] = self._step_trajectory
+                    details["duration_ms"] = 300  # Default swipe duration
+
             return StepResult(
                 step_number=self._step_number,
                 action=step.action,
                 status="failed" if error else "passed",
+                target=step.target or step.condition_target,
+                description=step.description,
                 duration=elapsed,
                 error=error,
                 screenshot_before=screenshot_before,
                 screenshot_after=screenshot_after,
-                details={"timestamp": time.time() - self._test_start},
+                screenshot_action=self._step_action_screenshot,
+                screenshot_action_end=self._step_action_end_screenshot,
+                details=details,
             )
 
         except Exception as e:
@@ -231,6 +326,8 @@ class TestExecutor:
                 step_number=self._step_number,
                 action=step.action,
                 status="failed",
+                target=step.target or step.condition_target,
+                description=step.description,
                 duration=elapsed,
                 error=str(e),
                 screenshot_before=screenshot_before,
@@ -261,13 +358,77 @@ class TestExecutor:
     def _capture_screenshot(self) -> bytes | None:
         """Capture screenshot from device if available.
 
+        Uses ScrcpyService for faster screenshots (~50ms) when available,
+        falls back to ADB screenshot otherwise.
+
         Returns:
             Screenshot bytes or None if capture fails
         """
         try:
+            # Prefer ScrcpyService for fast screenshots
+            if self._scrcpy and self._scrcpy.is_connected:
+                return self._scrcpy.screenshot()
             return self._device.take_screenshot()
         except Exception:
             return None
+
+    def _start_video_recording(self) -> None:
+        """Start video recording for test execution."""
+        if not self._scrcpy:
+            logger.warning("Cannot start recording: ScrcpyService not available")
+            return
+
+        # Ensure scrcpy is connected
+        if not self._scrcpy.is_connected:
+            logger.info("Connecting ScrcpyService for video recording...")
+            if not self._scrcpy.connect():
+                logger.error("Failed to connect ScrcpyService for recording")
+                return
+
+        # Enable show_touches to display touch indicators in video
+        self._original_show_touches = self._device.get_show_touches()
+        if not self._original_show_touches:
+            self._device.set_show_touches(True)
+            logger.info("Enabled show_touches for video recording")
+
+        # Create recording directory
+        recording_dir = self._output_dir / "recording"
+        recording_dir.mkdir(parents=True, exist_ok=True)
+        video_path = recording_dir / "video.mp4"
+
+        result = self._scrcpy.start_recording(str(video_path))
+        if result.get("success"):
+            self._recording_video = True
+            logger.info("Video recording started: %s", video_path)
+        else:
+            logger.error("Failed to start video recording: %s", result.get("error"))
+            # Restore show_touches on failure
+            if self._original_show_touches is not None and not self._original_show_touches:
+                self._device.set_show_touches(False)
+
+    def _stop_video_recording(self) -> None:
+        """Stop video recording."""
+        if not self._scrcpy or not self._recording_video:
+            return
+
+        result = self._scrcpy.stop_recording()
+        self._recording_video = False
+
+        # Restore original show_touches setting
+        if self._original_show_touches is not None and not self._original_show_touches:
+            self._device.set_show_touches(False)
+            logger.info("Restored show_touches to original setting")
+        self._original_show_touches = None
+
+        if result.get("success"):
+            logger.info(
+                "Video recording saved: %s (%.1fs, %d frames)",
+                result.get("output_path"),
+                result.get("duration_seconds", 0),
+                result.get("frame_count", 0),
+            )
+        else:
+            logger.error("Failed to stop video recording: %s", result.get("error"))
 
     def _get_screen_size(self) -> tuple[int, int]:
         """Get cached screen size."""
@@ -292,6 +453,48 @@ class TestExecutor:
             width, height = self._get_screen_size()
             return int(x * width / 100), int(y * height / 100)
         return int(x), int(y)
+
+    def _synthesize_trajectory(
+        self,
+        start: tuple[int, int],
+        end: tuple[int, int],
+        duration_ms: int,
+        num_points: int = 15,
+    ) -> list[dict[str, float]]:
+        """Generate trajectory points for swipe visualization.
+
+        Uses ease-out-quad easing for natural finger motion.
+
+        Args:
+            start: Start coordinates (x, y) in pixels
+            end: End coordinates (x, y) in pixels
+            duration_ms: Swipe duration in milliseconds
+            num_points: Number of trajectory points to generate
+
+        Returns:
+            List of trajectory points with x, y (percentages) and t (ms)
+        """
+
+        def ease_out_quad(t: float) -> float:
+            return t * (2 - t)
+
+        width, height = self._get_screen_size()
+        points = []
+
+        for i in range(num_points):
+            t = i / (num_points - 1) if num_points > 1 else 0
+            t_eased = ease_out_quad(t)
+
+            x = start[0] + (end[0] - start[0]) * t_eased
+            y = start[1] + (end[1] - start[1]) * t_eased
+
+            points.append({
+                "x": x / width * 100,
+                "y": y / height * 100,
+                "t": int(t * duration_ms),
+            })
+
+        return points
 
     def _resolve_coordinates_ai(self, step: Step) -> tuple[tuple[int, int] | None, str | None]:
         """Resolve coordinates using AI-first approach.
@@ -387,7 +590,24 @@ class TestExecutor:
         if coords is None:
             return "Could not resolve coordinates for tap"
 
+        self._step_coords = coords  # Store for report gesture indicator
         self._device.tap(coords[0], coords[1])
+        # Capture action screenshot immediately after tap (shows touch feedback)
+        self._step_action_screenshot = self._capture_screenshot()
+        return None
+
+    def _action_double_tap(self, step: Step) -> str | None:
+        """Execute double tap action using AI-first approach."""
+        coords, error = self._resolve_coordinates_ai(step)
+        if error:
+            return error
+        if coords is None:
+            return "Could not resolve coordinates for double_tap"
+
+        self._step_coords = coords  # Store for report gesture indicator
+        self._device.double_tap(coords[0], coords[1])
+        # Capture action screenshot after double tap
+        self._step_action_screenshot = self._capture_screenshot()
         return None
 
     def _action_type(self, step: Step) -> str | None:
@@ -400,7 +620,7 @@ class TestExecutor:
         return None
 
     def _action_swipe(self, step: Step) -> str | None:
-        """Execute swipe action."""
+        """Execute swipe action with mid-action screenshot capture."""
         width, height = self._get_screen_size()
 
         # Default: center of screen
@@ -417,18 +637,42 @@ class TestExecutor:
         distance_px = int(distance * height / 100)
 
         direction = (step.direction or "up").lower()
+        self._step_coords = (cx, cy)  # Store start coords for report
+        self._step_direction = direction
+
         if direction == "up":
-            self._device.swipe(cx, cy, cx, cy - distance_px)
+            end_x, end_y = cx, cy - distance_px
         elif direction == "down":
-            self._device.swipe(cx, cy, cx, cy + distance_px)
+            end_x, end_y = cx, cy + distance_px
         elif direction == "left":
             distance_px = int(distance * width / 100)
-            self._device.swipe(cx, cy, cx - distance_px, cy)
+            end_x, end_y = cx - distance_px, cy
         elif direction == "right":
             distance_px = int(distance * width / 100)
-            self._device.swipe(cx, cy, cx + distance_px, cy)
+            end_x, end_y = cx + distance_px, cy
         else:
             return f"Unknown swipe direction: {direction}"
+
+        self._step_end_coords = (end_x, end_y)  # Store end coords for report
+
+        # Capture swipe_start screenshot before swipe begins
+        self._step_action_screenshot = self._capture_screenshot()
+
+        # Execute swipe asynchronously to capture mid-action
+        duration_ms = 300
+
+        # Generate trajectory for visualization
+        self._step_trajectory = self._synthesize_trajectory(
+            (cx, cy), (end_x, end_y), duration_ms
+        )
+        process = self._device.swipe_async(cx, cy, end_x, end_y, duration_ms)
+
+        # Wait 90% of duration, then capture swipe_end
+        time.sleep(duration_ms * 0.9 / 1000)
+        self._step_action_end_screenshot = self._capture_screenshot()
+
+        # Wait for swipe to complete
+        process.wait()
 
         return None
 
@@ -525,15 +769,29 @@ class TestExecutor:
         return None
 
     def _action_long_press(self, step: Step) -> str | None:
-        """Execute long press action using AI-first approach."""
+        """Execute long press action with mid-press screenshot capture."""
         coords, error = self._resolve_coordinates_ai(step)
         if error:
             return error
         if coords is None:
             return "Could not resolve coordinates for long_press"
 
-        duration = step.duration or 500  # Default 500ms
-        self._device.long_press(coords[0], coords[1], duration)
+        self._step_coords = coords  # Store for report gesture indicator
+        duration_ms = step.duration or 500  # Default 500ms
+
+        # Capture press_start screenshot before press begins
+        self._step_action_screenshot = self._capture_screenshot()
+
+        # Execute long press asynchronously to capture mid-action
+        process = self._device.long_press_async(coords[0], coords[1], duration_ms)
+
+        # Wait 70% of duration, then capture press_held
+        time.sleep(duration_ms * 0.7 / 1000)
+        self._step_action_end_screenshot = self._capture_screenshot()
+
+        # Wait for press to complete
+        process.wait()
+
         return None
 
     def _action_scroll_to(self, step: Step) -> str | None:
@@ -700,6 +958,29 @@ class TestExecutor:
             return self._execute_nested_steps(step.else_steps)
 
         logger.debug("if_screen('%s'): condition FALSE, no else branch", description)
+        return None
+
+    def _action_repeat(self, step: Step) -> str | None:
+        """Execute steps repeatedly for a specified count."""
+        count = step.repeat_count or 1
+        steps = step.repeat_steps
+
+        if not steps:
+            logger.debug("repeat: no steps to repeat")
+            return None
+
+        logger.debug("repeat: executing %d step(s) %d time(s)", len(steps), count)
+
+        for iteration in range(count):
+            logger.debug("repeat: iteration %d/%d", iteration + 1, count)
+            error = self._execute_nested_steps(steps)
+            if error:
+                logger.debug(
+                    "repeat: iteration %d/%d failed: %s", iteration + 1, count, error
+                )
+                return f"repeat iteration {iteration + 1} failed: {error}"
+
+        logger.debug("repeat: all %d iterations completed successfully", count)
         return None
 
     def _execute_nested_steps(self, steps: list[Step]) -> str | None:

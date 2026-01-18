@@ -17,6 +17,11 @@ class TestExecutorBasicActions:
         device = MagicMock()
         device.get_screen_size.return_value = (1080, 2340)
         device.find_element.return_value = (540, 1200)
+        # Mock async methods to return mock process
+        mock_process = MagicMock()
+        mock_process.wait.return_value = None
+        device.swipe_async.return_value = mock_process
+        device.long_press_async.return_value = mock_process
         return device
 
     @pytest.fixture
@@ -65,7 +70,7 @@ class TestExecutorBasicActions:
         result = executor.execute_step(step)
 
         assert result.status == "passed"
-        mock_device.swipe.assert_called()
+        mock_device.swipe_async.assert_called()
 
     def test_tap_fails_when_element_not_found(self, executor, mock_device):
         """Tap fails gracefully when element not found."""
@@ -292,6 +297,10 @@ class TestExecutorSwipeActions:
         """Mock DeviceController."""
         device = MagicMock()
         device.get_screen_size.return_value = (1080, 2340)
+        # Mock swipe_async to return a mock process
+        mock_process = MagicMock()
+        mock_process.wait.return_value = None
+        device.swipe_async.return_value = mock_process
         return device
 
     @pytest.fixture
@@ -307,8 +316,8 @@ class TestExecutorSwipeActions:
         result = executor.execute_step(step)
 
         assert result.status == "passed"
-        # Should swipe from center upward
-        args = mock_device.swipe.call_args[0]
+        # Should swipe from center upward (uses swipe_async now)
+        args = mock_device.swipe_async.call_args[0]
         assert args[1] > args[3]  # y1 > y2 for up swipe
 
     def test_swipe_down(self, executor, mock_device):
@@ -318,7 +327,7 @@ class TestExecutorSwipeActions:
         result = executor.execute_step(step)
 
         assert result.status == "passed"
-        args = mock_device.swipe.call_args[0]
+        args = mock_device.swipe_async.call_args[0]
         assert args[1] < args[3]  # y1 < y2 for down swipe
 
     def test_swipe_left(self, executor, mock_device):
@@ -328,7 +337,7 @@ class TestExecutorSwipeActions:
         result = executor.execute_step(step)
 
         assert result.status == "passed"
-        args = mock_device.swipe.call_args[0]
+        args = mock_device.swipe_async.call_args[0]
         assert args[0] > args[2]  # x1 > x2 for left swipe
 
     def test_swipe_right(self, executor, mock_device):
@@ -338,7 +347,7 @@ class TestExecutorSwipeActions:
         result = executor.execute_step(step)
 
         assert result.status == "passed"
-        args = mock_device.swipe.call_args[0]
+        args = mock_device.swipe_async.call_args[0]
         assert args[0] < args[2]  # x1 < x2 for right swipe
 
     def test_swipe_with_custom_distance(self, executor, mock_device):
@@ -348,7 +357,7 @@ class TestExecutorSwipeActions:
         result = executor.execute_step(step)
 
         assert result.status == "passed"
-        mock_device.swipe.assert_called()
+        mock_device.swipe_async.assert_called()
 
 
 class TestExecutorErrorHandling:
@@ -441,6 +450,10 @@ class TestExecutorLongPressActions:
         device = MagicMock()
         device.get_screen_size.return_value = (1080, 2340)
         device.find_element.return_value = (540, 1200)
+        # Mock long_press_async to return a mock process
+        mock_process = MagicMock()
+        mock_process.wait.return_value = None
+        device.long_press_async.return_value = mock_process
         return device
 
     @pytest.fixture
@@ -457,7 +470,7 @@ class TestExecutorLongPressActions:
 
         assert result.status == "passed"
         mock_device.find_element.assert_called_with("Hold Me")
-        mock_device.long_press.assert_called_with(540, 1200, 500)  # Default 500ms
+        mock_device.long_press_async.assert_called_with(540, 1200, 500)  # Default 500ms
 
     def test_long_press_with_custom_duration(self, executor, mock_device):
         """long_press respects custom duration."""
@@ -466,7 +479,7 @@ class TestExecutorLongPressActions:
         result = executor.execute_step(step)
 
         assert result.status == "passed"
-        mock_device.long_press.assert_called_with(540, 1200, 2000)
+        mock_device.long_press_async.assert_called_with(540, 1200, 2000)
 
     def test_long_press_element_not_found(self, executor, mock_device):
         """long_press fails when element not found."""
@@ -490,7 +503,7 @@ class TestExecutorLongPressActions:
         result = executor.execute_step(step)
 
         assert result.status == "passed"
-        mock_device.long_press.assert_called_with(100, 200, 1000)
+        mock_device.long_press_async.assert_called_with(100, 200, 1000)
 
 
 class TestExecutorScrollToActions:
@@ -838,6 +851,74 @@ class TestExecutorConditionalActions:
         assert "not found" in result.error.lower()
 
 
+class TestSwipeTrajectory:
+    """Test swipe trajectory synthesis."""
+
+    @pytest.fixture
+    def mock_device(self):
+        """Mock DeviceController."""
+        device = MagicMock()
+        device.get_screen_size.return_value = (1080, 2400)
+        # Mock swipe_async to return a mock process
+        mock_process = MagicMock()
+        mock_process.wait.return_value = None
+        device.swipe_async.return_value = mock_process
+        return device
+
+    @pytest.fixture
+    def executor(self, mock_device):
+        """Create executor with mocked device."""
+        with patch("mutcli.core.executor.DeviceController", return_value=mock_device):
+            return TestExecutor(device_id="test-device")
+
+    def test_swipe_generates_trajectory(self, executor, mock_device):
+        """Test that swipe action generates trajectory points in details."""
+        step = Step(action="swipe", direction="up", distance=30)
+
+        result = executor.execute_step(step)
+
+        assert result.status == "passed"
+        # Verify trajectory exists in details
+        assert "trajectory" in result.details
+        trajectory = result.details["trajectory"]
+        assert len(trajectory) >= 10  # At least 10 points
+        assert all("x" in p and "y" in p and "t" in p for p in trajectory)
+
+        # Verify first point is start, last is end
+        assert trajectory[0]["t"] == 0
+        assert trajectory[-1]["t"] > 0
+
+        # Verify duration_ms is set
+        assert "duration_ms" in result.details
+        assert result.details["duration_ms"] == 300  # Default swipe duration
+
+    def test_swipe_trajectory_uses_easing(self, executor, mock_device):
+        """Test that trajectory uses ease-out-quad easing for natural motion."""
+        step = Step(action="swipe", direction="up", distance=30)
+
+        result = executor.execute_step(step)
+
+        trajectory = result.details["trajectory"]
+        # With ease-out-quad, earlier points should be more spread out
+        # than later points (faster start, slower end)
+        # Check that y changes more between first few points than last few
+        # (for up swipe, y decreases)
+        first_dy = abs(trajectory[1]["y"] - trajectory[0]["y"])
+        last_dy = abs(trajectory[-1]["y"] - trajectory[-2]["y"])
+        assert first_dy > last_dy, "Ease-out should have faster start than end"
+
+    def test_swipe_trajectory_points_are_percentages(self, executor, mock_device):
+        """Test that trajectory x,y coordinates are percentages (0-100)."""
+        step = Step(action="swipe", direction="up", distance=30)
+
+        result = executor.execute_step(step)
+
+        trajectory = result.details["trajectory"]
+        for point in trajectory:
+            assert 0 <= point["x"] <= 100, f"x should be percentage: {point['x']}"
+            assert 0 <= point["y"] <= 100, f"y should be percentage: {point['y']}"
+
+
 class TestStepResult:
     """Test StepResult dataclass."""
 
@@ -902,8 +983,8 @@ class TestExecutorScreenshots:
         result = executor.execute_step(step)
 
         assert result.screenshot_after == b"fake_screenshot_bytes"
-        # take_screenshot should be called twice (before and after)
-        assert mock_device.take_screenshot.call_count == 2
+        # take_screenshot should be called 3 times (before, action, after) for tap
+        assert mock_device.take_screenshot.call_count == 3
 
     def test_screenshot_failure_does_not_fail_step(self, executor, mock_device):
         """Screenshot capture failure should not fail the step."""
