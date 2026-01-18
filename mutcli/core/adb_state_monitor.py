@@ -169,9 +169,9 @@ class ADBStateMonitor:
             timeout=2.0,
         )
         # Parse topResumedActivity line
-        # Format: topResumedActivity=ActivityRecord{abc u0 com.example.app/.MainActivity}
+        # Format: topResumedActivity=ActivityRecord{171648756 u0 com.example.app/.MainActivity t123}
         match = re.search(
-            r"topResumedActivity=ActivityRecord\{[^}]*\s+(\S+/\S+)\}",
+            r"topResumedActivity=ActivityRecord\{\S+\s+u\d+\s+([^\s}]+/[^\s}]+)",
             result.stdout,
         )
         if match:
