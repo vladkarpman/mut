@@ -270,3 +270,30 @@ class ADBStateMonitor:
                 else:
                     break
             return result
+
+    def get_keyboard_states(self) -> list[tuple[float, bool]]:
+        """Get all recorded keyboard states.
+
+        Returns:
+            Copy of all (timestamp, is_visible) tuples.
+        """
+        with self._lock:
+            return list(self._keyboard_states)
+
+    def get_activity_states(self) -> list[tuple[float, str | None]]:
+        """Get all recorded activity states.
+
+        Returns:
+            Copy of all (timestamp, activity_name) tuples.
+        """
+        with self._lock:
+            return list(self._activity_states)
+
+    def get_window_states(self) -> list[tuple[float, list[str]]]:
+        """Get all recorded window states.
+
+        Returns:
+            Copy of all (timestamp, window_list) tuples.
+        """
+        with self._lock:
+            return list(self._window_states)

@@ -131,7 +131,8 @@ class TestTouchMonitorStart:
     def test_start_launches_adb_getevent(self):
         """start() should launch adb getevent subprocess."""
         with patch("subprocess.Popen") as mock_popen, \
-             patch.object(TouchMonitor, "_get_device_info", return_value=True):
+             patch.object(TouchMonitor, "_get_device_info", return_value=True), \
+             patch("mutcli.core.touch_monitor.ADBStateMonitor"):
             mock_process = MagicMock()
             mock_process.stdout = iter([])  # Empty iterator
             mock_popen.return_value = mock_process
@@ -181,7 +182,8 @@ class TestTouchMonitorStart:
     def test_stop_clears_running_state(self):
         """stop() should set is_running to False."""
         with patch("subprocess.Popen") as mock_popen, \
-             patch.object(TouchMonitor, "_get_device_info", return_value=True):
+             patch.object(TouchMonitor, "_get_device_info", return_value=True), \
+             patch("mutcli.core.touch_monitor.ADBStateMonitor"):
             mock_process = MagicMock()
             mock_process.stdout = iter([])
             mock_popen.return_value = mock_process
@@ -199,7 +201,8 @@ class TestTouchMonitorStart:
     def test_stop_terminates_process(self):
         """stop() should terminate the subprocess."""
         with patch("subprocess.Popen") as mock_popen, \
-             patch.object(TouchMonitor, "_get_device_info", return_value=True):
+             patch.object(TouchMonitor, "_get_device_info", return_value=True), \
+             patch("mutcli.core.touch_monitor.ADBStateMonitor"):
             mock_process = MagicMock()
             mock_process.stdout = iter([])
             mock_popen.return_value = mock_process
@@ -332,7 +335,8 @@ class TestTouchMonitorEventParsing:
         ]
 
         with patch("subprocess.Popen") as mock_popen, \
-             patch.object(TouchMonitor, "_get_device_info", return_value=True):
+             patch.object(TouchMonitor, "_get_device_info", return_value=True), \
+             patch("mutcli.core.touch_monitor.ADBStateMonitor"):
             mock_process = MagicMock()
             mock_process.stdout = iter(getevent_lines)
             mock_popen.return_value = mock_process
@@ -401,3 +405,121 @@ class TestTouchMonitorThreadSafety:
 
         # Internal list should still have the event
         assert len(monitor.get_events()) == 1
+
+
+class TestTouchMonitorADBStateIntegration:
+    """Test ADB state monitor integration."""
+
+    def test_touch_monitor_has_adb_state_monitor_attribute(self):
+        """TouchMonitor should have ADB state monitor attribute."""
+        monitor = TouchMonitor("test-device")
+
+        assert hasattr(monitor, "_adb_state_monitor")
+        assert monitor._adb_state_monitor is None  # Not started yet
+
+    def test_has_state_getter_methods(self):
+        """TouchMonitor should have ADB state getter methods."""
+        monitor = TouchMonitor("test-device")
+
+        assert hasattr(monitor, "get_keyboard_states")
+        assert hasattr(monitor, "get_activity_states")
+        assert hasattr(monitor, "get_window_states")
+        assert hasattr(monitor, "get_adb_state_at")
+
+    def test_get_keyboard_states_returns_list_when_not_started(self):
+        """get_keyboard_states should return empty list when monitor not started."""
+        monitor = TouchMonitor("test-device")
+
+        states = monitor.get_keyboard_states()
+
+        assert isinstance(states, list)
+        assert states == []
+
+    def test_get_activity_states_returns_list_when_not_started(self):
+        """get_activity_states should return empty list when monitor not started."""
+        monitor = TouchMonitor("test-device")
+
+        states = monitor.get_activity_states()
+
+        assert isinstance(states, list)
+        assert states == []
+
+    def test_get_window_states_returns_list_when_not_started(self):
+        """get_window_states should return empty list when monitor not started."""
+        monitor = TouchMonitor("test-device")
+
+        states = monitor.get_window_states()
+
+        assert isinstance(states, list)
+        assert states == []
+
+    def test_get_adb_state_at_returns_empty_dict_when_not_started(self):
+        """get_adb_state_at should return empty dict when monitor not started."""
+        monitor = TouchMonitor("test-device")
+
+        state = monitor.get_adb_state_at(1.0)
+
+        assert isinstance(state, dict)
+        assert state == {}
+
+    def test_start_creates_adb_state_monitor(self):
+        """start() should create and start ADB state monitor."""
+        with patch("subprocess.Popen") as mock_popen, \
+             patch.object(TouchMonitor, "_get_device_info", return_value=True), \
+             patch("mutcli.core.touch_monitor.ADBStateMonitor") as mock_adb_monitor_class:
+            mock_process = MagicMock()
+            mock_process.stdout = iter([])
+            mock_popen.return_value = mock_process
+
+            mock_adb_monitor = MagicMock()
+            mock_adb_monitor_class.return_value = mock_adb_monitor
+
+            monitor = TouchMonitor("test-device")
+            monitor.start()
+            time.sleep(0.1)
+
+            # Verify ADB state monitor was created and started
+            mock_adb_monitor_class.assert_called_once_with("test-device")
+            mock_adb_monitor.start.assert_called_once()
+
+            monitor.stop()
+
+    def test_stop_stops_adb_state_monitor(self):
+        """stop() should stop ADB state monitor."""
+        with patch("subprocess.Popen") as mock_popen, \
+             patch.object(TouchMonitor, "_get_device_info", return_value=True), \
+             patch("mutcli.core.touch_monitor.ADBStateMonitor") as mock_adb_monitor_class:
+            mock_process = MagicMock()
+            mock_process.stdout = iter([])
+            mock_popen.return_value = mock_process
+
+            mock_adb_monitor = MagicMock()
+            mock_adb_monitor_class.return_value = mock_adb_monitor
+
+            monitor = TouchMonitor("test-device")
+            monitor.start()
+            time.sleep(0.1)
+            monitor.stop()
+
+            # Verify ADB state monitor was stopped
+            mock_adb_monitor.stop.assert_called_once()
+
+    def test_get_adb_state_at_delegates_to_monitor(self):
+        """get_adb_state_at should delegate to ADB state monitor."""
+        monitor = TouchMonitor("test-device")
+
+        # Manually set up a mock ADB state monitor
+        mock_adb_monitor = MagicMock()
+        mock_adb_monitor.get_keyboard_state_at.return_value = True
+        mock_adb_monitor.get_activity_state_at.return_value = "com.example/.MainActivity"
+        mock_adb_monitor.get_windows_state_at.return_value = ["StatusBar", "MainActivity"]
+        monitor._adb_state_monitor = mock_adb_monitor
+
+        state = monitor.get_adb_state_at(5.0)
+
+        assert state["keyboard_visible"] is True
+        assert state["activity"] == "com.example/.MainActivity"
+        assert state["windows"] == ["StatusBar", "MainActivity"]
+        mock_adb_monitor.get_keyboard_state_at.assert_called_once_with(5.0)
+        mock_adb_monitor.get_activity_state_at.assert_called_once_with(5.0)
+        mock_adb_monitor.get_windows_state_at.assert_called_once_with(5.0)
