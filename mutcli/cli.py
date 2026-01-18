@@ -877,6 +877,7 @@ def _start_preview_and_generate_yaml(
     console.print()
     console.print("[blue]Opening approval UI in browser...[/blue]")
     console.print("[dim]Review and edit steps, then click 'Generate YAML'[/dim]")
+    console.print("[dim]Waiting for approval... (Ctrl+C to cancel)[/dim]")
 
     server = PreviewServer(
         steps=preview_steps,

@@ -5304,9 +5304,9 @@
             <h1>Image Enhance Preset Selection</h1>
         </div>
         <div class="header-right">
-            <button class="export-btn-minimal" onclick="exportYAML()">
-                <span class="material-symbols-outlined">download</span>
-                Export YAML
+            <button class="export-btn-minimal" id="generateYamlBtn" onclick="generateAndSaveYAML()">
+                <span class="material-symbols-outlined">save</span>
+                Generate YAML
             </button>
         </div>
     </header>
@@ -8154,6 +8154,74 @@
         }
 
         // Export Functions
+        async function generateAndSaveYAML() {
+            const btn = document.getElementById('generateYamlBtn');
+            const originalContent = btn.innerHTML;
+
+            // Show loading state
+            btn.disabled = true;
+            btn.innerHTML = '<span class="material-symbols-outlined">hourglass_empty</span> Saving...';
+
+            try {
+                // Map browser steps to CLI format
+                const stepsData = steps.map(step => ({
+                    action: step.action,
+                    element_text: step.target?.text || null,
+                    coordinates: [step.target?.x || 0, step.target?.y || 0],
+                    enabled: step.enabled !== false,
+                    direction: step.direction || null,
+                    text: step.text || null,
+                    submit: step.submit || false,
+                    tap_count: step.tapCount || null,
+                }));
+
+                // Get verifications (if any)
+                const verificationsData = (window.verifications || []).map(v => ({
+                    description: v.description,
+                    after_step: v.after_step,
+                    enabled: v.enabled !== false,
+                }));
+
+                const response = await fetch('/approve', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        steps: stepsData,
+                        verifications: verificationsData,
+                    }),
+                });
+
+                if (!response.ok) {
+                    throw new Error(`Server error: ${response.status}`);
+                }
+
+                const result = await response.json();
+
+                // Show success state
+                btn.innerHTML = '<span class="material-symbols-outlined">check_circle</span> Saved!';
+                btn.style.background = '#4caf50';
+
+                // Show success message
+                setTimeout(() => {
+                    alert(`Test saved successfully!\n\nYou can close this tab.`);
+                }, 100);
+
+            } catch (error) {
+                console.error('Failed to save:', error);
+
+                // Show error state
+                btn.innerHTML = '<span class="material-symbols-outlined">error</span> Failed - Click to retry';
+                btn.style.background = '#f44336';
+                btn.disabled = false;
+
+                // Reset after a moment
+                setTimeout(() => {
+                    btn.innerHTML = originalContent;
+                    btn.style.background = '';
+                }, 3000);
+            }
+        }
+
         function exportYAML() {
             const yaml = generateYAML();
             downloadFile(testData.testName + '.yaml', yaml);
