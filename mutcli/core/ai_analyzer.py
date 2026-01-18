@@ -424,15 +424,30 @@ Respond with JSON only (no markdown, no code blocks):
   "element_text": "button/field text or null",
   "element_type": "button|text_field|link|icon|checkbox|other",
   "action_description": "User taps on [element name/text]",
-  "before_description": "brief UI state before",
-  "after_description": "brief UI state after",
-  "suggested_verification": "verification phrase or null"
+  "before_description": "Brief UI state before tap.",
+  "after_description": "Brief UI state after tap.",
+  "suggested_verification": "Display shows '[value]'." or null
 }}
 
-IMPORTANT for action_description:
-- Use format: "User taps on [element]" where [element] is the button text, label, or icon name
-- Examples: "User taps on 5", "User taps on + button", "User taps on Login", "User taps on search icon"
-- Be specific about what was tapped, not what it does"""
+FORMAT REQUIREMENTS (follow exactly):
+
+action_description:
+- Format: "User taps on [element]"
+- Examples: "User taps on 5", "User taps on + button", "User taps on Login"
+
+before_description and after_description:
+- Start with capital letter, end with period
+- Be concise (5-15 words)
+- Use "display" consistently (not "screen", "input field", "output area")
+- Examples:
+  - "Display is empty."
+  - "Display shows '10'."
+  - "Display shows '10+250' with preview '260'."
+  - "Result '260' appears in display."
+
+suggested_verification:
+- Format: "Display shows '[exact value]'." or null if not meaningful
+- Examples: "Display shows '10'.", "Display shows '260'.", null"""
 
         try:
             before_part = types.Part.from_bytes(data=before, mime_type="image/png")
@@ -524,15 +539,29 @@ Respond with JSON only (no markdown, no code blocks):
   "direction": "up|down|left|right",
   "content_changed": "what scrolled into/out of view",
   "action_description": "User swipes [direction] [context]",
-  "before_description": "brief UI state before",
-  "after_description": "brief UI state after",
-  "suggested_verification": "verification phrase or null"
+  "before_description": "Brief UI state before swipe.",
+  "after_description": "Brief UI state after swipe.",
+  "suggested_verification": "Description of expected state." or null
 }}
 
-IMPORTANT for action_description:
-- Use format: "User swipes [direction]" or "User swipes [direction] to [purpose]"
+FORMAT REQUIREMENTS (follow exactly):
+
+action_description:
+- Format: "User swipes [direction]" or "User swipes [direction] to [purpose]"
 - Examples: "User swipes up", "User swipes down to scroll list", "User swipes left to dismiss"
-- Be descriptive about the swipe action"""
+
+before_description and after_description:
+- Start with capital letter, end with period
+- Be concise (5-15 words)
+- Focus on visible content that changed
+- Examples:
+  - "List shows items 1-5."
+  - "List now shows items 6-10."
+  - "Card is fully visible."
+
+suggested_verification:
+- Format: "[Element] is visible." or "[Content] appears." or null
+- Examples: "Item 'Settings' is visible.", "Next page content appears.", null"""
 
         try:
             before_part = types.Part.from_bytes(data=before, mime_type="image/png")
@@ -626,15 +655,28 @@ Respond with JSON only (no markdown, no code blocks):
   "element_type": "list_item|text|image|icon|other",
   "result_type": "context_menu|selection|drag_start|other",
   "action_description": "User long-presses on [element]",
-  "before_description": "brief UI state before",
-  "after_description": "brief UI state after",
-  "suggested_verification": "verification phrase or null"
+  "before_description": "Brief UI state before press.",
+  "after_description": "Brief UI state after press.",
+  "suggested_verification": "Description of expected state." or null
 }}
 
-IMPORTANT for action_description:
-- Use format: "User long-presses on [element]"
+FORMAT REQUIREMENTS (follow exactly):
+
+action_description:
+- Format: "User long-presses on [element]"
 - Examples: "User long-presses on message", "User long-presses on item", "User long-presses on image"
-- Be specific about what was pressed"""
+
+before_description and after_description:
+- Start with capital letter, end with period
+- Be concise (5-15 words)
+- Examples:
+  - "Message list is displayed."
+  - "Context menu appears with options."
+  - "Item is highlighted."
+
+suggested_verification:
+- Format: "[Menu/Selection] is visible." or null
+- Examples: "Context menu is visible.", "Item is selected.", null"""
 
         try:
             before_part = types.Part.from_bytes(data=before, mime_type="image/png")
@@ -717,15 +759,28 @@ Respond with JSON only (no markdown, no code blocks):
   "element_text": "field name like 'Search field', 'Email input', 'Password field', or null",
   "element_type": "text_field|search_box|password_field|textarea|other",
   "action_description": "User types in [field name]",
-  "before_description": "brief UI state before/during typing",
-  "after_description": "brief UI state after typing",
-  "suggested_verification": "verification phrase or null"
+  "before_description": "Brief UI state before typing.",
+  "after_description": "Brief UI state after typing.",
+  "suggested_verification": "Field contains '[text]'." or null
 }}
 
-IMPORTANT for action_description:
-- Use format: "User types in [field name]"
+FORMAT REQUIREMENTS (follow exactly):
+
+action_description:
+- Format: "User types in [field name]"
 - Examples: "User types in search field", "User types in email input", "User types in password field"
-- Be specific about where the user is typing"""
+
+before_description and after_description:
+- Start with capital letter, end with period
+- Be concise (5-15 words)
+- Examples:
+  - "Search field is empty with keyboard visible."
+  - "Email field now contains 'user@example.com'."
+  - "Text field shows entered value."
+
+suggested_verification:
+- Format: "Field contains '[text]'." or "[Field] shows '[value]'." or null
+- Examples: "Search field contains 'query'.", "Email shows 'test@test.com'.", null"""
 
         try:
             before_part = types.Part.from_bytes(data=before, mime_type="image/png")
