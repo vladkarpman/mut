@@ -102,7 +102,7 @@ class StepAnalyzer:
             timestamp: Event timestamp
             x: Tap X coordinate (optional)
             y: Tap Y coordinate (optional)
-            adb_data: Dict with keyboard_states, activity_states, window_states
+            adb_data: Dict with keyboard_states, activity_states, window_states, ui_dumps
 
         Returns:
             Context dict for AI prompt, or None if no data
@@ -139,7 +139,61 @@ class StepAnalyzer:
                 else:
                     break
 
+        # Get element at tap coordinates from UI hierarchy dumps
+        if x is not None and y is not None:
+            ui_dumps = adb_data.get("ui_dumps", [])
+            if ui_dumps:
+                element = self._find_element_from_dumps(ui_dumps, timestamp, x, y)
+                if element:
+                    context["element"] = element
+
         return context if context else None
+
+    def _find_element_from_dumps(
+        self,
+        ui_dumps: list[dict[str, Any]],
+        timestamp: float,
+        x: int,
+        y: int,
+    ) -> dict[str, Any] | None:
+        """Find element at coordinates from closest preceding UI dump.
+
+        Args:
+            ui_dumps: List of UI dumps with timestamp and elements
+            timestamp: Event timestamp
+            x: X coordinate
+            y: Y coordinate
+
+        Returns:
+            Element dict or None if not found
+        """
+        # Find closest dump before timestamp
+        preceding = [d for d in ui_dumps if d.get("timestamp", 0) <= timestamp]
+        if not preceding:
+            return None
+
+        closest_dump = preceding[-1]  # Last one before timestamp
+        elements = closest_dump.get("elements", [])
+
+        if not elements:
+            return None
+
+        # Find smallest element containing (x, y)
+        matching = []
+        for elem in elements:
+            bounds = elem.get("bounds")
+            if bounds and len(bounds) == 4:
+                left, top, right, bottom = bounds
+                if left <= x <= right and top <= y <= bottom:
+                    area = (right - left) * (bottom - top)
+                    matching.append((area, elem))
+
+        if not matching:
+            return None
+
+        # Return smallest (most specific) element
+        matching.sort(key=lambda item: item[0])
+        return matching[0][1]
 
     def analyze_step(
         self,

@@ -426,28 +426,33 @@ Respond with JSON only (no markdown, no code blocks):
   "action_description": "User taps on [element name/text]",
   "before_description": "Brief UI state before tap.",
   "after_description": "Brief UI state after tap.",
-  "suggested_verification": "Display shows '[value]'." or null
+  "suggested_verification": "Expected visible state or null"
 }}
 
 FORMAT REQUIREMENTS (follow exactly):
 
+element_text:
+- IMPORTANT: If UI HIERARCHY DATA is provided above, use the SUGGESTED element_text value
+- Priority: content-desc > text > resource-id (last part only)
+- Only use null if no UI hierarchy data AND element is unclear from screenshots
+
 action_description:
 - Format: "User taps on [element]"
-- Examples: "User taps on 5", "User taps on + button", "User taps on Login"
+- Use element_text value for [element]
+- Examples: "User taps on Submit", "User taps on menu icon", "User taps on Login"
 
 before_description and after_description:
 - Start with capital letter, end with period
 - Be concise (5-15 words)
-- Use "display" consistently (not "screen", "input field", "output area")
+- Describe the visible UI state objectively
 - Examples:
-  - "Display is empty."
-  - "Display shows '10'."
-  - "Display shows '10+250' with preview '260'."
-  - "Result '260' appears in display."
+  - "Home screen is displayed."
+  - "Login form with email and password fields."
+  - "List shows 5 items."
 
 suggested_verification:
-- Format: "Display shows '[exact value]'." or null if not meaningful
-- Examples: "Display shows '10'.", "Display shows '260'.", null"""
+- Describe expected visible state after this action, or null if not meaningful
+- Examples: "Welcome message is visible.", "Item is added to cart.", null"""
 
         try:
             before_part = types.Part.from_bytes(data=before, mime_type="image/png")
@@ -662,9 +667,14 @@ Respond with JSON only (no markdown, no code blocks):
 
 FORMAT REQUIREMENTS (follow exactly):
 
+element_text:
+- IMPORTANT: If UI HIERARCHY DATA is provided above, use the SUGGESTED element_text value
+- Priority: content-desc > text > resource-id (last part only)
+- Only use null if no UI hierarchy data AND element is unclear from screenshots
+
 action_description:
 - Format: "User long-presses on [element]"
-- Examples: "User long-presses on message", "User long-presses on item", "User long-presses on image"
+- Examples: "User long-presses on message", "User long-presses on item"
 
 before_description and after_description:
 - Start with capital letter, end with period
@@ -766,9 +776,14 @@ Respond with JSON only (no markdown, no code blocks):
 
 FORMAT REQUIREMENTS (follow exactly):
 
+element_text:
+- If UI HIERARCHY DATA is provided above, use it to identify the field
+- Priority: content-desc > text > resource-id (last part only)
+- Examples: "Search field", "Email input", "Password field"
+
 action_description:
 - Format: "User types in [field name]"
-- Examples: "User types in search field", "User types in email input", "User types in password field"
+- Examples: "User types in search field", "User types in email input"
 
 before_description and after_description:
 - Start with capital letter, end with period
@@ -844,11 +859,24 @@ suggested_verification:
 
         if adb_context.get("element"):
             elem = adb_context["element"]
-            context_section += "\nTapped Element (from UI hierarchy):\n"
+            # Extract short resource-id (e.g., "digit_1" from "...id/digit_1")
+            resource_id = elem.get("resource_id") or ""
+            short_rid = resource_id.split("/")[-1] if "/" in resource_id else resource_id
+
+            # Determine the best element identifier (priority: content_desc > text > resource_id)
+            content_desc = elem.get("content_desc")
+            text = elem.get("text")
+            suggested_text = content_desc or text or short_rid or None
+
+            context_section += "\n=== UI HIERARCHY DATA (GROUND TRUTH) ===\n"
+            context_section += "Use this data for element_text - it's from the actual UI tree.\n"
+            context_section += f"- text: {text or 'None'}\n"
+            context_section += f"- content-desc (accessibility label): {content_desc or 'None'}\n"
+            context_section += f"- resource-id: {short_rid or 'None'}\n"
             context_section += f"- class: {elem.get('class', 'Unknown')}\n"
-            context_section += f"- text: {elem.get('text') or 'None'}\n"
-            context_section += f"- resource-id: {elem.get('resource_id') or 'None'}\n"
-            context_section += f"- content-desc: {elem.get('content_desc') or 'None'}\n"
+            if suggested_text:
+                context_section += f"- SUGGESTED element_text: \"{suggested_text}\"\n"
+            context_section += "=========================================\n"
 
         context_section += "\n"
         return context_section

@@ -9,6 +9,7 @@ from typing import Any
 
 from mutcli.core.scrcpy_service import ScrcpyService
 from mutcli.core.touch_monitor import TouchMonitor
+from mutcli.core.ui_hierarchy_monitor import UIHierarchyMonitor
 
 logger = logging.getLogger("mut.recorder")
 
@@ -107,6 +108,7 @@ class Recorder:
 
         self._scrcpy: ScrcpyService | None = None
         self._touch_monitor: TouchMonitor | None = None
+        self._ui_monitor: UIHierarchyMonitor | None = None
 
     @property
     def is_recording(self) -> bool:
@@ -161,6 +163,11 @@ class Recorder:
                 self._cleanup_scrcpy()
                 self._touch_monitor = None
                 return {"success": False, "error": "Failed to start touch monitor"}
+
+            # Start UI hierarchy monitor with same reference time
+            # This ensures UI dump timestamps are synchronized with video and touch
+            self._ui_monitor = UIHierarchyMonitor(self._device_id)
+            self._ui_monitor.start(reference_time=video_start_time)
 
             # Set recording state BEFORE saving state file (Issue 5)
             self._start_time = time.time()
@@ -270,6 +277,18 @@ class Recorder:
             except Exception as e:
                 logger.warning(f"Error saving ADB state data: {e}")
 
+        # Save UI hierarchy dumps
+        if self._ui_monitor:
+            try:
+                self._ui_monitor.stop()
+                ui_dumps = self._ui_monitor.get_dumps()
+                ui_dumps_path = self._output_dir / "ui_dumps.json"
+                with open(ui_dumps_path, "w") as f:
+                    json.dump(ui_dumps, f, indent=2)
+                logger.info(f"Saved {len(ui_dumps)} UI hierarchy dumps")
+            except Exception as e:
+                logger.warning(f"Error saving UI hierarchy dumps: {e}")
+
         # Clean up state file with exception handling (Issue 4)
         try:
             if self.STATE_FILE.exists():
@@ -312,6 +331,13 @@ class Recorder:
             except Exception as e:
                 logger.warning(f"Error stopping touch monitor during cleanup: {e}")
             self._touch_monitor = None
+
+        if self._ui_monitor:
+            try:
+                self._ui_monitor.stop()
+            except Exception as e:
+                logger.warning(f"Error stopping UI monitor during cleanup: {e}")
+            self._ui_monitor = None
 
         self._cleanup_scrcpy()
         self._recording = False
