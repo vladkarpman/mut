@@ -455,6 +455,31 @@ def _process_recording(
     analyzed_steps: list[AnalyzedStep] = []
     verifications_raw: list[dict] = []
 
+    # Load ADB state data for enhanced analysis
+    adb_data: dict = {}
+    activity_path = test_dir / "activity_states.json"
+    if activity_path.exists():
+        try:
+            with open(activity_path) as f:
+                adb_data["activity_states"] = json.load(f)
+        except Exception as e:
+            console.print(f"  [dim]Could not load activity states: {e}[/dim]")
+
+    window_path = test_dir / "window_states.json"
+    if window_path.exists():
+        try:
+            with open(window_path) as f:
+                adb_data["window_states"] = json.load(f)
+        except Exception as e:
+            console.print(f"  [dim]Could not load window states: {e}[/dim]")
+
+    # keyboard_states already loaded earlier for typing detection
+    if keyboard_states:
+        adb_data["keyboard_states"] = keyboard_states
+
+    if adb_data:
+        console.print("  Loaded ADB state data for enhanced analysis")
+
     try:
         if config and config.google_api_key:
             ai = AIAnalyzer(api_key=config.google_api_key)
@@ -474,7 +499,10 @@ def _process_recording(
                         progress.update(task, completed=completed)
 
                     return await step_analyzer.analyze_collapsed_steps_parallel(
-                        collapsed_steps, screenshots_dir, on_progress
+                        collapsed_steps,
+                        screenshots_dir,
+                        on_progress,
+                        adb_data=adb_data if adb_data else None,
                     )
 
             analyzed_steps = asyncio.run(run_analysis())

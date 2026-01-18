@@ -85,6 +85,60 @@ class StepAnalyzer:
         """
         self._ai_analyzer = ai_analyzer
 
+    def _build_adb_context(
+        self,
+        timestamp: float,
+        x: int | None,
+        y: int | None,
+        adb_data: dict | None,
+    ) -> dict | None:
+        """Build ADB context for AI prompt enrichment.
+
+        Finds the most recent ADB state for the given timestamp.
+
+        Args:
+            timestamp: Event timestamp
+            x: Tap X coordinate (optional)
+            y: Tap Y coordinate (optional)
+            adb_data: Dict with keyboard_states, activity_states, window_states
+
+        Returns:
+            Context dict for AI prompt, or None if no data
+        """
+        if not adb_data:
+            return None
+
+        context: dict[str, Any] = {}
+
+        # Get keyboard state - find most recent state before/at timestamp
+        keyboard_states = adb_data.get("keyboard_states", [])
+        if keyboard_states:
+            for ts, visible in keyboard_states:
+                if ts <= timestamp:
+                    context["keyboard_visible"] = visible
+                else:
+                    break
+
+        # Get activity - find most recent activity before/at timestamp
+        activity_states = adb_data.get("activity_states", [])
+        if activity_states:
+            for ts, activity in activity_states:
+                if ts <= timestamp:
+                    context["activity"] = activity
+                else:
+                    break
+
+        # Get windows - find most recent window state before/at timestamp
+        window_states = adb_data.get("window_states", [])
+        if window_states:
+            for ts, windows in window_states:
+                if ts <= timestamp:
+                    context["windows"] = windows
+                else:
+                    break
+
+        return context if context else None
+
     def analyze_step(
         self,
         before_screenshot: bytes,
@@ -391,6 +445,7 @@ class StepAnalyzer:
         before_data: bytes,
         after_data: bytes,
         step_str: str,
+        adb_context: dict | None = None,
     ) -> AnalyzedStep:
         """Analyze a tap gesture step.
 
@@ -401,6 +456,7 @@ class StepAnalyzer:
             before_data: PNG bytes of before frame
             after_data: PNG bytes of after frame
             step_str: Zero-padded step number string (e.g., "001")
+            adb_context: Optional ADB context for enhanced analysis
 
         Returns:
             AnalyzedStep with tap analysis results
@@ -419,6 +475,7 @@ class StepAnalyzer:
             after=after_data,
             x=x,
             y=y,
+            adb_context=adb_context,
         )
 
         return AnalyzedStep(
@@ -438,6 +495,7 @@ class StepAnalyzer:
         before_data: bytes,
         after_data: bytes,
         step_str: str,
+        adb_context: dict | None = None,
     ) -> AnalyzedStep:
         """Analyze a swipe gesture step.
 
@@ -448,6 +506,7 @@ class StepAnalyzer:
             before_data: PNG bytes of before frame
             after_data: PNG bytes of after frame
             step_str: Zero-padded step number string (e.g., "001")
+            adb_context: Optional ADB context for enhanced analysis
 
         Returns:
             AnalyzedStep with swipe analysis results
@@ -478,6 +537,7 @@ class StepAnalyzer:
             start_y=start_y,
             end_x=end_x,
             end_y=end_y,
+            adb_context=adb_context,
         )
 
         # Use direction as element_text for swipes
@@ -501,6 +561,7 @@ class StepAnalyzer:
         before_data: bytes,
         after_data: bytes,
         step_str: str,
+        adb_context: dict | None = None,
     ) -> AnalyzedStep:
         """Analyze a long press gesture step.
 
@@ -511,6 +572,7 @@ class StepAnalyzer:
             before_data: PNG bytes of before frame
             after_data: PNG bytes of after frame
             step_str: Zero-padded step number string (e.g., "001")
+            adb_context: Optional ADB context for enhanced analysis
 
         Returns:
             AnalyzedStep with long press analysis results
@@ -538,6 +600,7 @@ class StepAnalyzer:
             x=x,
             y=y,
             duration_ms=duration_ms,
+            adb_context=adb_context,
         )
 
         return AnalyzedStep(
@@ -554,6 +617,7 @@ class StepAnalyzer:
         index: int,
         step: CollapsedStep,
         screenshots_dir: Path,
+        adb_context: dict | None = None,
     ) -> AnalyzedStep:
         """Analyze a type action step using before and after frames.
 
@@ -561,6 +625,7 @@ class StepAnalyzer:
             index: Step index (0-based)
             step: CollapsedStep for the type action
             screenshots_dir: Directory with extracted frames
+            adb_context: Optional ADB context for enhanced analysis
 
         Returns:
             AnalyzedStep with type analysis results
@@ -581,6 +646,7 @@ class StepAnalyzer:
         result = await self._ai_analyzer.analyze_type(
             before=before_data,
             after=after_data,
+            adb_context=adb_context,
         )
 
         # Convert CollapsedStep to event dict for original_tap field
@@ -634,6 +700,7 @@ class StepAnalyzer:
         collapsed_steps: list[CollapsedStep],
         screenshots_dir: Path,
         on_progress: Callable[[int, int], None] | None = None,
+        adb_data: dict | None = None,
     ) -> list[AnalyzedStep]:
         """Analyze all collapsed steps in parallel with progress callback.
 
@@ -648,6 +715,8 @@ class StepAnalyzer:
             collapsed_steps: List of CollapsedStep objects
             screenshots_dir: Directory with extracted frames
             on_progress: Callback(completed, total) called as each finishes
+            adb_data: Dict with keyboard_states, activity_states, window_states for
+                     enhanced AI analysis
 
         Returns:
             List of AnalyzedStep in original order
@@ -658,7 +727,9 @@ class StepAnalyzer:
         # Create tasks for all steps
         tasks = []
         for i, step in enumerate(collapsed_steps):
-            task = self._analyze_collapsed_step_with_retry(i, step, screenshots_dir)
+            task = self._analyze_collapsed_step_with_retry(
+                i, step, screenshots_dir, adb_data=adb_data
+            )
             tasks.append(task)
 
         # Execute in parallel, collecting results as they complete
@@ -681,6 +752,7 @@ class StepAnalyzer:
         step: CollapsedStep,
         screenshots_dir: Path,
         max_retries: int = 2,
+        adb_data: dict | None = None,
     ) -> tuple[int, AnalyzedStep]:
         """Analyze single collapsed step with exponential backoff retry.
 
@@ -691,6 +763,7 @@ class StepAnalyzer:
             step: CollapsedStep object
             screenshots_dir: Directory with extracted frames
             max_retries: Maximum number of retries (default: 2)
+            adb_data: Dict with keyboard_states, activity_states, window_states
 
         Returns:
             Tuple of (index, AnalyzedStep) to preserve ordering
@@ -704,7 +777,9 @@ class StepAnalyzer:
 
         for attempt in range(max_retries + 1):
             try:
-                result = await self._analyze_single_collapsed_step(index, step, screenshots_dir)
+                result = await self._analyze_single_collapsed_step(
+                    index, step, screenshots_dir, adb_data=adb_data
+                )
                 return (index, result)
             except RETRYABLE_EXCEPTIONS as e:
                 # Transient error - retry with backoff
@@ -730,6 +805,7 @@ class StepAnalyzer:
         index: int,
         step: CollapsedStep,
         screenshots_dir: Path,
+        adb_data: dict | None = None,
     ) -> AnalyzedStep:
         """Analyze a single collapsed step by routing to the correct analyzer.
 
@@ -737,6 +813,7 @@ class StepAnalyzer:
             index: Step index (0-based)
             step: CollapsedStep object
             screenshots_dir: Directory with extracted frames
+            adb_data: Dict with keyboard_states, activity_states, window_states
 
         Returns:
             AnalyzedStep with analysis results
@@ -747,8 +824,21 @@ class StepAnalyzer:
         """
         action = step.action
 
+        # Build ADB context for this step's timestamp
+        if step.coordinates:
+            x = step.coordinates.get("x")
+            y = step.coordinates.get("y")
+        elif step.start:
+            x = step.start.get("x")
+            y = step.start.get("y")
+        else:
+            x, y = None, None
+        adb_context = self._build_adb_context(step.timestamp, x, y, adb_data)
+
         if action == "type":
-            return await self._analyze_type_step(index, step, screenshots_dir)
+            return await self._analyze_type_step(
+                index, step, screenshots_dir, adb_context=adb_context
+            )
 
         # For gesture actions, convert to event dict and use existing methods
         step_str = f"{step.index:03d}"
@@ -770,21 +860,27 @@ class StepAnalyzer:
 
         if action == "tap":
             return await self._analyze_tap_step(
-                index, event, screenshots_dir, before_data, after_data, step_str
+                index, event, screenshots_dir, before_data, after_data, step_str,
+                adb_context=adb_context,
             )
         elif action == "swipe":
             return await self._analyze_swipe_step(
-                index, event, screenshots_dir, before_data, after_data, step_str
+                index, event, screenshots_dir, before_data, after_data, step_str,
+                adb_context=adb_context,
             )
         elif action == "long_press":
             return await self._analyze_long_press_step(
-                index, event, screenshots_dir, before_data, after_data, step_str
+                index, event, screenshots_dir, before_data, after_data, step_str,
+                adb_context=adb_context,
             )
         else:
             # Unknown action - treat as tap
-            logger.warning(f"Unknown action type '{action}' for step {step.index}, treating as tap")
+            logger.warning(
+                f"Unknown action type '{action}' for step {step.index}, treating as tap"
+            )
             return await self._analyze_tap_step(
-                index, event, screenshots_dir, before_data, after_data, step_str
+                index, event, screenshots_dir, before_data, after_data, step_str,
+                adb_context=adb_context,
             )
 
     def _collapsed_step_to_event(self, step: CollapsedStep) -> dict[str, Any]:
