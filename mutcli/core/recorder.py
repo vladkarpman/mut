@@ -2,6 +2,7 @@
 
 import json
 import logging
+import subprocess
 import time
 from dataclasses import dataclass
 from pathlib import Path
@@ -12,6 +13,54 @@ from mutcli.core.touch_monitor import TouchMonitor
 from mutcli.core.ui_hierarchy_monitor import UIHierarchyMonitor
 
 logger = logging.getLogger("mut.recorder")
+
+
+def _get_show_touches(device_id: str) -> bool:
+    """Get current show_touches setting.
+
+    Args:
+        device_id: ADB device identifier
+
+    Returns:
+        True if show_touches is enabled, False otherwise
+    """
+    try:
+        result = subprocess.run(
+            ["adb", "-s", device_id, "shell", "settings", "get", "system", "show_touches"],
+            capture_output=True,
+            text=True,
+        )
+        return result.stdout.strip() == "1"
+    except Exception as e:
+        logger.warning(f"Failed to get show_touches setting: {e}")
+        return False
+
+
+def _set_show_touches(device_id: str, enabled: bool) -> bool:
+    """Set show_touches setting.
+
+    Args:
+        device_id: ADB device identifier
+        enabled: True to enable, False to disable
+
+    Returns:
+        True if successful, False otherwise
+    """
+    try:
+        value = "1" if enabled else "0"
+        result = subprocess.run(
+            ["adb", "-s", device_id, "shell", "settings", "put", "system", "show_touches", value],
+            capture_output=True,
+            text=True,
+        )
+        if result.returncode == 0:
+            logger.debug(f"Set show_touches to {enabled}")
+            return True
+        logger.warning(f"Failed to set show_touches: {result.stderr}")
+        return False
+    except Exception as e:
+        logger.warning(f"Failed to set show_touches: {e}")
+        return False
 
 
 @dataclass
@@ -114,6 +163,9 @@ class Recorder:
         self._touch_monitor: TouchMonitor | None = None
         self._ui_monitor: UIHierarchyMonitor | None = None
 
+        # Track original show_touches state to restore after recording
+        self._original_show_touches: bool | None = None
+
     @property
     def is_recording(self) -> bool:
         """Check if recording is active."""
@@ -142,10 +194,19 @@ class Recorder:
         video_path = str(self._output_dir / "video.mp4")
 
         try:
+            # Enable show_touches to display touch indicators in video
+            self._original_show_touches = _get_show_touches(self._device_id)
+            if not self._original_show_touches:
+                _set_show_touches(self._device_id, True)
+                logger.info("Enabled show_touches for recording")
+
             # Connect ScrcpyService
             self._scrcpy = ScrcpyService(self._device_id)
             if not self._scrcpy.connect():
                 self._scrcpy = None
+                # Restore show_touches on failure
+                if self._original_show_touches is not None and not self._original_show_touches:
+                    _set_show_touches(self._device_id, False)
                 return {"success": False, "error": "Failed to connect ScrcpyService"}
 
             # Start video recording
@@ -299,6 +360,11 @@ class Recorder:
             except Exception as e:
                 logger.warning(f"Error saving UI hierarchy dumps: {e}")
 
+        # Restore original show_touches setting
+        if self._original_show_touches is not None and not self._original_show_touches:
+            _set_show_touches(self._device_id, False)
+            logger.info("Restored show_touches to original state (disabled)")
+
         # Clean up state file with exception handling (Issue 4)
         try:
             if self.STATE_FILE.exists():
@@ -350,6 +416,11 @@ class Recorder:
             self._ui_monitor = None
 
         self._cleanup_scrcpy()
+
+        # Restore show_touches if it was changed
+        if self._original_show_touches is not None and not self._original_show_touches:
+            _set_show_touches(self._device_id, False)
+
         self._recording = False
 
     @classmethod
