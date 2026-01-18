@@ -111,7 +111,8 @@ class UIElementParser:
         """
         match = re.match(r"\[(\d+),(\d+)\]\[(\d+),(\d+)\]", bounds_str)
         if match:
-            return tuple(int(x) for x in match.groups())  # type: ignore
+            left, top, right, bottom = match.groups()
+            return (int(left), int(top), int(right), int(bottom))
         return (0, 0, 0, 0)
 
     def find_element_at(
