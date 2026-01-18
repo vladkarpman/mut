@@ -651,9 +651,9 @@ def _build_preview_steps(
         # Build frames dict
         frames: dict[str, str | None] = {}
         if before_path.exists():
-            frames["before"] = f"recording/screenshots/step_{step_str}_before.png"
+            frames["before"] = f"screenshots/step_{step_str}_before.png"
         if after_path.exists():
-            frames["after"] = f"recording/screenshots/step_{step_str}_after.png"
+            frames["after"] = f"screenshots/step_{step_str}_after.png"
 
         preview_steps.append(PreviewStep(
             index=step_num,
@@ -710,9 +710,9 @@ def _build_preview_steps_from_analysis(
         # Build frames dict
         frames: dict[str, str | None] = {}
         if before_path.exists():
-            frames["before"] = f"recording/screenshots/step_{step_str}_before.png"
+            frames["before"] = f"screenshots/step_{step_str}_before.png"
         if after_path.exists():
-            frames["after"] = f"recording/screenshots/step_{step_str}_after.png"
+            frames["after"] = f"screenshots/step_{step_str}_after.png"
 
         # Get action_description from data or build default
         action_desc = step_data.get("action_description") or _build_default_action_description(

@@ -126,8 +126,8 @@ class PreviewServer:
 
                 if parsed.path == "/preview":
                     self._serve_preview()
-                elif parsed.path.startswith("/recording/"):
-                    self._serve_recording_file(parsed.path)
+                elif parsed.path.startswith("/screenshots/") or parsed.path == "/video.mp4":
+                    self._serve_file(parsed.path)
                 else:
                     self.send_error(404)
 
@@ -146,10 +146,10 @@ class PreviewServer:
                 self.end_headers()
                 self.wfile.write(html.encode("utf-8"))
 
-            def _serve_recording_file(self, path: str) -> None:
+            def _serve_file(self, path: str) -> None:
                 """Serve files from recording directory (video, screenshots)."""
-                # Remove /recording/ prefix
-                relative_path = path.replace("/recording/", "", 1)
+                # Remove leading slash to get relative path
+                relative_path = path.lstrip("/")
                 file_path = server.recording_dir / relative_path
 
                 if file_path.exists() and file_path.is_file():
@@ -232,10 +232,8 @@ class PreviewServer:
 
         # Save to test folder for debugging/inspection (only once)
         if save_to_file and not self._html_saved:
-            # For file:// access, remove 'recording/' prefix so paths work directly
-            file_html = html.replace('recording/', '')
             approval_path = self.recording_dir / "approval.html"
-            approval_path.write_text(file_html, encoding="utf-8")
+            approval_path.write_text(html, encoding="utf-8")
             self._html_saved = True
 
         return html
@@ -247,13 +245,13 @@ class PreviewServer:
         for step in self.steps:
             step_id = f"step_{step.index:03d}"
 
-            # Build frames dict with paths relative to recording/
+            # Build frames dict with relative paths
             frames = {}
             if step.frames:
                 frames = step.frames
             elif step.screenshot_path:
                 # Legacy: single screenshot becomes before frame
-                frames["before"] = f"recording/screenshots/before_{step.index:03d}.png"
+                frames["before"] = f"screenshots/before_{step.index:03d}.png"
 
             # Build analysis dict - action is the step description like "User taps on 5"
             analysis = step.analysis if step.analysis else {
