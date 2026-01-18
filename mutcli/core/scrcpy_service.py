@@ -46,6 +46,7 @@ class ScrcpyService:
         self._video_stream: Any = None
         self._recording_output_path: str | None = None
         self._recording_start_time: float | None = None
+        self._frame_timestamps: list[float] = []  # Wall-clock timestamps for each frame
 
     @property
     def is_connected(self) -> bool:
@@ -166,7 +167,7 @@ class ScrcpyService:
 
                     # Write to video if recording
                     if recording:
-                        self._write_frame(frame)
+                        self._write_frame(frame, timestamp)
 
                 time.sleep(0.016)  # ~60 fps polling
 
@@ -240,6 +241,7 @@ class ScrcpyService:
                 self._recording = True
             self._recording_output_path = output_path
             self._recording_start_time = time.time()
+            self._frame_timestamps = []  # Clear timestamps for new recording
 
             logger.info(f"Recording started: {output_path}")
 
@@ -281,13 +283,24 @@ class ScrcpyService:
 
             file_size = Path(output_path).stat().st_size if output_path else 0
 
+            # Save frame timestamps for accurate frame extraction
+            timestamps_path = None
+            if output_path and self._frame_timestamps:
+                import json
+                timestamps_path = str(Path(output_path).with_suffix(".timestamps.json"))
+                with open(timestamps_path, "w") as f:
+                    json.dump(self._frame_timestamps, f)
+                logger.info(f"Saved {len(self._frame_timestamps)} frame timestamps")
+
             logger.info(f"Recording stopped: {output_path} ({duration:.1f}s)")
 
             return {
                 "success": True,
                 "output_path": output_path,
+                "timestamps_path": timestamps_path,
                 "duration_seconds": round(duration, 2),
                 "file_size_bytes": file_size,
+                "frame_count": len(self._frame_timestamps),
             }
 
         except Exception as e:
@@ -299,19 +312,28 @@ class ScrcpyService:
             self._video_stream = None
             self._recording_output_path = None
             self._recording_start_time = None
+            self._frame_timestamps = []
 
-    def _write_frame(self, frame: np.ndarray) -> None:
-        """Write frame to video file."""
+    def _write_frame(self, frame: np.ndarray, timestamp: float) -> None:
+        """Write frame to video file with proper timestamp.
+
+        Args:
+            frame: RGB frame as numpy array
+            timestamp: Wall-clock timestamp when frame was captured
+        """
         if not self._video_writer or not self._video_stream:
             return
 
         try:
             import av
 
-            # Convert RGB to video frame
-            video_frame = av.VideoFrame.from_ndarray(frame, format="rgb24")
+            # Store wall-clock timestamp for this frame (relative to recording start)
+            if self._recording_start_time:
+                elapsed = timestamp - self._recording_start_time
+                self._frame_timestamps.append(elapsed)
 
-            # Encode and write
+            # Convert RGB to video frame and encode
+            video_frame = av.VideoFrame.from_ndarray(frame, format="rgb24")
             for packet in self._video_stream.encode(video_frame):
                 self._video_writer.mux(packet)
 

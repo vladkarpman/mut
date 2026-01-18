@@ -1,13 +1,14 @@
-"""Video frame extraction using PyAV."""
+"""Video frame extraction using ffmpeg."""
 
 from __future__ import annotations
 
 import logging
-from io import BytesIO
+import os
+import subprocess
+import tempfile
+from concurrent.futures import ThreadPoolExecutor, as_completed
 from pathlib import Path
 from typing import TYPE_CHECKING, Any
-
-import av
 
 if TYPE_CHECKING:
     from mutcli.core.step_collapsing import CollapsedStep
@@ -18,9 +19,10 @@ logger = logging.getLogger("mut.frame_extractor")
 class FrameExtractor:
     """Extract frames from recorded video at specific timestamps.
 
-    Uses PyAV for efficient video seeking and frame extraction.
+    Uses ffmpeg for reliable video seeking and frame extraction.
     Uses midpoint approach for non-overlapping time ranges.
     Uses frame timestamps file for accurate wall-clock time mapping.
+    Supports parallel extraction for performance.
 
     Frame extraction by gesture type:
     - tap: before, touch, after (3 frames)
@@ -106,88 +108,90 @@ class FrameExtractor:
         return self.get_duration()
 
     def get_duration(self) -> float:
-        """Get video duration in seconds.
+        """Get video duration in seconds using ffprobe.
 
         Returns:
             Duration in seconds, or 0.0 on error
         """
+        cmd = [
+            "ffprobe",
+            "-v", "error",
+            "-show_entries", "format=duration",
+            "-of", "default=noprint_wrappers=1:nokey=1",
+            str(self._video_path),
+        ]
+
         try:
-            with av.open(str(self._video_path)) as container:
-                stream = container.streams.video[0]
-                if stream.duration and stream.time_base:
-                    return float(stream.duration * stream.time_base)
-                # Fallback: calculate from container duration
-                if container.duration:
-                    return container.duration / av.time_base
-                return 0.0
+            result = subprocess.run(
+                cmd, capture_output=True, text=True, timeout=10
+            )
+            if result.returncode == 0 and result.stdout.strip():
+                return float(result.stdout.strip())
+        except subprocess.TimeoutExpired:
+            logger.error("ffprobe timed out getting video duration")
+        except ValueError as e:
+            logger.error(f"Failed to parse video duration: {e}")
         except Exception as e:
             logger.error(f"Failed to get video duration: {e}")
-            return 0.0
+
+        return 0.0
 
     def extract_frame(self, timestamp_sec: float) -> bytes | None:
-        """Extract single frame at timestamp as PNG bytes.
-
-        If frame timestamps are available, uses frame index for accurate
-        wall-clock time extraction with efficient seeking.
+        """Extract single frame at timestamp as PNG bytes using ffmpeg.
 
         Args:
-            timestamp_sec: Timestamp in seconds (wall-clock time)
+            timestamp_sec: Timestamp in seconds (video-relative time)
 
         Returns:
             PNG image bytes, or None on error
         """
-        # Find target frame index using timestamps if available
-        target_frame_idx = self._find_frame_index(timestamp_sec)
+        # Clamp timestamp to valid range
+        timestamp_sec = max(0.0, timestamp_sec)
+
+        # Create temp file for output
+        fd, tmp_path = tempfile.mkstemp(suffix=".png")
+        os.close(fd)
 
         try:
-            with av.open(str(self._video_path)) as container:
-                stream = container.streams.video[0]
-                time_base = float(stream.time_base) if stream.time_base else 1.0 / 30
+            cmd = [
+                "ffmpeg",
+                "-ss", f"{timestamp_sec:.3f}",  # Seek BEFORE input (fast)
+                "-i", str(self._video_path),
+                "-frames:v", "1",
+                "-q:v", "2",  # High quality
+                "-y",  # Overwrite
+                "-loglevel", "error",
+                tmp_path,
+            ]
 
-                # Seek to keyframe before target (use estimated PTS from frame rate)
-                # This is approximate but gets us close for efficient decoding
-                estimated_pts = int((target_frame_idx / 30.0) / time_base)
-                seek_pts = max(0, estimated_pts - int(1.0 / time_base))
-                container.seek(seek_pts, stream=stream, backward=True)
+            result = subprocess.run(cmd, capture_output=True, timeout=30)
 
-                # Decode frames and find the target by index
-                # Track frame indices by counting from seek position
-                best_frame = None
-                frames_decoded = 0
-
-                for frame in container.decode(video=0):
-                    # Get actual frame index from PTS
-                    frame_idx = int(frame.pts * time_base * 30) if frame.pts else frames_decoded
-
-                    # Keep best frame (closest to target without going too far)
-                    if best_frame is None or frame_idx <= target_frame_idx:
-                        best_frame = frame
-
-                    # Stop if we've passed the target
-                    if frame_idx >= target_frame_idx:
-                        break
-
-                    frames_decoded += 1
-
-                    # Safety limit
-                    if frames_decoded > 100:
-                        break
-
-                if best_frame is not None:
-                    img = best_frame.to_image()
-                    buffer = BytesIO()
-                    img.save(buffer, format="PNG")
-                    return buffer.getvalue()
-
-                logger.warning(f"Frame {target_frame_idx} not found for timestamp {timestamp_sec}s")
+            if result.returncode != 0:
+                stderr = result.stderr.decode() if result.stderr else "Unknown error"
+                logger.warning(f"ffmpeg failed for {timestamp_sec}s: {stderr}")
                 return None
+
+            # Read PNG data
+            with open(tmp_path, "rb") as f:
+                data = f.read()
+
+            return data if data else None
 
         except FileNotFoundError:
             logger.error(f"Video file not found: {self._video_path}")
             return None
+        except subprocess.TimeoutExpired:
+            logger.error(f"ffmpeg timed out at {timestamp_sec}s")
+            return None
         except Exception as e:
             logger.error(f"Failed to extract frame at {timestamp_sec}s: {e}")
             return None
+        finally:
+            # Clean up temp file
+            try:
+                Path(tmp_path).unlink(missing_ok=True)
+            except Exception:
+                pass
 
     def _calculate_frame_times(
         self,
@@ -299,12 +303,69 @@ class FrameExtractor:
             logger.warning(f"Failed to extract {frame_name} frame for step {step_num}")
             return None
 
+    def _extract_frames_parallel(
+        self,
+        extractions: list[tuple[float, Path]],
+        max_workers: int | None = None,
+    ) -> list[Path]:
+        """Extract multiple frames in parallel using ffmpeg.
+
+        Args:
+            extractions: List of (timestamp, output_path) tuples
+            max_workers: Max parallel processes (defaults to CPU count * 4, max 24)
+
+        Returns:
+            List of successfully extracted paths
+        """
+        if max_workers is None:
+            max_workers = min(24, (os.cpu_count() or 4) * 4)
+
+        def extract_single(timestamp: float, output_path: Path) -> Path | None:
+            """Extract a single frame directly to output path."""
+            timestamp = max(0.0, timestamp)
+            cmd = [
+                "ffmpeg",
+                "-ss", f"{timestamp:.3f}",
+                "-i", str(self._video_path),
+                "-frames:v", "1",
+                "-q:v", "2",
+                "-y",
+                "-loglevel", "error",
+                str(output_path),
+            ]
+            try:
+                result = subprocess.run(cmd, capture_output=True, timeout=30)
+                if result.returncode == 0 and output_path.exists():
+                    return output_path
+            except Exception as e:
+                logger.debug(f"Failed to extract {output_path.name}: {e}")
+            return None
+
+        extracted: list[Path] = []
+
+        with ThreadPoolExecutor(max_workers=max_workers) as executor:
+            future_to_path = {
+                executor.submit(extract_single, ts, path): path
+                for ts, path in extractions
+            }
+
+            for future in as_completed(future_to_path):
+                path = future_to_path[future]
+                try:
+                    result = future.result()
+                    if result:
+                        extracted.append(result)
+                except Exception as e:
+                    logger.warning(f"Failed to extract {path}: {e}")
+
+        return extracted
+
     def extract_for_touches(
         self,
         touch_events: list[dict[str, Any]],
         output_dir: Path,
     ) -> list[Path]:
-        """Extract frames for touch events using midpoint approach.
+        """Extract frames for touch events using parallel ffmpeg.
 
         Uses midpoints between consecutive gestures to ensure non-overlapping
         time ranges. Frame count varies by gesture type:
@@ -321,10 +382,8 @@ class FrameExtractor:
         """
         output_dir.mkdir(parents=True, exist_ok=True)
 
-        extracted_paths: list[Path] = []
-
         if not touch_events:
-            return extracted_paths
+            return []
 
         # Get actual recording duration for boundary calculation
         video_duration = self._get_actual_duration()
@@ -335,82 +394,60 @@ class FrameExtractor:
         # Calculate frame times using midpoint approach
         frame_times = self._calculate_frame_times(touch_events, video_duration)
 
+        # Build extraction tasks: (timestamp, output_path)
+        extractions: list[tuple[float, Path]] = []
+
         for ft in frame_times:
             step_num = ft["step_num"]
             gesture = ft["gesture"]
             step_str = f"{step_num:03d}"
 
             # BEFORE frame (common to all gestures)
-            path = self._extract_and_save(
+            extractions.append((
                 ft["before_time"],
-                output_dir / f"step_{step_str}_before.png",
-                step_num, "before"
-            )
-            if path:
-                extracted_paths.append(path)
+                output_dir / f"step_{step_str}_before.png"
+            ))
 
             # Gesture-specific frames
             if gesture == "tap":
-                path = self._extract_and_save(
+                extractions.append((
                     ft["touch_time"],
-                    output_dir / f"step_{step_str}_touch.png",
-                    step_num, "touch"
-                )
-                if path:
-                    extracted_paths.append(path)
-
+                    output_dir / f"step_{step_str}_touch.png"
+                ))
             elif gesture == "swipe":
-                path = self._extract_and_save(
+                extractions.append((
                     ft["swipe_start_time"],
-                    output_dir / f"step_{step_str}_swipe_start.png",
-                    step_num, "swipe_start"
-                )
-                if path:
-                    extracted_paths.append(path)
-
-                path = self._extract_and_save(
+                    output_dir / f"step_{step_str}_swipe_start.png"
+                ))
+                extractions.append((
                     ft["swipe_end_time"],
-                    output_dir / f"step_{step_str}_swipe_end.png",
-                    step_num, "swipe_end"
-                )
-                if path:
-                    extracted_paths.append(path)
-
+                    output_dir / f"step_{step_str}_swipe_end.png"
+                ))
             elif gesture == "long_press":
-                path = self._extract_and_save(
+                extractions.append((
                     ft["press_start_time"],
-                    output_dir / f"step_{step_str}_press_start.png",
-                    step_num, "press_start"
-                )
-                if path:
-                    extracted_paths.append(path)
-
-                path = self._extract_and_save(
+                    output_dir / f"step_{step_str}_press_start.png"
+                ))
+                extractions.append((
                     ft["press_held_time"],
-                    output_dir / f"step_{step_str}_press_held.png",
-                    step_num, "press_held"
-                )
-                if path:
-                    extracted_paths.append(path)
-
+                    output_dir / f"step_{step_str}_press_held.png"
+                ))
             else:
                 # Unknown gesture - extract single touch frame
-                path = self._extract_and_save(
+                extractions.append((
                     ft.get("touch_time", ft["before_time"]),
-                    output_dir / f"step_{step_str}_touch.png",
-                    step_num, "touch"
-                )
-                if path:
-                    extracted_paths.append(path)
+                    output_dir / f"step_{step_str}_touch.png"
+                ))
 
             # AFTER frame (common to all gestures)
-            path = self._extract_and_save(
+            extractions.append((
                 ft["after_time"],
-                output_dir / f"step_{step_str}_after.png",
-                step_num, "after"
-            )
-            if path:
-                extracted_paths.append(path)
+                output_dir / f"step_{step_str}_after.png"
+            ))
+
+        # Extract all frames in parallel
+        logger.info(f"Extracting {len(extractions)} frames in parallel...")
+        extracted_paths = self._extract_frames_parallel(extractions)
 
         logger.info(
             f"Extracted {len(extracted_paths)} frames for {len(touch_events)} gestures"
@@ -517,7 +554,7 @@ class FrameExtractor:
         touch_events: list[dict[str, Any]],
         output_dir: Path,
     ) -> list[Path]:
-        """Extract frames for collapsed steps.
+        """Extract frames for collapsed steps using parallel ffmpeg.
 
         Uses collapsed step data with original_indices to find timestamps
         in raw touch_events. For "type" action, extracts only before/after
@@ -539,10 +576,8 @@ class FrameExtractor:
         """
         output_dir.mkdir(parents=True, exist_ok=True)
 
-        extracted_paths: list[Path] = []
-
         if not collapsed_steps or not touch_events:
-            return extracted_paths
+            return []
 
         # Get actual recording duration for boundary calculation
         video_duration = self._get_actual_duration()
@@ -556,86 +591,63 @@ class FrameExtractor:
             collapsed_steps, touch_events, video_duration
         )
 
+        # Build extraction tasks: (timestamp, output_path)
+        extractions: list[tuple[float, Path]] = []
+
         for ft in frame_times:
             step_num = ft["step_num"]
             action = ft["action"]
             step_str = f"{step_num:03d}"
 
             # BEFORE frame (common to all actions)
-            path = self._extract_and_save(
+            extractions.append((
                 ft["before_time"],
-                output_dir / f"step_{step_str}_before.png",
-                step_num, "before"
-            )
-            if path:
-                extracted_paths.append(path)
+                output_dir / f"step_{step_str}_before.png"
+            ))
 
             # Action-specific frames
             if action == "type":
                 # "type" action: no touch frame, only before and after
                 pass
-
             elif action == "tap":
-                path = self._extract_and_save(
+                extractions.append((
                     ft["touch_time"],
-                    output_dir / f"step_{step_str}_touch.png",
-                    step_num, "touch"
-                )
-                if path:
-                    extracted_paths.append(path)
-
+                    output_dir / f"step_{step_str}_touch.png"
+                ))
             elif action == "swipe":
-                path = self._extract_and_save(
+                extractions.append((
                     ft["swipe_start_time"],
-                    output_dir / f"step_{step_str}_swipe_start.png",
-                    step_num, "swipe_start"
-                )
-                if path:
-                    extracted_paths.append(path)
-
-                path = self._extract_and_save(
+                    output_dir / f"step_{step_str}_swipe_start.png"
+                ))
+                extractions.append((
                     ft["swipe_end_time"],
-                    output_dir / f"step_{step_str}_swipe_end.png",
-                    step_num, "swipe_end"
-                )
-                if path:
-                    extracted_paths.append(path)
-
+                    output_dir / f"step_{step_str}_swipe_end.png"
+                ))
             elif action == "long_press":
-                path = self._extract_and_save(
+                extractions.append((
                     ft["press_start_time"],
-                    output_dir / f"step_{step_str}_press_start.png",
-                    step_num, "press_start"
-                )
-                if path:
-                    extracted_paths.append(path)
-
-                path = self._extract_and_save(
+                    output_dir / f"step_{step_str}_press_start.png"
+                ))
+                extractions.append((
                     ft["press_held_time"],
-                    output_dir / f"step_{step_str}_press_held.png",
-                    step_num, "press_held"
-                )
-                if path:
-                    extracted_paths.append(path)
-
+                    output_dir / f"step_{step_str}_press_held.png"
+                ))
             else:
                 # Unknown action - extract single touch frame
-                path = self._extract_and_save(
+                extractions.append((
                     ft.get("touch_time", ft["before_time"]),
-                    output_dir / f"step_{step_str}_touch.png",
-                    step_num, "touch"
-                )
-                if path:
-                    extracted_paths.append(path)
+                    output_dir / f"step_{step_str}_touch.png"
+                ))
 
             # AFTER frame (common to all actions)
-            path = self._extract_and_save(
+            extractions.append((
                 ft["after_time"],
-                output_dir / f"step_{step_str}_after.png",
-                step_num, "after"
-            )
-            if path:
-                extracted_paths.append(path)
+                output_dir / f"step_{step_str}_after.png"
+            ))
+
+        # Extract all frames in parallel
+        logger.info(f"Extracting {len(extractions)} frames in parallel...")
+        extracted_paths = self._extract_frames_parallel(extractions)
 
         logger.info(
             f"Extracted {len(extracted_paths)} frames for "

@@ -1,7 +1,8 @@
 """Tests for FrameExtractor."""
 
+import subprocess
 from pathlib import Path
-from unittest.mock import MagicMock, patch
+from unittest.mock import MagicMock, patch, mock_open
 
 from mutcli.core.frame_extractor import FrameExtractor
 from mutcli.core.step_collapsing import CollapsedStep
@@ -34,29 +35,21 @@ class TestFrameExtractorInitialization:
 class TestExtractFrame:
     """Test extract_frame method."""
 
-    def test_returns_png_bytes(self):
+    def test_returns_png_bytes(self, tmp_path):
         """extract_frame should return PNG bytes for valid timestamp."""
-        mock_frame = MagicMock()
-        mock_frame.pts = 1500
-        mock_image = MagicMock()
-        mock_frame.to_image.return_value = mock_image
+        png_data = b"\x89PNG\r\n\x1a\ntest_data"
 
-        # Mock PIL Image save to BytesIO
-        def save_png(buffer, format):
-            buffer.write(b"\x89PNG\r\n\x1a\n")  # PNG magic bytes
+        # Mock subprocess.run to succeed
+        mock_result = MagicMock()
+        mock_result.returncode = 0
 
-        mock_image.save.side_effect = save_png
+        def run_side_effect(cmd, **kwargs):
+            # Write PNG data to the temp file (last arg is output path)
+            output_path = cmd[-1]
+            Path(output_path).write_bytes(png_data)
+            return mock_result
 
-        mock_stream = MagicMock()
-        mock_stream.time_base = 0.001  # 1ms time base
-
-        mock_container = MagicMock()
-        mock_container.streams.video = [mock_stream]
-        mock_container.decode.return_value = iter([mock_frame])
-
-        with patch("av.open") as mock_av_open:
-            mock_av_open.return_value.__enter__.return_value = mock_container
-
+        with patch("mutcli.core.frame_extractor.subprocess.run", side_effect=run_side_effect):
             extractor = FrameExtractor("/path/to/video.mp4")
             result = extractor.extract_frame(1.5)
 
@@ -64,10 +57,12 @@ class TestExtractFrame:
         assert result.startswith(b"\x89PNG")
 
     def test_returns_none_on_file_not_found(self):
-        """extract_frame should return None if video file not found."""
-        with patch("av.open") as mock_av_open:
-            mock_av_open.side_effect = FileNotFoundError("Video not found")
+        """extract_frame should return None if ffmpeg fails with file not found."""
+        mock_result = MagicMock()
+        mock_result.returncode = 1
+        mock_result.stderr = b"No such file or directory"
 
+        with patch("mutcli.core.frame_extractor.subprocess.run", return_value=mock_result):
             extractor = FrameExtractor("/nonexistent/video.mp4")
             result = extractor.extract_frame(1.0)
 
@@ -75,56 +70,50 @@ class TestExtractFrame:
 
     def test_returns_none_on_extraction_error(self):
         """extract_frame should return None on extraction error."""
-        with patch("av.open") as mock_av_open:
-            mock_av_open.side_effect = Exception("Extraction failed")
+        mock_result = MagicMock()
+        mock_result.returncode = 1
+        mock_result.stderr = b"Extraction failed"
 
+        with patch("mutcli.core.frame_extractor.subprocess.run", return_value=mock_result):
             extractor = FrameExtractor("/path/to/video.mp4")
             result = extractor.extract_frame(1.0)
 
         assert result is None
 
-    def test_returns_none_when_no_frames(self):
-        """extract_frame should return None when no frames decoded."""
-        mock_stream = MagicMock()
-        mock_stream.time_base = 0.001
-
-        mock_container = MagicMock()
-        mock_container.streams.video = [mock_stream]
-        mock_container.decode.return_value = iter([])  # No frames
-
-        with patch("av.open") as mock_av_open:
-            mock_av_open.return_value.__enter__.return_value = mock_container
-
+    def test_returns_none_on_timeout(self):
+        """extract_frame should return None when ffmpeg times out."""
+        with patch(
+            "mutcli.core.frame_extractor.subprocess.run",
+            side_effect=subprocess.TimeoutExpired(cmd="ffmpeg", timeout=30),
+        ):
             extractor = FrameExtractor("/path/to/video.mp4")
             result = extractor.extract_frame(1.5)
 
         assert result is None
 
-    def test_seeks_to_correct_timestamp(self):
-        """extract_frame should seek to the correct timestamp with backward=True."""
-        mock_frame = MagicMock()
-        mock_frame.pts = 2500
-        mock_image = MagicMock()
-        mock_frame.to_image.return_value = mock_image
-        mock_image.save.side_effect = lambda buf, fmt: buf.write(b"\x89PNG")
+    def test_clamps_negative_timestamp(self, tmp_path):
+        """extract_frame should clamp negative timestamps to 0."""
+        png_data = b"\x89PNG\r\n\x1a\n"
+        mock_result = MagicMock()
+        mock_result.returncode = 0
 
-        mock_stream = MagicMock()
-        mock_stream.time_base = 0.001  # 1ms time base, so 1s = 1000 pts
+        captured_cmd = []
 
-        mock_container = MagicMock()
-        mock_container.streams.video = [mock_stream]
-        mock_container.decode.return_value = iter([mock_frame])
+        def run_side_effect(cmd, **kwargs):
+            captured_cmd.clear()
+            captured_cmd.extend(cmd)
+            output_path = cmd[-1]
+            Path(output_path).write_bytes(png_data)
+            return mock_result
 
-        with patch("av.open") as mock_av_open:
-            mock_av_open.return_value.__enter__.return_value = mock_container
-
+        with patch("mutcli.core.frame_extractor.subprocess.run", side_effect=run_side_effect):
             extractor = FrameExtractor("/path/to/video.mp4")
-            extractor.extract_frame(2.5)
+            extractor.extract_frame(-1.0)
 
-        # 2.5 seconds / 0.001 time_base = 2500 pts, with backward=True for keyframe
-        mock_container.seek.assert_called_once_with(
-            2500, stream=mock_stream, backward=True
-        )
+        # Should clamp to 0.000
+        assert "-ss" in captured_cmd
+        ss_idx = captured_cmd.index("-ss")
+        assert captured_cmd[ss_idx + 1] == "0.000"
 
 
 class TestCalculateFrameTimes:
@@ -251,15 +240,20 @@ class TestExtractForTouches:
             {"timestamp": 2.0, "gesture": "tap", "duration_ms": 100}
         ]
 
-        with patch.object(FrameExtractor, "extract_frame", return_value=b"\x89PNG"), \
+        def mock_parallel_extract(extractions, max_workers=None):
+            # Return all requested paths (simulating successful extraction)
+            return [path for _, path in extractions]
+
+        with patch.object(FrameExtractor, "_extract_frames_parallel", side_effect=mock_parallel_extract), \
              patch.object(FrameExtractor, "get_duration", return_value=5.0):
             extractor = FrameExtractor("/path/to/video.mp4")
             paths = extractor.extract_for_touches(touch_events, output_dir)
 
         assert len(paths) == 3
-        assert paths[0].name == "step_001_before.png"
-        assert paths[1].name == "step_001_touch.png"
-        assert paths[2].name == "step_001_after.png"
+        path_names = [p.name for p in paths]
+        assert "step_001_before.png" in path_names
+        assert "step_001_touch.png" in path_names
+        assert "step_001_after.png" in path_names
 
     def test_swipe_extracts_four_frames(self, tmp_path):
         """Swipe should extract before, swipe_start, swipe_end, after (4 frames)."""
@@ -268,16 +262,20 @@ class TestExtractForTouches:
             {"timestamp": 2.0, "gesture": "swipe", "duration_ms": 500}
         ]
 
-        with patch.object(FrameExtractor, "extract_frame", return_value=b"\x89PNG"), \
+        def mock_parallel_extract(extractions, max_workers=None):
+            return [path for _, path in extractions]
+
+        with patch.object(FrameExtractor, "_extract_frames_parallel", side_effect=mock_parallel_extract), \
              patch.object(FrameExtractor, "get_duration", return_value=5.0):
             extractor = FrameExtractor("/path/to/video.mp4")
             paths = extractor.extract_for_touches(touch_events, output_dir)
 
         assert len(paths) == 4
-        assert paths[0].name == "step_001_before.png"
-        assert paths[1].name == "step_001_swipe_start.png"
-        assert paths[2].name == "step_001_swipe_end.png"
-        assert paths[3].name == "step_001_after.png"
+        path_names = [p.name for p in paths]
+        assert "step_001_before.png" in path_names
+        assert "step_001_swipe_start.png" in path_names
+        assert "step_001_swipe_end.png" in path_names
+        assert "step_001_after.png" in path_names
 
     def test_long_press_extracts_four_frames(self, tmp_path):
         """Long press should extract before, press_start, press_held, after (4 frames)."""
@@ -286,16 +284,20 @@ class TestExtractForTouches:
             {"timestamp": 2.0, "gesture": "long_press", "duration_ms": 1000}
         ]
 
-        with patch.object(FrameExtractor, "extract_frame", return_value=b"\x89PNG"), \
+        def mock_parallel_extract(extractions, max_workers=None):
+            return [path for _, path in extractions]
+
+        with patch.object(FrameExtractor, "_extract_frames_parallel", side_effect=mock_parallel_extract), \
              patch.object(FrameExtractor, "get_duration", return_value=5.0):
             extractor = FrameExtractor("/path/to/video.mp4")
             paths = extractor.extract_for_touches(touch_events, output_dir)
 
         assert len(paths) == 4
-        assert paths[0].name == "step_001_before.png"
-        assert paths[1].name == "step_001_press_start.png"
-        assert paths[2].name == "step_001_press_held.png"
-        assert paths[3].name == "step_001_after.png"
+        path_names = [p.name for p in paths]
+        assert "step_001_before.png" in path_names
+        assert "step_001_press_start.png" in path_names
+        assert "step_001_press_held.png" in path_names
+        assert "step_001_after.png" in path_names
 
     def test_multiple_gestures_numbering(self, tmp_path):
         """Multiple gestures should be numbered correctly."""
@@ -306,12 +308,15 @@ class TestExtractForTouches:
             {"timestamp": 3.0, "gesture": "tap", "duration_ms": 50},
         ]
 
-        with patch.object(FrameExtractor, "extract_frame", return_value=b"\x89PNG"), \
+        def mock_parallel_extract(extractions, max_workers=None):
+            return [path for _, path in extractions]
+
+        with patch.object(FrameExtractor, "_extract_frames_parallel", side_effect=mock_parallel_extract), \
              patch.object(FrameExtractor, "get_duration", return_value=5.0):
             extractor = FrameExtractor("/path/to/video.mp4")
             paths = extractor.extract_for_touches(touch_events, output_dir)
 
-        # 3 taps + 4 swipe = 11 frames total? No: 3 + 4 + 3 = 10
+        # 3 tap + 4 swipe + 3 tap = 10
         assert len(paths) == 10
 
         # Check step numbering
@@ -339,31 +344,27 @@ class TestExtractForTouches:
         assert all(isinstance(p, Path) for p in result)
 
     def test_skips_failed_extractions(self, tmp_path):
-        """Should skip frames when extraction returns None."""
+        """Should skip frames when extraction fails."""
         output_dir = tmp_path / "screenshots"
         touch_events = [
             {"timestamp": 1.0, "gesture": "tap", "duration_ms": 50},
         ]
 
-        # Fail the "touch" frame extraction
-        call_count = [0]
-
-        def extract_side_effect(timestamp):
-            call_count[0] += 1
-            if call_count[0] == 2:  # Second call is touch frame
-                return None
-            return b"\x89PNG"
+        def mock_parallel_extract(extractions, max_workers=None):
+            # Skip the touch frame (index 1)
+            return [path for i, (_, path) in enumerate(extractions) if i != 1]
 
         with patch.object(
-            FrameExtractor, "extract_frame", side_effect=extract_side_effect
+            FrameExtractor, "_extract_frames_parallel", side_effect=mock_parallel_extract
         ), patch.object(FrameExtractor, "get_duration", return_value=5.0):
             extractor = FrameExtractor("/path/to/video.mp4")
             paths = extractor.extract_for_touches(touch_events, output_dir)
 
         # Should have before and after, but not touch
         assert len(paths) == 2
-        assert paths[0].name == "step_001_before.png"
-        assert paths[1].name == "step_001_after.png"
+        path_names = [p.name for p in paths]
+        assert "step_001_before.png" in path_names
+        assert "step_001_after.png" in path_names
 
     def test_empty_touch_events(self, tmp_path):
         """Should return empty list for empty touch events."""
@@ -395,53 +396,54 @@ class TestExtractForTouches:
 
 
 class TestGetDuration:
-    """Test get_duration method."""
+    """Test get_duration method using ffprobe."""
 
-    def test_returns_duration_from_stream(self):
-        """Should return duration calculated from stream."""
-        mock_stream = MagicMock()
-        mock_stream.duration = 5000
-        mock_stream.time_base = 0.001  # 5000 * 0.001 = 5.0s
+    def test_returns_duration_from_ffprobe(self):
+        """Should return duration from ffprobe output."""
+        mock_result = MagicMock()
+        mock_result.returncode = 0
+        mock_result.stdout = "5.0\n"
 
-        mock_container = MagicMock()
-        mock_container.streams.video = [mock_stream]
-
-        with patch("av.open") as mock_av_open:
-            mock_av_open.return_value.__enter__.return_value = mock_container
-
+        with patch("mutcli.core.frame_extractor.subprocess.run", return_value=mock_result):
             extractor = FrameExtractor("/path/to/video.mp4")
             result = extractor.get_duration()
 
         assert result == 5.0
 
     def test_returns_zero_on_error(self):
-        """Should return 0.0 on error."""
-        with patch("av.open") as mock_av_open:
-            mock_av_open.side_effect = Exception("Failed to open")
+        """Should return 0.0 on ffprobe error."""
+        mock_result = MagicMock()
+        mock_result.returncode = 1
+        mock_result.stdout = ""
 
+        with patch("mutcli.core.frame_extractor.subprocess.run", return_value=mock_result):
             extractor = FrameExtractor("/path/to/video.mp4")
             result = extractor.get_duration()
 
         assert result == 0.0
 
-    def test_uses_container_duration_as_fallback(self):
-        """Should use container duration if stream duration not available."""
-        mock_stream = MagicMock()
-        mock_stream.duration = None
-        mock_stream.time_base = None
-
-        mock_container = MagicMock()
-        mock_container.streams.video = [mock_stream]
-        mock_container.duration = 5000000  # microseconds
-
-        with patch("av.open") as mock_av_open, \
-             patch("av.time_base", 1000000):  # 1 second = 1000000
-            mock_av_open.return_value.__enter__.return_value = mock_container
-
+    def test_returns_zero_on_timeout(self):
+        """Should return 0.0 if ffprobe times out."""
+        with patch(
+            "mutcli.core.frame_extractor.subprocess.run",
+            side_effect=subprocess.TimeoutExpired(cmd="ffprobe", timeout=10),
+        ):
             extractor = FrameExtractor("/path/to/video.mp4")
             result = extractor.get_duration()
 
-        assert result == 5.0
+        assert result == 0.0
+
+    def test_returns_zero_on_parse_error(self):
+        """Should return 0.0 if duration cannot be parsed."""
+        mock_result = MagicMock()
+        mock_result.returncode = 0
+        mock_result.stdout = "not_a_number\n"
+
+        with patch("mutcli.core.frame_extractor.subprocess.run", return_value=mock_result):
+            extractor = FrameExtractor("/path/to/video.mp4")
+            result = extractor.get_duration()
+
+        assert result == 0.0
 
 
 class TestCalculateCollapsedFrameTimes:
@@ -649,7 +651,10 @@ class TestExtractForCollapsedSteps:
             {"timestamp": 1.4, "gesture": "tap", "duration_ms": 50},
         ]
 
-        with patch.object(FrameExtractor, "extract_frame", return_value=b"\x89PNG"), \
+        def mock_parallel_extract(extractions, max_workers=None):
+            return [path for _, path in extractions]
+
+        with patch.object(FrameExtractor, "_extract_frames_parallel", side_effect=mock_parallel_extract), \
              patch.object(FrameExtractor, "get_duration", return_value=5.0):
             extractor = FrameExtractor("/path/to/video.mp4")
             paths = extractor.extract_for_collapsed_steps(
@@ -657,8 +662,9 @@ class TestExtractForCollapsedSteps:
             )
 
         assert len(paths) == 2
-        assert paths[0].name == "step_001_before.png"
-        assert paths[1].name == "step_001_after.png"
+        path_names = [p.name for p in paths]
+        assert "step_001_before.png" in path_names
+        assert "step_001_after.png" in path_names
 
     def test_tap_extracts_three_frames(self, tmp_path):
         """Tap action should extract before, touch, after (3 frames)."""
@@ -677,7 +683,10 @@ class TestExtractForCollapsedSteps:
             {"timestamp": 2.0, "gesture": "tap", "duration_ms": 100},
         ]
 
-        with patch.object(FrameExtractor, "extract_frame", return_value=b"\x89PNG"), \
+        def mock_parallel_extract(extractions, max_workers=None):
+            return [path for _, path in extractions]
+
+        with patch.object(FrameExtractor, "_extract_frames_parallel", side_effect=mock_parallel_extract), \
              patch.object(FrameExtractor, "get_duration", return_value=5.0):
             extractor = FrameExtractor("/path/to/video.mp4")
             paths = extractor.extract_for_collapsed_steps(
@@ -685,9 +694,10 @@ class TestExtractForCollapsedSteps:
             )
 
         assert len(paths) == 3
-        assert paths[0].name == "step_001_before.png"
-        assert paths[1].name == "step_001_touch.png"
-        assert paths[2].name == "step_001_after.png"
+        path_names = [p.name for p in paths]
+        assert "step_001_before.png" in path_names
+        assert "step_001_touch.png" in path_names
+        assert "step_001_after.png" in path_names
 
     def test_swipe_extracts_four_frames(self, tmp_path):
         """Swipe action should extract before, swipe_start, swipe_end, after."""
@@ -708,7 +718,10 @@ class TestExtractForCollapsedSteps:
             {"timestamp": 2.0, "gesture": "swipe", "duration_ms": 500},
         ]
 
-        with patch.object(FrameExtractor, "extract_frame", return_value=b"\x89PNG"), \
+        def mock_parallel_extract(extractions, max_workers=None):
+            return [path for _, path in extractions]
+
+        with patch.object(FrameExtractor, "_extract_frames_parallel", side_effect=mock_parallel_extract), \
              patch.object(FrameExtractor, "get_duration", return_value=5.0):
             extractor = FrameExtractor("/path/to/video.mp4")
             paths = extractor.extract_for_collapsed_steps(
@@ -716,10 +729,11 @@ class TestExtractForCollapsedSteps:
             )
 
         assert len(paths) == 4
-        assert paths[0].name == "step_001_before.png"
-        assert paths[1].name == "step_001_swipe_start.png"
-        assert paths[2].name == "step_001_swipe_end.png"
-        assert paths[3].name == "step_001_after.png"
+        path_names = [p.name for p in paths]
+        assert "step_001_before.png" in path_names
+        assert "step_001_swipe_start.png" in path_names
+        assert "step_001_swipe_end.png" in path_names
+        assert "step_001_after.png" in path_names
 
     def test_long_press_extracts_four_frames(self, tmp_path):
         """Long press should extract before, press_start, press_held, after."""
@@ -739,7 +753,10 @@ class TestExtractForCollapsedSteps:
             {"timestamp": 2.0, "gesture": "long_press", "duration_ms": 1000},
         ]
 
-        with patch.object(FrameExtractor, "extract_frame", return_value=b"\x89PNG"), \
+        def mock_parallel_extract(extractions, max_workers=None):
+            return [path for _, path in extractions]
+
+        with patch.object(FrameExtractor, "_extract_frames_parallel", side_effect=mock_parallel_extract), \
              patch.object(FrameExtractor, "get_duration", return_value=5.0):
             extractor = FrameExtractor("/path/to/video.mp4")
             paths = extractor.extract_for_collapsed_steps(
@@ -747,10 +764,11 @@ class TestExtractForCollapsedSteps:
             )
 
         assert len(paths) == 4
-        assert paths[0].name == "step_001_before.png"
-        assert paths[1].name == "step_001_press_start.png"
-        assert paths[2].name == "step_001_press_held.png"
-        assert paths[3].name == "step_001_after.png"
+        path_names = [p.name for p in paths]
+        assert "step_001_before.png" in path_names
+        assert "step_001_press_start.png" in path_names
+        assert "step_001_press_held.png" in path_names
+        assert "step_001_after.png" in path_names
 
     def test_type_then_tap_correct_frame_count(self, tmp_path):
         """Type followed by tap should have 2 + 3 = 5 frames."""
@@ -780,7 +798,10 @@ class TestExtractForCollapsedSteps:
             {"timestamp": 3.0, "gesture": "tap", "duration_ms": 100},
         ]
 
-        with patch.object(FrameExtractor, "extract_frame", return_value=b"\x89PNG"), \
+        def mock_parallel_extract(extractions, max_workers=None):
+            return [path for _, path in extractions]
+
+        with patch.object(FrameExtractor, "_extract_frames_parallel", side_effect=mock_parallel_extract), \
              patch.object(FrameExtractor, "get_duration", return_value=5.0):
             extractor = FrameExtractor("/path/to/video.mp4")
             paths = extractor.extract_for_collapsed_steps(
@@ -844,7 +865,10 @@ class TestExtractForCollapsedSteps:
             {"timestamp": 1.0, "gesture": "tap", "duration_ms": 50},
         ]
 
-        with patch.object(FrameExtractor, "extract_frame", return_value=b"\x89PNG"), \
+        def mock_parallel_extract(extractions, max_workers=None):
+            return [path for _, path in extractions]
+
+        with patch.object(FrameExtractor, "_extract_frames_parallel", side_effect=mock_parallel_extract), \
              patch.object(FrameExtractor, "get_duration", return_value=5.0):
             extractor = FrameExtractor("/path/to/video.mp4")
             extractor.extract_for_collapsed_steps(
@@ -854,7 +878,7 @@ class TestExtractForCollapsedSteps:
         assert output_dir.exists()
 
     def test_skips_failed_extractions(self, tmp_path):
-        """Should skip frames when extraction returns None."""
+        """Should skip frames when extraction fails."""
         output_dir = tmp_path / "screenshots"
 
         collapsed_steps = [
@@ -870,17 +894,12 @@ class TestExtractForCollapsedSteps:
             {"timestamp": 1.0, "gesture": "tap", "duration_ms": 50},
         ]
 
-        # Fail the touch frame extraction (second call)
-        call_count = [0]
-
-        def extract_side_effect(timestamp):
-            call_count[0] += 1
-            if call_count[0] == 2:  # Second call is touch frame
-                return None
-            return b"\x89PNG"
+        def mock_parallel_extract(extractions, max_workers=None):
+            # Skip the touch frame (index 1)
+            return [path for i, (_, path) in enumerate(extractions) if i != 1]
 
         with patch.object(
-            FrameExtractor, "extract_frame", side_effect=extract_side_effect
+            FrameExtractor, "_extract_frames_parallel", side_effect=mock_parallel_extract
         ), patch.object(FrameExtractor, "get_duration", return_value=5.0):
             extractor = FrameExtractor("/path/to/video.mp4")
             paths = extractor.extract_for_collapsed_steps(
@@ -889,8 +908,9 @@ class TestExtractForCollapsedSteps:
 
         # Should have before and after, but not touch
         assert len(paths) == 2
-        assert paths[0].name == "step_001_before.png"
-        assert paths[1].name == "step_001_after.png"
+        path_names = [p.name for p in paths]
+        assert "step_001_before.png" in path_names
+        assert "step_001_after.png" in path_names
 
     def test_uses_step_index_for_numbering(self, tmp_path):
         """Should use step.index for file naming, not sequential counter."""
@@ -912,7 +932,10 @@ class TestExtractForCollapsedSteps:
             {"timestamp": 1.2, "gesture": "tap", "duration_ms": 50},
         ]
 
-        with patch.object(FrameExtractor, "extract_frame", return_value=b"\x89PNG"), \
+        def mock_parallel_extract(extractions, max_workers=None):
+            return [path for _, path in extractions]
+
+        with patch.object(FrameExtractor, "_extract_frames_parallel", side_effect=mock_parallel_extract), \
              patch.object(FrameExtractor, "get_duration", return_value=5.0):
             extractor = FrameExtractor("/path/to/video.mp4")
             paths = extractor.extract_for_collapsed_steps(
@@ -920,5 +943,6 @@ class TestExtractForCollapsedSteps:
             )
 
         # Should use step index 3 in filenames
-        assert paths[0].name == "step_003_before.png"
-        assert paths[1].name == "step_003_after.png"
+        path_names = [p.name for p in paths]
+        assert "step_003_before.png" in path_names
+        assert "step_003_after.png" in path_names
