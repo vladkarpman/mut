@@ -232,8 +232,10 @@ class PreviewServer:
 
         # Save to test folder for debugging/inspection (only once)
         if save_to_file and not self._html_saved:
+            # For file:// access, remove 'recording/' prefix so paths work directly
+            file_html = html.replace('recording/', '')
             approval_path = self.recording_dir / "approval.html"
-            approval_path.write_text(html, encoding="utf-8")
+            approval_path.write_text(file_html, encoding="utf-8")
             self._html_saved = True
 
         return html
