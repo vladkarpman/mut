@@ -205,7 +205,7 @@ def record(
     console.print()
 
     # Create and start recorder
-    recorder = Recorder(name=name, device_id=device_id)
+    recorder = Recorder(name=name, device_id=device_id, app_package=app)
 
     # Setup verbose logging after recorder is created (so we have the output directory)
     if config and config.verbose:

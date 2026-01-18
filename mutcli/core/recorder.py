@@ -92,6 +92,7 @@ class Recorder:
         name: str,
         device_id: str,
         output_dir: Path | None = None,
+        app_package: str | None = None,
     ):
         """Initialize recorder.
 
@@ -99,10 +100,13 @@ class Recorder:
             name: Test name
             device_id: ADB device identifier
             output_dir: Output directory (defaults to tests/{name}/)
+            app_package: App package name for UI hierarchy filtering.
+                        Required for accurate element identification.
         """
         self._name = name
         self._device_id = device_id
         self._output_dir = output_dir or Path(f"tests/{name}")
+        self._app_package = app_package
         self._recording = False
         self._start_time: float | None = None
 
@@ -166,8 +170,14 @@ class Recorder:
 
             # Start UI hierarchy monitor with same reference time
             # This ensures UI dump timestamps are synchronized with video and touch
-            self._ui_monitor = UIHierarchyMonitor(self._device_id)
-            self._ui_monitor.start(reference_time=video_start_time)
+            if self._app_package:
+                self._ui_monitor = UIHierarchyMonitor(self._device_id, self._app_package)
+                self._ui_monitor.start(reference_time=video_start_time)
+            else:
+                logger.warning(
+                    "No app_package provided - UI hierarchy monitoring disabled. "
+                    "Provide --app to enable element identification."
+                )
 
             # Set recording state BEFORE saving state file (Issue 5)
             self._start_time = time.time()

@@ -28,13 +28,16 @@ class UIHierarchyMonitor:
         dumps = monitor.get_dumps()
     """
 
-    def __init__(self, device_id: str):
+    def __init__(self, device_id: str, app_package: str):
         """Initialize monitor for a specific device.
 
         Args:
             device_id: ADB device identifier
+            app_package: App package to filter dumps. Only dumps when this
+                        app has focus are saved.
         """
         self._device_id = device_id
+        self._app_package = app_package
         self._dumps: list[dict[str, Any]] = []
         self._lock = threading.Lock()
         self._running = False
@@ -42,6 +45,7 @@ class UIHierarchyMonitor:
         self._reference_time: float | None = None
         self._parser = UIElementParser()
         self._dump_count = 0
+        self._skipped_count = 0
 
     @property
     def is_running(self) -> bool:
@@ -84,7 +88,11 @@ class UIHierarchyMonitor:
             self._thread.join(timeout=5)
             self._thread = None
 
-        logger.info(f"UI hierarchy monitoring stopped ({self._dump_count} dumps captured)")
+        msg = f"UI hierarchy monitoring stopped ({self._dump_count} dumps captured"
+        if self._skipped_count > 0:
+            msg += f", {self._skipped_count} skipped due to wrong focus"
+        msg += ")"
+        logger.info(msg)
 
     def get_dumps(self) -> list[dict[str, Any]]:
         """Get all captured dumps (thread-safe copy).
@@ -153,6 +161,44 @@ class UIHierarchyMonitor:
         matching.sort(key=lambda x: x[0])
         return matching[0][1]
 
+    def _get_focused_window(self) -> str | None:
+        """Get the currently focused window's package name.
+
+        Returns:
+            Package name of focused window, or None if unable to determine.
+        """
+        try:
+            result = subprocess.run(
+                ["adb", "-s", self._device_id, "shell", "dumpsys", "window", "windows"],
+                capture_output=True,
+                text=True,
+                timeout=5,
+            )
+
+            if result.returncode != 0:
+                return None
+
+            # Look for mCurrentFocus line
+            for line in result.stdout.split("\n"):
+                if "mCurrentFocus" in line:
+                    # Extract package from: mCurrentFocus=Window{... u0 package/activity}
+                    # or: mCurrentFocus=Window{... u0 WindowName}
+                    parts = line.split()
+                    for part in parts:
+                        if "/" in part and "}" not in part:
+                            # Format: package/activity
+                            return part.split("/")[0]
+                        elif part.endswith("}"):
+                            # Try to get package from window name
+                            window_name = part.rstrip("}")
+                            if "." in window_name:
+                                return window_name
+            return None
+
+        except Exception as e:
+            logger.debug(f"Failed to get focused window: {e}")
+            return None
+
     def _poll_loop(self) -> None:
         """Background thread: continuously poll uiautomator dump."""
         if self._reference_time is None:
@@ -161,6 +207,17 @@ class UIHierarchyMonitor:
 
         while self._running:
             try:
+                # Check if target app has focus before dumping
+                focused = self._get_focused_window()
+                if focused and self._app_package not in focused:
+                    logger.debug(
+                        f"Skipping dump: {focused} has focus, "
+                        f"not {self._app_package}"
+                    )
+                    self._skipped_count += 1
+                    time.sleep(0.5)  # Brief sleep before retry
+                    continue
+
                 timestamp = time.time() - self._reference_time
                 elements = self._dump_hierarchy()
 
