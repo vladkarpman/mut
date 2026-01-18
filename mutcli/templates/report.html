@@ -174,26 +174,6 @@
             border: 1px solid var(--fail-color);
         }}
 
-        .export-btn {{
-            display: inline-flex;
-            align-items: center;
-            gap: var(--space-2);
-            padding: var(--space-2) var(--space-4);
-            background: var(--md-primary);
-            color: var(--md-on-primary);
-            border: none;
-            border-radius: var(--radius-full);
-            font-size: 0.875rem;
-            font-weight: 500;
-            cursor: pointer;
-            transition: all var(--md-duration-short3) var(--md-easing-standard);
-        }}
-
-        .export-btn:hover {{
-            background: #e8d6ff;
-            box-shadow: 0 1px 3px rgba(0, 0, 0, 0.3);
-        }}
-
         /* Main Layout - Video Left, Steps Right */
         .main {{
             display: flex;
@@ -1021,10 +1001,6 @@
                 <span class="material-symbols-outlined">{{status_icon}}</span>
                 {{status}}
             </span>
-            <button class="export-btn" onclick="exportJSON()">
-                <span class="material-symbols-outlined">download</span>
-                Export
-            </button>
         </div>
     </header>
 
@@ -1049,18 +1025,6 @@
         const reportData = {{json_data}};
         let activeStepIndex = -1;
         const stepCards = document.querySelectorAll('.step-card');
-
-        function exportJSON() {{
-            const blob = new Blob([JSON.stringify(reportData, null, 2)], {{ type: 'application/json' }});
-            const url = URL.createObjectURL(blob);
-            const a = document.createElement('a');
-            a.href = url;
-            a.download = reportData.test + '_report.json';
-            document.body.appendChild(a);
-            a.click();
-            document.body.removeChild(a);
-            URL.revokeObjectURL(url);
-        }}
 
         function selectStep(index) {{
             stepCards.forEach(card => card.classList.remove('active'));
@@ -1182,11 +1146,48 @@
             const imgOffsetY = imgRect.top - containerRect.top;
 
             // Position indicator container to match actual rendered image content
-            // Add both the element offset (flex centering) and the letterbox offset
             indicatorContainer.style.left = (imgOffsetX + bounds.x) + 'px';
             indicatorContainer.style.top = (imgOffsetY + bounds.y) + 'px';
             indicatorContainer.style.width = bounds.width + 'px';
             indicatorContainer.style.height = bounds.height + 'px';
+
+            // Position individual indicators within container
+            indicatorContainer.querySelectorAll('.tap-indicator, .long-press-indicator').forEach(indicator => {{
+                // These use percentage-based positioning from data attributes
+                // CSS transform: translate(-50%, -50%) handles centering
+            }});
+
+            // Handle swipe indicators with trajectory
+            indicatorContainer.querySelectorAll('.swipe-indicator').forEach(indicator => {{
+                const startX = parseFloat(indicator.dataset.x) || 0;
+                const startY = parseFloat(indicator.dataset.y) || 0;
+                const endX = parseFloat(indicator.dataset.endX) || startX;
+                const endY = parseFloat(indicator.dataset.endY) || startY;
+
+                // Convert percentages to pixels within rendered bounds
+                const sx = (startX / 100) * bounds.width;
+                const sy = (startY / 100) * bounds.height;
+                const ex = (endX / 100) * bounds.width;
+                const ey = (endY / 100) * bounds.height;
+
+                // Position indicator at start point
+                indicator.style.left = sx + 'px';
+                indicator.style.top = sy + 'px';
+
+                // Calculate line angle and length
+                const dx = ex - sx;
+                const dy = ey - sy;
+                const length = Math.sqrt(dx * dx + dy * dy);
+                const angle = Math.atan2(dy, dx) * (180 / Math.PI);
+
+                // Set CSS custom properties for trajectory line
+                indicator.style.setProperty('--line-length', length + 'px');
+                indicator.style.setProperty('--line-angle', angle + 'deg');
+
+                // Set end position for dot animation
+                indicator.style.setProperty('--end-left', dx + 'px');
+                indicator.style.setProperty('--end-top', dy + 'px');
+            }});
         }}
 
         // Position indicators on load and resize
