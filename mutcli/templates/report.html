@@ -4,33 +4,92 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Test Report - {{test_name}}</title>
+    <!-- Material Design 3 - Typography & Icons -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500&display=swap" rel="stylesheet">
+    <!-- Material Symbols Icons -->
+    <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:opsz,wght,FILL,GRAD@20..48,100..700,0..1,-50..200" />
     <style>
-        :root {
-            --pass-color: #10b981;
-            --fail-color: #ef4444;
-            --skip-color: #6b7280;
-            --bg-primary: #111827;
-            --bg-secondary: #1f2937;
-            --bg-tertiary: #374151;
-            --text-primary: #f9fafb;
-            --text-secondary: #9ca3af;
-            --border-color: #4b5563;
-            --accent-color: #3b82f6;
-            --action-tap: #f59e0b;
-            --action-verify: #8b5cf6;
-            --action-type: #06b6d4;
-            --action-wait: #6b7280;
-            --action-swipe: #f59e0b;
-            --action-long_press: #f59e0b;
-            --action-scroll_to: #06b6d4;
-        }
+        :root {{
+            /* Material Design 3 - Dark Theme */
+            --md-primary: #d0bcff;
+            --md-primary-rgb: 208, 188, 255;
+            --md-on-primary: #381e72;
+            --md-primary-container: #4f378b;
+            --md-on-primary-container: #eaddff;
+
+            --md-secondary: #ccc2dc;
+            --md-tertiary: #efb8c8;
+
+            --md-surface: #141218;
+            --md-surface-dim: #0e0d11;
+            --md-surface-container-lowest: #0a090d;
+            --md-surface-container-low: #1a181d;
+            --md-surface-container: #1e1c22;
+            --md-surface-container-high: #282629;
+            --md-surface-container-highest: #333137;
+            --md-on-surface: #e6e1e5;
+            --md-on-surface-variant: #cac4d0;
+            --md-outline: #938f99;
+            --md-outline-variant: #49454f;
+
+            --md-error: #f2b8b5;
+            --md-error-container: #8c1d18;
+
+            /* Status colors */
+            --pass-color: #a8d5a2;
+            --pass-bg: rgba(168, 213, 162, 0.16);
+            --fail-color: #f2b8b5;
+            --fail-bg: rgba(242, 184, 181, 0.16);
+            --skip-color: #938f99;
+            --skip-bg: rgba(147, 143, 153, 0.16);
+
+            /* Action colors */
+            --action-tap: #d0bcff;
+            --action-tap-bg: rgba(208, 188, 255, 0.16);
+            --action-swipe: #efb8c8;
+            --action-swipe-bg: rgba(239, 184, 200, 0.16);
+            --action-verify: #a8d5a2;
+            --action-verify-bg: rgba(168, 213, 162, 0.16);
+            --action-type: #90caf9;
+            --action-type-bg: rgba(144, 202, 249, 0.16);
+            --action-wait: #ffb957;
+            --action-wait-bg: rgba(255, 185, 87, 0.16);
+
+            /* Spacing */
+            --space-1: 4px;
+            --space-2: 8px;
+            --space-3: 12px;
+            --space-4: 16px;
+            --space-5: 20px;
+            --space-6: 24px;
+
+            /* Radius */
+            --radius-sm: 6px;
+            --radius-md: 8px;
+            --radius-lg: 12px;
+            --radius-xl: 16px;
+            --radius-full: 9999px;
+
+            /* Motion */
+            --md-easing-standard: cubic-bezier(0.2, 0, 0, 1);
+            --md-duration-short3: 150ms;
+            --md-duration-short4: 200ms;
+        }}
+
+        .material-symbols-outlined {{
+            font-variation-settings: 'FILL' 0, 'wght' 400, 'GRAD' 0, 'opsz' 24;
+            font-size: 20px;
+            vertical-align: middle;
+        }}
 
         * {{ margin: 0; padding: 0; box-sizing: border-box; }}
 
         body {{
-            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
-            background: var(--bg-primary);
-            color: var(--text-primary);
+            font-family: 'Plus Jakarta Sans', -apple-system, BlinkMacSystemFont, sans-serif;
+            background: var(--md-surface-dim);
+            color: var(--md-on-surface);
             line-height: 1.6;
             height: 100vh;
             overflow: hidden;
@@ -41,23 +100,43 @@
             display: flex;
             justify-content: space-between;
             align-items: center;
-            padding: 12px 20px;
-            background: var(--bg-secondary);
-            border-bottom: 1px solid var(--border-color);
+            padding: var(--space-3) var(--space-5);
+            background: var(--md-surface-container);
+            border-bottom: 1px solid var(--md-outline-variant);
         }}
 
         .header-left {{
             display: flex;
             align-items: center;
-            gap: 16px;
-            min-width: 200px;
+            gap: var(--space-4);
+        }}
+
+        .header-meta {{
+            display: flex;
+            align-items: center;
+            gap: var(--space-3);
+            font-size: 0.85rem;
+            color: var(--md-on-surface-variant);
+        }}
+
+        .header-meta-item {{
+            display: flex;
+            align-items: center;
+            gap: var(--space-1);
+        }}
+
+        .header-meta-item .material-symbols-outlined {{
+            font-size: 18px;
+        }}
+
+        .header-meta-divider {{
+            color: var(--md-outline);
         }}
 
         .header-center {{
             display: flex;
             flex-direction: column;
             align-items: center;
-            justify-content: center;
         }}
 
         .header h1 {{
@@ -66,491 +145,478 @@
             margin: 0;
         }}
 
-        .header-timestamp {{
-            font-size: 0.75rem;
-            color: var(--text-secondary);
-            margin-top: 2px;
-        }}
-
         .header-right {{
             display: flex;
             align-items: center;
-            gap: 12px;
-            min-width: 200px;
-            justify-content: flex-end;
+            gap: var(--space-3);
         }}
 
         .status-badge {{
             display: inline-flex;
             align-items: center;
-            gap: 6px;
-            padding: 6px 14px;
-            border-radius: 20px;
+            gap: var(--space-2);
+            padding: var(--space-2) var(--space-4);
+            border-radius: var(--radius-full);
             font-size: 0.8rem;
             font-weight: 600;
             text-transform: uppercase;
-            letter-spacing: 0.5px;
         }}
 
         .status-badge.passed {{
-            background: rgba(16, 185, 129, 0.2);
+            background: var(--pass-bg);
             color: var(--pass-color);
             border: 1px solid var(--pass-color);
         }}
 
-        .status-badge.failed {{
-            background: rgba(239, 68, 68, 0.2);
+        .status-badge.failed, .status-badge.error {{
+            background: var(--fail-bg);
             color: var(--fail-color);
             border: 1px solid var(--fail-color);
         }}
 
-        .duration-badge {{
+        .export-btn {{
             display: inline-flex;
             align-items: center;
-            gap: 6px;
-            padding: 6px 12px;
-            background: var(--bg-tertiary);
-            border-radius: 6px;
-            font-size: 0.85rem;
-            color: var(--text-secondary);
-        }}
-
-        .btn {{
-            padding: 8px 16px;
-            border-radius: 6px;
+            gap: var(--space-2);
+            padding: var(--space-2) var(--space-4);
+            background: var(--md-primary);
+            color: var(--md-on-primary);
+            border: none;
+            border-radius: var(--radius-full);
             font-size: 0.875rem;
             font-weight: 500;
             cursor: pointer;
-            transition: all 0.15s;
-            border: none;
+            transition: all var(--md-duration-short3) var(--md-easing-standard);
         }}
 
-        .btn-primary {{
-            background: var(--accent-color);
-            color: white;
+        .export-btn:hover {{
+            background: #e8d6ff;
+            box-shadow: 0 1px 3px rgba(0, 0, 0, 0.3);
         }}
 
-        .btn-primary:hover {{
-            background: #2563eb;
-        }}
-
-        .btn-secondary {{
-            background: var(--bg-tertiary);
-            color: var(--text-primary);
-            border: 1px solid var(--border-color);
-        }}
-
-        .btn-secondary:hover {{
-            background: var(--border-color);
-        }}
-
-        /* Summary Bar */
-        .summary-bar {{
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            gap: 24px;
-            padding: 10px 20px;
-            background: var(--bg-tertiary);
-            border-bottom: 1px solid var(--border-color);
-        }}
-
-        .summary-item {{
-            display: flex;
-            align-items: center;
-            gap: 8px;
-            font-size: 0.85rem;
-        }}
-
-        .summary-count {{
-            font-weight: 700;
-            font-size: 1rem;
-        }}
-
-        .summary-item.total .summary-count {{ color: var(--text-primary); }}
-        .summary-item.passed .summary-count {{ color: var(--pass-color); }}
-        .summary-item.failed .summary-count {{ color: var(--fail-color); }}
-        .summary-item.skipped .summary-count {{ color: var(--skip-color); }}
-
-        /* Filter Buttons */
-        .filter-bar {{
-            display: flex;
-            align-items: center;
-            gap: 8px;
-            padding: 10px 20px;
-            background: var(--bg-secondary);
-            border-bottom: 1px solid var(--border-color);
-        }}
-
-        .filter-btn {{
-            padding: 6px 14px;
-            border-radius: 20px;
-            font-size: 0.8rem;
-            font-weight: 500;
-            cursor: pointer;
-            transition: all 0.15s;
-            border: 1px solid var(--border-color);
-            background: transparent;
-            color: var(--text-secondary);
-        }}
-
-        .filter-btn:hover {{
-            background: var(--bg-tertiary);
-            color: var(--text-primary);
-        }}
-
-        .filter-btn.active {{
-            background: var(--accent-color);
-            border-color: var(--accent-color);
-            color: white;
-        }}
-
-        .filter-btn.active.passed {{
-            background: var(--pass-color);
-            border-color: var(--pass-color);
-        }}
-
-        .filter-btn.active.failed {{
-            background: var(--fail-color);
-            border-color: var(--fail-color);
-        }}
-
-        /* Main Layout */
+        /* Main Layout - Video Left, Steps Right */
         .main {{
             display: flex;
-            height: calc(100vh - 145px);
+            height: calc(100vh - 56px);
         }}
 
+        /* Video Panel (Left) */
         .video-panel {{
-            width: 25%;
-            min-width: 240px;
-            max-width: 320px;
-            padding: 16px;
-            border-right: 1px solid var(--border-color);
+            width: 320px;
+            min-width: 280px;
+            max-width: 400px;
             display: flex;
             flex-direction: column;
-            background: var(--bg-secondary);
-        }}
-
-        .video-panel.hidden {{
-            display: none;
+            background: var(--md-surface-container);
+            border-right: 1px solid var(--md-outline-variant);
         }}
 
         .video-container {{
             flex: 1;
             display: flex;
             flex-direction: column;
+            padding: var(--space-4);
         }}
 
         .video-wrapper {{
             display: flex;
             align-items: flex-start;
             justify-content: center;
-            background: var(--bg-primary);
-            border-radius: 8px;
+            background: var(--md-surface);
+            border-radius: var(--radius-lg);
             overflow: hidden;
         }}
 
         .video-wrapper video {{
             width: 100%;
             height: auto;
-            max-height: 400px;
+            max-height: 500px;
             object-fit: contain;
-            border-radius: 8px;
         }}
 
-        .video-controls {{
+        .no-video {{
             display: flex;
-            align-items: center;
-            gap: 12px;
-            padding: 12px;
-            margin-top: 8px;
-            background: var(--bg-tertiary);
-            border-radius: 8px;
-        }}
-
-        .video-play-btn {{
-            width: 36px;
-            height: 36px;
-            border-radius: 50%;
-            background: var(--accent-color);
-            border: none;
-            color: white;
-            font-size: 14px;
-            cursor: pointer;
-            display: flex;
+            flex-direction: column;
             align-items: center;
             justify-content: center;
-            flex-shrink: 0;
+            padding: var(--space-6);
+            color: var(--md-on-surface-variant);
+            text-align: center;
+            min-height: 300px;
         }}
 
-        .video-play-btn:hover {{
-            background: #2563eb;
+        .no-video .material-symbols-outlined {{
+            font-size: 48px;
+            opacity: 0.5;
+            margin-bottom: var(--space-3);
         }}
 
-        .video-scrubber {{
-            flex: 1;
-            height: 6px;
-            -webkit-appearance: none;
-            appearance: none;
-            background: var(--bg-primary);
-            border-radius: 3px;
-            cursor: pointer;
-        }}
-
-        .video-scrubber::-webkit-slider-thumb {{
-            -webkit-appearance: none;
-            width: 14px;
-            height: 14px;
-            border-radius: 50%;
-            background: var(--accent-color);
-            cursor: pointer;
-        }}
-
-        .video-scrubber::-moz-range-thumb {{
-            width: 14px;
-            height: 14px;
-            border-radius: 50%;
-            background: var(--accent-color);
-            cursor: pointer;
-            border: none;
-        }}
-
-        .video-time {{
-            font-size: 0.8rem;
-            color: var(--text-secondary);
-            font-family: monospace;
-            white-space: nowrap;
-        }}
-
-        .video-panel-header {{
-            font-size: 0.75rem;
-            font-weight: 600;
-            text-transform: uppercase;
-            color: var(--text-secondary);
-            letter-spacing: 0.5px;
-            margin-bottom: 12px;
-        }}
-
-        /* Steps Panel */
+        /* Steps Panel (Right) */
         .steps-panel {{
             flex: 1;
             overflow-y: auto;
-            padding: 20px;
+            padding: var(--space-5);
         }}
 
-        /* Step Cards */
+        /* Step Card */
         .step-card {{
-            background: var(--bg-secondary);
-            border-radius: 10px;
-            padding: 16px;
-            margin-bottom: 16px;
-            border: 1px solid var(--border-color);
-            transition: all 0.2s;
-            cursor: pointer;
+            background: var(--md-surface-container);
+            border-radius: var(--radius-lg);
+            margin-bottom: var(--space-4);
+            border: 1px solid var(--md-outline-variant);
+            overflow: hidden;
+            transition: all var(--md-duration-short4) var(--md-easing-standard);
         }}
 
         .step-card:hover {{
-            border-color: var(--text-secondary);
-            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
+            border-color: var(--md-outline);
         }}
 
         .step-card.active {{
-            border-color: var(--accent-color);
-            box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.2);
+            border-color: var(--md-primary);
+            box-shadow: 0 0 0 3px rgba(208, 188, 255, 0.2);
         }}
 
-        .step-card.passed {{
-            border-left: 4px solid var(--pass-color);
-        }}
-
-        .step-card.failed {{
-            border-left: 4px solid var(--fail-color);
-        }}
-
-        .step-card.skipped {{
-            border-left: 4px solid var(--skip-color);
-            opacity: 0.7;
-        }}
-
-        .step-card.hidden {{
-            display: none;
-        }}
-
+        /* Step Header */
         .step-header {{
             display: flex;
             justify-content: space-between;
             align-items: center;
-            margin-bottom: 12px;
-            padding-bottom: 10px;
-            border-bottom: 1px solid var(--border-color);
+            padding: var(--space-3) var(--space-4);
+            border-bottom: 1px solid var(--md-outline-variant);
+            cursor: pointer;
         }}
 
         .step-title {{
             display: flex;
             align-items: center;
-            gap: 12px;
-            flex: 1;
-            min-width: 0;
+            gap: var(--space-3);
         }}
 
         .step-number {{
-            width: 32px;
-            height: 32px;
+            width: 28px;
+            height: 28px;
             border-radius: 50%;
             display: flex;
             align-items: center;
             justify-content: center;
-            font-size: 0.85rem;
+            font-size: 0.8rem;
             font-weight: 700;
-            color: white;
-            flex-shrink: 0;
+            font-family: 'IBM Plex Mono', monospace;
         }}
 
-        .step-number.passed {{ background: var(--pass-color); }}
-        .step-number.failed {{ background: var(--fail-color); }}
-        .step-number.skipped {{ background: var(--skip-color); }}
+        .step-number.passed {{ background: var(--pass-color); color: #1a1a1a; }}
+        .step-number.failed {{ background: var(--fail-color); color: #1a1a1a; }}
+        .step-number.skipped {{ background: var(--skip-color); color: #1a1a1a; }}
 
-        .action-badge {{
+        .gesture-badge {{
             display: inline-flex;
             align-items: center;
-            gap: 4px;
-            padding: 4px 10px;
-            border-radius: 4px;
+            gap: var(--space-1);
+            padding: var(--space-1) var(--space-3);
+            border-radius: var(--radius-sm);
             font-size: 0.7rem;
             font-weight: 600;
             text-transform: uppercase;
-            white-space: nowrap;
+            font-family: 'IBM Plex Mono', monospace;
         }}
 
-        .action-badge.tap {{ background: rgba(245, 158, 11, 0.2); color: var(--action-tap); }}
-        .action-badge.swipe {{ background: rgba(245, 158, 11, 0.2); color: var(--action-swipe); }}
-        .action-badge.verify, .action-badge.verify_screen {{ background: rgba(139, 92, 246, 0.2); color: var(--action-verify); }}
-        .action-badge.wait, .action-badge.wait_for {{ background: rgba(107, 114, 128, 0.2); color: var(--action-wait); }}
-        .action-badge.type {{ background: rgba(6, 182, 212, 0.2); color: var(--action-type); }}
-        .action-badge.long_press {{ background: rgba(245, 158, 11, 0.3); color: var(--action-tap); }}
-        .action-badge.scroll_to {{ background: rgba(6, 182, 212, 0.2); color: var(--action-scroll_to); }}
-        .action-badge.launch_app {{ background: rgba(59, 130, 246, 0.2); color: var(--accent-color); }}
-        .action-badge.terminate_app {{ background: rgba(239, 68, 68, 0.2); color: var(--fail-color); }}
+        .gesture-badge .material-symbols-outlined {{
+            font-size: 16px;
+        }}
 
-        .step-description {{
+        .gesture-badge.tap {{ background: var(--action-tap-bg); color: var(--action-tap); }}
+        .gesture-badge.doubletap {{ background: var(--action-tap-bg); color: var(--action-tap); }}
+        .gesture-badge.longpress {{ background: var(--action-tap-bg); color: var(--action-tap); }}
+        .gesture-badge.swipe {{ background: var(--action-swipe-bg); color: var(--action-swipe); }}
+        .gesture-badge.verify, .gesture-badge.verifyscreen {{ background: var(--action-verify-bg); color: var(--action-verify); }}
+        .gesture-badge.wait, .gesture-badge.waitfor {{ background: var(--action-wait-bg); color: var(--action-wait); }}
+        .gesture-badge.type {{ background: var(--action-type-bg); color: var(--action-type); }}
+        .gesture-badge.scrollto {{ background: var(--action-type-bg); color: var(--action-type); }}
+        .gesture-badge.launchapp {{ background: var(--action-tap-bg); color: var(--action-tap); }}
+        .gesture-badge.terminateapp {{ background: var(--fail-bg); color: var(--fail-color); }}
+        .gesture-badge.back {{ background: var(--action-wait-bg); color: var(--action-wait); }}
+        .gesture-badge.hidekeyboard {{ background: var(--action-wait-bg); color: var(--action-wait); }}
+
+        .step-action-title {{
             font-size: 0.95rem;
             font-weight: 500;
-            color: var(--text-primary);
-            flex: 1;
-            min-width: 0;
-            white-space: nowrap;
-            overflow: hidden;
-            text-overflow: ellipsis;
+            color: var(--md-on-surface);
         }}
 
-        .step-meta {{
+        .step-status {{
             display: flex;
             align-items: center;
-            gap: 12px;
+            gap: var(--space-3);
         }}
 
         .step-duration {{
             font-size: 0.8rem;
-            color: var(--text-secondary);
-            font-family: monospace;
+            color: var(--md-on-surface-variant);
+            font-family: 'IBM Plex Mono', monospace;
         }}
 
-        .step-status-icon {{
-            width: 24px;
-            height: 24px;
+        .step-status-indicator {{
+            width: 28px;
+            height: 28px;
             border-radius: 50%;
             display: flex;
             align-items: center;
             justify-content: center;
-            font-size: 0.9rem;
         }}
 
-        .step-status-icon.passed {{
-            background: rgba(16, 185, 129, 0.2);
+        .step-status-indicator.passed {{
+            background: var(--pass-bg);
             color: var(--pass-color);
         }}
 
-        .step-status-icon.failed {{
-            background: rgba(239, 68, 68, 0.2);
+        .step-status-indicator.failed {{
+            background: var(--fail-bg);
             color: var(--fail-color);
         }}
 
-        .step-status-icon.skipped {{
-            background: rgba(107, 114, 128, 0.2);
+        .step-status-indicator.skipped {{
+            background: var(--skip-bg);
             color: var(--skip-color);
         }}
 
-        /* Error Message */
-        .step-error {{
-            margin-top: 12px;
-            padding: 12px;
-            background: rgba(239, 68, 68, 0.1);
-            border: 1px solid rgba(239, 68, 68, 0.3);
-            border-radius: 6px;
-            color: var(--fail-color);
-            font-size: 0.85rem;
-            font-family: monospace;
-            white-space: pre-wrap;
-            word-break: break-word;
+        .step-status-indicator .material-symbols-outlined {{
+            font-size: 18px;
         }}
 
-        /* Screenshots Row */
+        /* Step Content */
+        .step-content {{
+            padding: var(--space-4);
+        }}
+
+        /* Frame Display - 3 Column Story Layout (matching approval.html) */
         .step-frames {{
             display: flex;
-            gap: 12px;
-            margin-top: 16px;
+            gap: 16px;
+            align-items: stretch;
+        }}
+
+        /* 2-column fallback for steps without action frames */
+        .step-frames.two-column {{
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: var(--space-4);
         }}
 
         .frame-column {{
             flex: 1;
             display: flex;
             flex-direction: column;
-            background: var(--bg-tertiary);
-            border-radius: 8px;
+            background: var(--md-surface-container);
+            border-radius: var(--radius-xl);
             overflow: hidden;
-            border: 1px solid var(--border-color);
+            border: 1px solid var(--md-outline-variant);
+            transition: all var(--md-duration-short3) var(--md-easing-standard);
+            box-shadow: 0 1px 2px rgba(0, 0, 0, 0.2);
         }}
 
-        .frame-column.before {{ border-color: var(--action-wait); }}
-        .frame-column.action {{ border-color: var(--action-tap); }}
-        .frame-column.after {{ border-color: var(--pass-color); }}
+        .frame-column.before {{
+            background: var(--md-surface-container);
+            border: 1px solid var(--md-outline-variant);
+        }}
+
+        .frame-column.action {{
+            background: var(--md-surface-container);
+            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.4), 0 0 0 2px var(--md-primary-container);
+            z-index: 1;
+        }}
+
+        .frame-column.after {{
+            background: var(--md-surface-container);
+            border: 1px solid var(--md-outline-variant);
+        }}
 
         .frame-column-header {{
-            padding: 8px 10px;
+            padding: 14px 16px;
             text-align: center;
-            font-size: 0.7rem;
+            font-size: 0.75rem;
             font-weight: 600;
             text-transform: uppercase;
-            letter-spacing: 0.5px;
+            letter-spacing: 0.1em;
+            border-radius: var(--radius-xl) var(--radius-xl) 0 0;
         }}
 
-        .frame-column.before .frame-column-header {{ background: rgba(107, 114, 128, 0.2); color: var(--action-wait); }}
-        .frame-column.action .frame-column-header {{ background: rgba(245, 158, 11, 0.2); color: var(--action-tap); }}
-        .frame-column.after .frame-column-header {{ background: rgba(16, 185, 129, 0.2); color: var(--pass-color); }}
+        .frame-column.before .frame-column-header {{
+            background: var(--md-surface-container-high);
+            color: var(--md-on-surface-variant);
+            border-bottom: 1px solid var(--md-outline-variant);
+        }}
+
+        .frame-column.action .frame-column-header {{
+            background: var(--md-primary-container);
+            color: var(--md-on-primary-container);
+            font-weight: 700;
+            letter-spacing: 0.12em;
+        }}
+
+        .frame-column.after .frame-column-header {{
+            background: rgba(168, 213, 162, 0.25);
+            color: var(--pass-color);
+            border-bottom: 1px solid rgba(168, 213, 162, 0.3);
+        }}
 
         .frame-image-container {{
             position: relative;
             width: 100%;
-            background: var(--bg-primary);
+            background: var(--md-surface);
             display: flex;
             align-items: center;
             justify-content: center;
-            min-height: 200px;
+            min-height: 180px;
             cursor: pointer;
         }}
 
         .frame-image-container img {{
             max-width: 100%;
-            max-height: 400px;
+            max-height: 500px;
             object-fit: contain;
         }}
 
         .frame-placeholder {{
-            color: var(--text-secondary);
+            color: var(--md-on-surface-variant);
             font-size: 0.8rem;
             text-align: center;
-            padding: 20px;
+            padding: var(--space-5);
+        }}
+
+        /* Error/Failure Section */
+        .step-failure {{
+            margin-top: var(--space-4);
+            padding: var(--space-4);
+            background: var(--fail-bg);
+            border: 1px solid rgba(242, 184, 181, 0.3);
+            border-radius: var(--radius-lg);
+        }}
+
+        .failure-header {{
+            display: flex;
+            align-items: center;
+            gap: var(--space-2);
+            margin-bottom: var(--space-3);
+            color: var(--fail-color);
+            font-weight: 600;
+            font-size: 0.85rem;
+        }}
+
+        .failure-header .material-symbols-outlined {{
+            font-size: 20px;
+        }}
+
+        .failure-error {{
+            font-family: 'IBM Plex Mono', monospace;
+            font-size: 0.85rem;
+            color: var(--fail-color);
+            background: var(--md-surface);
+            padding: var(--space-3);
+            border-radius: var(--radius-md);
+            margin-bottom: var(--space-3);
+            white-space: pre-wrap;
+            word-break: break-word;
+        }}
+
+        .failure-suggestion {{
+            display: flex;
+            flex-direction: column;
+            gap: var(--space-2);
+        }}
+
+        .failure-suggestion-label {{
+            font-size: 0.75rem;
+            font-weight: 600;
+            text-transform: uppercase;
+            color: var(--md-on-surface-variant);
+            letter-spacing: 0.5px;
+        }}
+
+        .failure-suggestion-text {{
+            font-size: 0.9rem;
+            color: var(--md-on-surface);
+            line-height: 1.5;
+        }}
+
+        /* AI Analysis Section */
+        .step-ai-analysis {{
+            margin-top: var(--space-4);
+            padding: var(--space-4);
+            background: var(--md-surface-container-high);
+            border: 1px solid var(--md-outline-variant);
+            border-radius: var(--radius-lg);
+        }}
+
+        .step-ai-analysis.verified {{
+            border-color: var(--pass-color);
+            background: rgba(168, 213, 162, 0.08);
+        }}
+
+        .step-ai-analysis.not-verified {{
+            border-color: var(--fail-color);
+            background: rgba(242, 184, 181, 0.08);
+        }}
+
+        .ai-header {{
+            display: flex;
+            align-items: center;
+            gap: var(--space-2);
+            margin-bottom: var(--space-3);
+            font-weight: 600;
+            font-size: 0.85rem;
+            color: var(--md-primary);
+        }}
+
+        .step-ai-analysis.verified .ai-header {{
+            color: var(--pass-color);
+        }}
+
+        .step-ai-analysis.not-verified .ai-header {{
+            color: var(--fail-color);
+        }}
+
+        .ai-header .material-symbols-outlined {{
+            font-size: 20px;
+        }}
+
+        .ai-outcome {{
+            font-size: 0.9rem;
+            color: var(--md-on-surface);
+            line-height: 1.5;
+        }}
+
+        /* AI Observation Section (for non-verification steps) */
+        .step-ai-observation {{
+            margin-top: var(--space-4);
+            padding: var(--space-3) var(--space-4);
+            background: var(--md-surface-container);
+            border: 1px solid var(--md-outline-variant);
+            border-radius: var(--radius-md);
+            opacity: 0.8;
+        }}
+
+        .ai-observation-header {{
+            display: flex;
+            align-items: center;
+            gap: var(--space-2);
+            margin-bottom: var(--space-2);
+            font-weight: 500;
+            font-size: 0.75rem;
+            color: var(--md-on-surface-variant);
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+        }}
+
+        .ai-observation-header .material-symbols-outlined {{
+            font-size: 16px;
+            opacity: 0.7;
+        }}
+
+        .ai-observation-text {{
+            font-size: 0.85rem;
+            color: var(--md-on-surface-variant);
+            line-height: 1.5;
         }}
 
         /* Image Modal */
@@ -576,16 +642,16 @@
             max-width: 90%;
             max-height: 90%;
             object-fit: contain;
-            border-radius: 8px;
+            border-radius: var(--radius-lg);
         }}
 
         .image-modal-close {{
             position: absolute;
-            top: 20px;
-            right: 20px;
-            background: var(--bg-tertiary);
+            top: var(--space-5);
+            right: var(--space-5);
+            background: var(--md-surface-container-high);
             border: none;
-            color: var(--text-primary);
+            color: var(--md-on-surface);
             width: 40px;
             height: 40px;
             border-radius: 50%;
@@ -597,50 +663,327 @@
         }}
 
         .image-modal-close:hover {{
-            background: var(--border-color);
+            background: var(--md-surface-container-highest);
         }}
 
-        /* Keyboard navigation hint */
-        .keyboard-hint {{
-            position: fixed;
-            bottom: 20px;
-            right: 20px;
-            background: var(--bg-secondary);
-            border: 1px solid var(--border-color);
-            border-radius: 8px;
-            padding: 10px 14px;
-            font-size: 0.75rem;
-            color: var(--text-secondary);
-            display: flex;
-            gap: 12px;
+        /* ═══════════════════════════════════════════════════════════
+           Enhanced Gesture Indicators - Material Touch Feedback
+           ═══════════════════════════════════════════════════════════ */
+
+        /* Gesture indicator container */
+        .gesture-indicator-container {{
+            position: absolute;
+            /* Will be positioned by JavaScript to match actual image bounds */
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            pointer-events: none;
         }}
 
-        .keyboard-hint kbd {{
-            background: var(--bg-tertiary);
-            border: 1px solid var(--border-color);
-            border-radius: 4px;
-            padding: 2px 6px;
-            font-family: monospace;
-            font-size: 0.7rem;
+        /* Tap indicator - High contrast with dark outline */
+        .tap-indicator {{
+            position: absolute;
+            width: 36px;
+            height: 36px;
+            border-radius: 50%;
+            background: var(--md-primary);
+            border: 3px solid #fff;
+            box-shadow:
+                0 0 0 2px rgba(0, 0, 0, 0.8),
+                0 4px 12px rgba(0, 0, 0, 0.5),
+                0 0 20px rgba(208, 188, 255, 0.6);
+            transform: translate(-50%, -50%);
+            pointer-events: none;
+            animation: tapBounce 1.5s cubic-bezier(0.34, 1.56, 0.64, 1) infinite;
         }}
 
-        /* No video state */
-        .no-video-message {{
-            display: flex;
-            flex-direction: column;
-            align-items: center;
-            justify-content: center;
-            height: 200px;
-            color: var(--text-secondary);
-            text-align: center;
-            padding: 20px;
+        /* Inner dot */
+        .tap-indicator::before {{
+            content: '';
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            width: 14px;
+            height: 14px;
+            background: #fff;
+            border-radius: 50%;
+            transform: translate(-50%, -50%);
+            box-shadow: 0 2px 8px rgba(0, 0, 0, 0.4);
         }}
 
-        .no-video-message svg {{
-            width: 48px;
-            height: 48px;
-            margin-bottom: 12px;
-            opacity: 0.5;
+        /* Ripple ring */
+        .tap-indicator::after {{
+            content: '';
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            width: 60px;
+            height: 60px;
+            border: 3px solid #fff;
+            box-shadow: 0 0 0 2px rgba(0, 0, 0, 0.5);
+            border-radius: 50%;
+            transform: translate(-50%, -50%);
+            animation: tapRipple1 1.5s ease-out infinite;
+        }}
+
+        @keyframes tapBounce {{
+            0%, 100% {{
+                transform: translate(-50%, -50%) scale(1);
+                filter: drop-shadow(0 0 12px rgba(208, 188, 255, 1));
+            }}
+            50% {{
+                transform: translate(-50%, -50%) scale(0.85);
+                filter: drop-shadow(0 0 20px rgba(208, 188, 255, 1));
+            }}
+        }}
+
+        @keyframes tapRipple1 {{
+            0% {{
+                transform: translate(-50%, -50%) scale(0.6);
+                opacity: 1;
+            }}
+            100% {{
+                transform: translate(-50%, -50%) scale(1.6);
+                opacity: 0;
+            }}
+        }}
+
+        /* Long press indicator - High contrast progress ring */
+        .long-press-indicator {{
+            position: absolute;
+            width: 52px;
+            height: 52px;
+            border-radius: 50%;
+            background: rgba(0, 0, 0, 0.4);
+            border: 3px solid #fff;
+            box-shadow:
+                0 0 0 2px rgba(0, 0, 0, 0.8),
+                0 4px 16px rgba(0, 0, 0, 0.5),
+                0 0 20px rgba(208, 188, 255, 0.5);
+            transform: translate(-50%, -50%);
+            pointer-events: none;
+        }}
+
+        /* Inner dot */
+        .long-press-indicator::before {{
+            content: '';
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            width: 18px;
+            height: 18px;
+            background: var(--md-primary);
+            border: 2px solid #fff;
+            border-radius: 50%;
+            transform: translate(-50%, -50%);
+            animation: longPressPulse 1s ease-in-out infinite;
+        }}
+
+        /* Animated progress arc */
+        .long-press-indicator::after {{
+            content: '';
+            position: absolute;
+            top: -3px;
+            left: -3px;
+            width: calc(100% + 6px);
+            height: calc(100% + 6px);
+            border-radius: 50%;
+            border: 4px solid transparent;
+            border-top-color: var(--md-primary);
+            border-right-color: var(--md-primary);
+            box-sizing: border-box;
+            animation: longPressProgress 1.5s linear infinite;
+            filter: drop-shadow(0 0 6px rgba(208, 188, 255, 0.8));
+        }}
+
+        @keyframes longPressPulse {{
+            0%, 100% {{ transform: translate(-50%, -50%) scale(1); }}
+            50% {{ transform: translate(-50%, -50%) scale(0.8); }}
+        }}
+
+        @keyframes longPressProgress {{
+            0% {{
+                transform: rotate(0deg);
+            }}
+            100% {{
+                transform: rotate(360deg);
+            }}
+        }}
+
+        /* Double tap indicator */
+        .double-tap-indicator {{
+            position: absolute;
+            transform: translate(-50%, -50%);
+            pointer-events: none;
+        }}
+
+        .double-tap-indicator .tap-circle {{
+            position: absolute;
+            width: 20px;
+            height: 20px;
+            border-radius: 50%;
+            border: 2px solid #fff;
+            background: rgba(245, 158, 11, 0.7);
+            box-shadow: 0 0 0 2px var(--action-tap), 0 2px 8px rgba(0,0,0,0.3);
+        }}
+
+        .double-tap-indicator .tap-1 {{
+            top: -14px;
+            left: -14px;
+            animation: doubleTap1 1s ease-in-out infinite;
+        }}
+
+        .double-tap-indicator .tap-2 {{
+            top: -6px;
+            left: -6px;
+            animation: doubleTap2 1s ease-in-out infinite;
+        }}
+
+        @keyframes doubleTap1 {{
+            0%, 100% {{ transform: scale(1); opacity: 1; }}
+            25% {{ transform: scale(0.7); opacity: 0.4; }}
+            50% {{ transform: scale(1); opacity: 1; }}
+            75% {{ transform: scale(1); opacity: 1; }}
+        }}
+
+        @keyframes doubleTap2 {{
+            0%, 100% {{ transform: scale(0.8); opacity: 0.6; }}
+            25% {{ transform: scale(0.8); opacity: 0.6; }}
+            50% {{ transform: scale(0.7); opacity: 0.4; }}
+            75% {{ transform: scale(1); opacity: 1; }}
+        }}
+
+        /* Swipe indicator - Modern gradient trail */
+        .swipe-indicator {{
+            position: absolute;
+            pointer-events: none;
+            z-index: 10;
+        }}
+
+        /* Trajectory line - smooth gradient with glow */
+        .swipe-indicator .swipe-trajectory-line {{
+            position: absolute;
+            left: var(--start-x);
+            top: var(--start-y);
+            width: var(--line-length);
+            height: 3px;
+            background: linear-gradient(
+                90deg,
+                rgba(208, 188, 255, 0.1) 0%,
+                rgba(208, 188, 255, 0.4) 20%,
+                rgba(208, 188, 255, 0.8) 80%,
+                var(--md-primary) 100%
+            );
+            transform-origin: 0 50%;
+            transform: rotate(var(--line-angle)) translateY(-50%);
+            border-radius: 2px;
+            filter: drop-shadow(0 0 6px rgba(208, 188, 255, 0.5));
+            animation: swipeTrailPulse 1.8s ease-in-out infinite;
+        }}
+
+        /* Arrow at end of swipe */
+        .swipe-indicator .swipe-trajectory-line::after {{
+            content: '';
+            position: absolute;
+            right: -6px;
+            top: 50%;
+            transform: translateY(-50%);
+            width: 0;
+            height: 0;
+            border-left: 10px solid var(--md-primary);
+            border-top: 6px solid transparent;
+            border-bottom: 6px solid transparent;
+            filter: drop-shadow(0 0 4px rgba(208, 188, 255, 0.8));
+        }}
+
+        /* Animated dot with comet trail */
+        .swipe-indicator .swipe-dot {{
+            position: absolute;
+            width: 20px;
+            height: 20px;
+            border-radius: 50%;
+            background: radial-gradient(circle, #fff 30%, var(--md-primary) 100%);
+            transform: translate(-50%, -50%);
+            left: var(--start-x);
+            top: var(--start-y);
+            animation: swipeMove 1.8s cubic-bezier(0.4, 0, 0.2, 1) infinite;
+            filter: drop-shadow(0 0 10px rgba(208, 188, 255, 0.9));
+        }}
+
+        /* Comet trail effect */
+        .swipe-indicator .swipe-dot::before {{
+            content: '';
+            position: absolute;
+            top: 50%;
+            right: 100%;
+            width: 30px;
+            height: 4px;
+            background: linear-gradient(90deg, transparent, rgba(208, 188, 255, 0.8));
+            transform: translateY(-50%);
+            border-radius: 2px;
+            opacity: 0;
+            animation: swipeTrail 1.8s cubic-bezier(0.4, 0, 0.2, 1) infinite;
+        }}
+
+        .swipe-indicator .swipe-dot::after {{
+            content: '';
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            width: 8px;
+            height: 8px;
+            background: #fff;
+            border-radius: 50%;
+            transform: translate(-50%, -50%);
+        }}
+
+        @keyframes swipeTrailPulse {{
+            0%, 70%, 100% {{ opacity: 1; }}
+            50% {{ opacity: 0.7; }}
+        }}
+
+        @keyframes swipeMove {{
+            0% {{
+                left: var(--start-x);
+                top: var(--start-y);
+                transform: translate(-50%, -50%) scale(1);
+            }}
+            5% {{
+                transform: translate(-50%, -50%) scale(0.8);
+            }}
+            45% {{
+                left: var(--end-x);
+                top: var(--end-y);
+                transform: translate(-50%, -50%) scale(1.1);
+            }}
+            50% {{
+                left: var(--end-x);
+                top: var(--end-y);
+                transform: translate(-50%, -50%) scale(1);
+                opacity: 1;
+            }}
+            55% {{
+                opacity: 0;
+            }}
+            56% {{
+                left: var(--start-x);
+                top: var(--start-y);
+                opacity: 0;
+            }}
+            70%, 100% {{
+                left: var(--start-x);
+                top: var(--start-y);
+                opacity: 1;
+                transform: translate(-50%, -50%) scale(1);
+            }}
+        }}
+
+        @keyframes swipeTrail {{
+            0%, 56%, 100% {{ opacity: 0; width: 20px; }}
+            10% {{ opacity: 0.8; }}
+            45% {{ opacity: 0.8; width: 40px; }}
+            55% {{ opacity: 0; }}
         }}
     </style>
 </head>
@@ -648,60 +991,49 @@
     <!-- Header -->
     <header class="header">
         <div class="header-left">
-            <span class="status-badge {{status_class}}">
-                {{status}}
-            </span>
+            <div class="header-meta">
+                <span class="header-meta-item">
+                    <span class="material-symbols-outlined">touch_app</span>
+                    <span>{{summary_total}} steps</span>
+                </span>
+                <span class="header-meta-divider">|</span>
+                <span class="header-meta-item passed">
+                    <span class="material-symbols-outlined">check_circle</span>
+                    <span style="color: var(--pass-color)">{{summary_passed}}</span>
+                </span>
+                <span class="header-meta-divider">|</span>
+                <span class="header-meta-item failed">
+                    <span class="material-symbols-outlined">cancel</span>
+                    <span style="color: var(--fail-color)">{{summary_failed}}</span>
+                </span>
+                <span class="header-meta-divider">|</span>
+                <span class="header-meta-item">
+                    <span class="material-symbols-outlined">schedule</span>
+                    <span>{{duration}}</span>
+                </span>
+            </div>
         </div>
         <div class="header-center">
             <h1>{{test_name}}</h1>
-            <span class="header-timestamp">{{timestamp}}</span>
         </div>
         <div class="header-right">
-            <span class="duration-badge">
-                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                    <circle cx="12" cy="12" r="10"></circle>
-                    <polyline points="12 6 12 12 16 14"></polyline>
-                </svg>
-                {{duration}}
+            <span class="status-badge {{status_class}}">
+                <span class="material-symbols-outlined">{{status_icon}}</span>
+                {{status}}
             </span>
-            <button class="btn btn-primary" onclick="exportJSON()">Export JSON</button>
+            <button class="export-btn" onclick="exportJSON()">
+                <span class="material-symbols-outlined">download</span>
+                Export
+            </button>
         </div>
     </header>
 
-    <!-- Summary Bar -->
-    <div class="summary-bar">
-        <div class="summary-item total">
-            <span class="summary-count">{{summary_total}}</span>
-            <span>Total</span>
-        </div>
-        <div class="summary-item passed">
-            <span class="summary-count">{{summary_passed}}</span>
-            <span>Passed</span>
-        </div>
-        <div class="summary-item failed">
-            <span class="summary-count">{{summary_failed}}</span>
-            <span>Failed</span>
-        </div>
-        <div class="summary-item skipped">
-            <span class="summary-count">{{summary_skipped}}</span>
-            <span>Skipped</span>
-        </div>
-    </div>
-
-    <!-- Filter Bar -->
-    <div class="filter-bar">
-        <button class="filter-btn active" data-filter="all" onclick="filterSteps('all')">All</button>
-        <button class="filter-btn" data-filter="passed" onclick="filterSteps('passed')">Passed</button>
-        <button class="filter-btn" data-filter="failed" onclick="filterSteps('failed')">Failed</button>
-        <button class="filter-btn" data-filter="skipped" onclick="filterSteps('skipped')">Skipped</button>
-    </div>
-
     <!-- Main Content -->
     <main class="main">
-        <!-- Video Panel (optional) -->
+        <!-- Video Panel (Left) -->
         {{video_html}}
 
-        <!-- Steps Panel -->
+        <!-- Steps Panel (Right) -->
         <div class="steps-panel" id="stepsPanel">
             {{steps_html}}
         </div>
@@ -713,107 +1045,50 @@
         <img id="modalImage" src="" alt="Screenshot">
     </div>
 
-    <!-- Keyboard Hint -->
-    <div class="keyboard-hint">
-        <span><kbd>&#8593;</kbd><kbd>&#8595;</kbd> Navigate</span>
-        <span><kbd>Enter</kbd> Expand</span>
-        <span><kbd>Esc</kbd> Close</span>
-    </div>
-
     <script>
-        // JSON data for export
         const reportData = {{json_data}};
-
-        // State
         let activeStepIndex = -1;
-        let currentFilter = 'all';
         const stepCards = document.querySelectorAll('.step-card');
 
-        // Export JSON
         function exportJSON() {{
             const blob = new Blob([JSON.stringify(reportData, null, 2)], {{ type: 'application/json' }});
             const url = URL.createObjectURL(blob);
             const a = document.createElement('a');
             a.href = url;
-            a.download = reportData.test_name + '_report.json';
+            a.download = reportData.test + '_report.json';
             document.body.appendChild(a);
             a.click();
             document.body.removeChild(a);
             URL.revokeObjectURL(url);
         }}
 
-        // Filter steps
-        function filterSteps(filter) {{
-            currentFilter = filter;
-
-            // Update filter buttons
-            document.querySelectorAll('.filter-btn').forEach(btn => {{
-                btn.classList.remove('active', 'passed', 'failed', 'skipped');
-                if (btn.dataset.filter === filter) {{
-                    btn.classList.add('active');
-                    if (filter !== 'all') btn.classList.add(filter);
-                }}
-            }});
-
-            // Show/hide step cards
-            stepCards.forEach(card => {{
-                if (filter === 'all') {{
-                    card.classList.remove('hidden');
-                }} else {{
-                    const status = card.dataset.status;
-                    card.classList.toggle('hidden', status !== filter);
-                }}
-            }});
-
-            // Reset active step
-            activeStepIndex = -1;
-            stepCards.forEach(card => card.classList.remove('active'));
-        }}
-
-        // Step click handler
         function selectStep(index) {{
             stepCards.forEach(card => card.classList.remove('active'));
             activeStepIndex = index;
+            if (stepCards[index]) {{
+                stepCards[index].classList.add('active');
+                stepCards[index].scrollIntoView({{ behavior: 'smooth', block: 'nearest' }});
 
-            const visibleCards = getVisibleCards();
-            if (visibleCards[index]) {{
-                visibleCards[index].classList.add('active');
-                visibleCards[index].scrollIntoView({{ behavior: 'smooth', block: 'nearest' }});
-
-                // Sync video if present
                 const video = document.getElementById('reportVideo');
-                const timestamp = visibleCards[index].dataset.timestamp;
+                const timestamp = stepCards[index].dataset.timestamp;
                 if (video && timestamp) {{
                     video.currentTime = parseFloat(timestamp);
                 }}
             }}
         }}
 
-        // Get visible cards based on current filter
-        function getVisibleCards() {{
-            return Array.from(stepCards).filter(card => !card.classList.contains('hidden'));
-        }}
-
-        // Keyboard navigation
         document.addEventListener('keydown', function(e) {{
-            const visibleCards = getVisibleCards();
-
             if (e.key === 'ArrowDown') {{
                 e.preventDefault();
-                if (activeStepIndex < visibleCards.length - 1) {{
-                    selectStep(activeStepIndex + 1);
-                }}
+                if (activeStepIndex < stepCards.length - 1) selectStep(activeStepIndex + 1);
             }} else if (e.key === 'ArrowUp') {{
                 e.preventDefault();
-                if (activeStepIndex > 0) {{
-                    selectStep(activeStepIndex - 1);
-                }}
+                if (activeStepIndex > 0) selectStep(activeStepIndex - 1);
             }} else if (e.key === 'Escape') {{
                 closeImageModal();
             }}
         }});
 
-        // Image modal
         function openImageModal(src) {{
             const modal = document.getElementById('imageModal');
             const img = document.getElementById('modalImage');
@@ -822,68 +1097,101 @@
         }}
 
         function closeImageModal() {{
-            const modal = document.getElementById('imageModal');
-            modal.classList.remove('active');
+            document.getElementById('imageModal').classList.remove('active');
         }}
 
-        // Video controls (if video exists)
-        function initVideoControls() {{
-            const video = document.getElementById('reportVideo');
-            const playBtn = document.getElementById('videoPlayBtn');
-            const scrubber = document.getElementById('videoScrubber');
-            const timeDisplay = document.getElementById('videoTime');
-
-            if (!video) return;
-
-            playBtn.addEventListener('click', function() {{
-                if (video.paused) {{
-                    video.play();
-                    playBtn.innerHTML = '&#10074;&#10074;';
-                }} else {{
-                    video.pause();
-                    playBtn.innerHTML = '&#9658;';
-                }}
-            }});
-
-            video.addEventListener('timeupdate', function() {{
-                const progress = (video.currentTime / video.duration) * 100;
-                scrubber.value = progress;
-                timeDisplay.textContent = formatTime(video.currentTime) + ' / ' + formatTime(video.duration);
-            }});
-
-            scrubber.addEventListener('input', function() {{
-                const time = (scrubber.value / 100) * video.duration;
-                video.currentTime = time;
-            }});
-
-            video.addEventListener('ended', function() {{
-                playBtn.innerHTML = '&#9658;';
-            }});
-        }}
-
-        function formatTime(seconds) {{
-            if (isNaN(seconds)) return '0:00';
-            const mins = Math.floor(seconds / 60);
-            const secs = Math.floor(seconds % 60);
-            return mins + ':' + (secs < 10 ? '0' : '') + secs;
-        }}
-
-        // Initialize
-        document.addEventListener('DOMContentLoaded', function() {{
-            initVideoControls();
-
-            // Add click handlers to step cards
-            stepCards.forEach((card, index) => {{
-                card.addEventListener('click', function(e) {{
-                    // Don't trigger if clicking on an image
-                    if (e.target.tagName !== 'IMG') {{
-                        const visibleCards = getVisibleCards();
-                        const visibleIndex = visibleCards.indexOf(card);
-                        selectStep(visibleIndex);
-                    }}
-                }});
-            }});
+        stepCards.forEach((card, index) => {{
+            card.querySelector('.step-header').addEventListener('click', () => selectStep(index));
         }});
+
+        /**
+         * Calculate the actual rendered image bounds for an img with object-fit: contain.
+         * Returns {{ x, y, width, height }} of the actual image content within the element.
+         */
+        function getRenderedImageBounds(img) {{
+            const imgRect = img.getBoundingClientRect();
+            const naturalWidth = img.naturalWidth;
+            const naturalHeight = img.naturalHeight;
+
+            if (!naturalWidth || !naturalHeight) {{
+                // Image not loaded yet, return element bounds
+                return {{ x: 0, y: 0, width: imgRect.width, height: imgRect.height }};
+            }}
+
+            // Calculate how the image is scaled to fit (object-fit: contain)
+            const elementAspect = imgRect.width / imgRect.height;
+            const imageAspect = naturalWidth / naturalHeight;
+
+            let renderedWidth, renderedHeight, offsetX, offsetY;
+
+            if (imageAspect > elementAspect) {{
+                // Image is wider than element - letterbox top/bottom
+                renderedWidth = imgRect.width;
+                renderedHeight = imgRect.width / imageAspect;
+                offsetX = 0;
+                offsetY = (imgRect.height - renderedHeight) / 2;
+            }} else {{
+                // Image is taller than element - letterbox left/right
+                renderedHeight = imgRect.height;
+                renderedWidth = imgRect.height * imageAspect;
+                offsetX = (imgRect.width - renderedWidth) / 2;
+                offsetY = 0;
+            }}
+
+            return {{
+                x: offsetX,
+                y: offsetY,
+                width: renderedWidth,
+                height: renderedHeight
+            }};
+        }}
+
+        /**
+         * Position gesture indicators relative to actual rendered image bounds.
+         * This accounts for object-fit: contain scaling and flexbox centering.
+         */
+        function positionGestureIndicators() {{
+            document.querySelectorAll('.frame-image-container').forEach(container => {{
+                const img = container.querySelector('img');
+                const indicatorContainer = container.querySelector('.gesture-indicator-container');
+                if (!img || !indicatorContainer) return;
+
+                // Wait for image to load if not already
+                if (!img.complete) {{
+                    img.onload = () => requestAnimationFrame(() =>
+                        requestAnimationFrame(() => positionIndicator(container, img, indicatorContainer))
+                    );
+                    return;
+                }}
+
+                // Double requestAnimationFrame ensures layout is fully settled
+                requestAnimationFrame(() =>
+                    requestAnimationFrame(() => positionIndicator(container, img, indicatorContainer))
+                );
+            }});
+        }}
+
+        function positionIndicator(container, img, indicatorContainer) {{
+            // Get the actual rendered image bounds (accounting for object-fit: contain)
+            const bounds = getRenderedImageBounds(img);
+
+            // Get position of img element relative to container (accounts for flex centering)
+            const imgRect = img.getBoundingClientRect();
+            const containerRect = container.getBoundingClientRect();
+            const imgOffsetX = imgRect.left - containerRect.left;
+            const imgOffsetY = imgRect.top - containerRect.top;
+
+            // Position indicator container to match actual rendered image content
+            // Add both the element offset (flex centering) and the letterbox offset
+            indicatorContainer.style.left = (imgOffsetX + bounds.x) + 'px';
+            indicatorContainer.style.top = (imgOffsetY + bounds.y) + 'px';
+            indicatorContainer.style.width = bounds.width + 'px';
+            indicatorContainer.style.height = bounds.height + 'px';
+        }}
+
+        // Position indicators on load and resize
+        positionGestureIndicators();
+        window.addEventListener('resize', positionGestureIndicators);
     </script>
 </body>
 </html>
