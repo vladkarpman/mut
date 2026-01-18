@@ -33,6 +33,7 @@ class PreviewStep:
     suggested_verification: str | None = None
     tap_count: int | None = None  # Number of keyboard taps for type action
     text: str | None = None  # User-entered text for type action
+    end_coordinates: tuple[int, int] | None = None  # End position for swipe gestures
 
 
 @dataclass
@@ -254,15 +255,21 @@ class PreviewServer:
                 "after": step.after_description or "",
             }
 
+            # Build target with coordinates (and end coordinates for swipes)
+            target = {
+                "x": step.coordinates[0],
+                "y": step.coordinates[1],
+                "text": step.element_text or "",
+            }
+            if step.action == "swipe" and step.end_coordinates:
+                target["endX"] = step.end_coordinates[0]
+                target["endY"] = step.end_coordinates[1]
+
             step_data = {
                 "id": step_id,
                 "timestamp": step.timestamp,
                 "action": step.action,
-                "target": {
-                    "x": step.coordinates[0],
-                    "y": step.coordinates[1],
-                    "text": step.element_text or "",
-                },
+                "target": target,
                 "direction": step.direction or "up",
                 "waitAfter": 0,
                 "frames": frames,

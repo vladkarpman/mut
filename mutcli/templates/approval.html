@@ -5957,13 +5957,19 @@
                 }
                 if (step.action === 'swipe') {
                     const dir = step.direction || 'up';
-                    const distance = step.distance || 400;
-                    // Calculate end coordinates based on direction
-                    let endX = posX, endY = posY;
-                    if (dir === 'up') endY = Math.max(50, posY - distance);
-                    if (dir === 'down') endY = Math.min(SCREEN_HEIGHT - 50, posY + distance);
-                    if (dir === 'left') endX = Math.max(50, posX - distance);
-                    if (dir === 'right') endX = Math.min(SCREEN_WIDTH - 50, posX + distance);
+                    // Use actual end coordinates from step.target if available
+                    let endX = step.target?.endX;
+                    let endY = step.target?.endY;
+                    // Fall back to calculation from direction if no actual end coords
+                    if (endX === undefined || endY === undefined) {
+                        const distance = step.distance || 400;
+                        endX = posX;
+                        endY = posY;
+                        if (dir === 'up') endY = Math.max(50, posY - distance);
+                        if (dir === 'down') endY = Math.min(SCREEN_HEIGHT - 50, posY + distance);
+                        if (dir === 'left') endX = Math.max(50, posX - distance);
+                        if (dir === 'right') endX = Math.min(SCREEN_WIDTH - 50, posX + distance);
+                    }
 
                     return `<div class="swipe-indicator gesture-indicator" data-x="${posX}" data-y="${posY}" data-end-x="${endX}" data-end-y="${endY}" data-direction="${dir}">
                         <div class="swipe-trajectory-line"></div>

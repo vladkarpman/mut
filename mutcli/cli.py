@@ -79,6 +79,10 @@ def run(
     device: str | None = typer.Option(None, "--device", "-d", help="Device ID"),
     output: Path | None = typer.Option(None, "--output", "-o", help="Output directory"),
     junit: Path | None = typer.Option(None, "--junit", help="JUnit XML output path"),
+    video: bool = typer.Option(False, "--video", "-v", help="Record video during test"),
+    ai_analysis: bool = typer.Option(
+        False, "--ai", "-a", help="AI analysis of all steps"
+    ),
 ) -> None:
     """Execute a YAML test file."""
     from mutcli.core.config import ConfigLoader, setup_logging
@@ -134,10 +138,6 @@ def run(
 
     console.print(f"[blue]Running test:[/blue] {test_file}")
 
-    # Execute test
-    executor = TestExecutor(device_id=config.device, config=config)
-    result = executor.execute_test(test)
-
     # Generate report
     timestamp = datetime.now().strftime("%Y-%m-%d_%H-%M")
 
@@ -148,7 +148,70 @@ def run(
         # Default: tests/{name}/reports/{timestamp}/
         report_dir = test_file.parent / "reports" / timestamp
 
-    generator = ReportGenerator(report_dir)
+    # Setup ScrcpyService if video recording requested
+    scrcpy = None
+    if video:
+        from mutcli.core.scrcpy_service import ScrcpyService
+
+        console.print("[dim]Connecting to device for video recording...[/dim]")
+        scrcpy = ScrcpyService(config.device)
+        if not scrcpy.connect():
+            console.print("[yellow]Warning:[/yellow] Could not connect scrcpy, video disabled")
+            scrcpy = None
+
+    # Execute test
+    try:
+        executor = TestExecutor(
+            device_id=config.device,
+            config=config,
+            scrcpy=scrcpy,
+            output_dir=report_dir,
+        )
+        result = executor.execute_test(test, record_video=video and scrcpy is not None)
+
+        # AI analysis of all steps (if requested)
+        if ai_analysis and result.steps:
+            from mutcli.core.ai_analyzer import AIAnalyzer
+            from mutcli.core.step_verifier import StepVerifier
+
+            console.print("[dim]Running AI analysis on steps...[/dim]")
+            analyzer = AIAnalyzer()
+            verifier = StepVerifier(analyzer)
+
+            # Build step dicts for analysis
+            step_dicts = [
+                {
+                    "action": s.action,
+                    "target": s.target,
+                    "description": s.description,
+                    "status": s.status,
+                    "error": s.error,
+                    "screenshot_before": s.screenshot_before,
+                    "screenshot_after": s.screenshot_after,
+                }
+                for s in result.steps
+            ]
+            analyses = verifier.analyze_all_steps(step_dicts)
+
+            # Populate AI fields in StepResult
+            for step, analysis in zip(result.steps, analyses):
+                step.ai_verified = analysis.verified
+                step.ai_outcome = analysis.outcome_description
+                step.ai_suggestion = analysis.suggestion
+
+            console.print(f"[dim]AI analyzed {len(analyses)} steps[/dim]")
+
+    finally:
+        # Disconnect scrcpy if it was connected
+        if scrcpy:
+            scrcpy.disconnect()
+
+    # Check for source video from recording session
+    source_video = test_file.parent / "video.mp4"
+    generator = ReportGenerator(
+        report_dir,
+        source_video_path=source_video if source_video.exists() else None,
+    )
     generator.generate_json(result)
     html_path = generator.generate_html(result)
 
@@ -561,9 +624,9 @@ def _process_recording(
 
             suggester = VerificationSuggester(ai)
             verifications_obj = suggester.suggest(analyzed_steps)
-            # Convert to dicts for preview server
+            # Convert to dicts for preview server (disabled by default, user opts in)
             verifications_raw = [
-                {"description": v.description, "after_step": v.after_step_index, "enabled": True}
+                {"description": v.description, "after_step": v.after_step_index, "enabled": False}
                 for v in verifications_obj
             ]
 
@@ -655,6 +718,11 @@ def _build_preview_steps(
         else:
             coords = (0, 0)
 
+        # Get end coordinates for swipes
+        end_coords: tuple[int, int] | None = None
+        if step.action == "swipe" and step.end:
+            end_coords = (step.end["x"], step.end["y"])
+
         # Screenshots use step_NNN_before.png, step_NNN_touch.png, step_NNN_after.png
         before_path = screenshots_dir / f"step_{step_str}_before.png"
         touch_path = screenshots_dir / f"step_{step_str}_touch.png"
@@ -683,6 +751,7 @@ def _build_preview_steps(
             timestamp=step.timestamp,
             frames=frames,
             suggested_verification=suggested_verification,
+            end_coordinates=end_coords,
         ))
 
     return preview_steps
@@ -717,6 +786,15 @@ def _build_preview_steps_from_analysis(
         elif isinstance(coords, list):
             coords = tuple(coords) if len(coords) >= 2 else (0, 0)
 
+        # Get end coordinates for swipes (from analysis.json end_coordinates field)
+        end_coords: tuple[int, int] | None = None
+        if step_data.get("action") == "swipe":
+            end_data = step_data.get("end_coordinates")
+            if isinstance(end_data, dict):
+                end_coords = (end_data.get("x", 0), end_data.get("y", 0))
+            elif isinstance(end_data, list) and len(end_data) >= 2:
+                end_coords = tuple(end_data)
+
         # Screenshots use step_NNN_before.png, step_NNN_touch.png, step_NNN_after.png
         before_path = screenshots_dir / f"step_{step_str}_before.png"
         touch_path = screenshots_dir / f"step_{step_str}_touch.png"
@@ -750,6 +828,7 @@ def _build_preview_steps_from_analysis(
             timestamp=step_data.get("timestamp", 0.0),
             frames=frames,
             suggested_verification=step_data.get("suggested_verification"),
+            end_coordinates=end_coords,
         ))
 
     return preview_steps
@@ -916,8 +995,21 @@ def _start_preview_and_generate_yaml(
     console.print()
     console.print("[blue]Generating YAML from approved steps...[/blue]")
 
-    generator = YAMLGenerator(name=test_name, app_package=app_package)
+    generator = YAMLGenerator(
+        name=test_name,
+        app_package=app_package,
+        screen_width=screen_width,
+        screen_height=screen_height,
+    )
     generator.add_launch_app()
+
+    # Build verification map: step_index -> verification description (only enabled ones)
+    verification_map: dict[int, str] = {}
+    for v in result.verifications:
+        if v.get("enabled", True) and v.get("description"):
+            after_step = v.get("after_step")
+            if after_step is not None:
+                verification_map[after_step] = v["description"]
 
     # Get enabled steps from approval result (skip app_launched which is index 0)
     enabled_steps = [
@@ -928,13 +1020,27 @@ def _start_preview_and_generate_yaml(
     for step_data in enabled_steps:
         action = step_data.get("action", "tap")
         element = step_data.get("element_text")
-        coords = step_data.get("coordinates", [0, 0])
+        coords = step_data.get("coordinates", {})
+        step_index = step_data.get("index")
+        description = step_data.get("action_description")
+
+        # Get verification for this step if approved
+        verification = verification_map.get(step_index) if step_index is not None else None
+
+        # Convert coords to tuple format
+        coords_tuple = None
+        if isinstance(coords, dict) and "x" in coords and "y" in coords:
+            coords_tuple = (coords["x"], coords["y"])
+        elif isinstance(coords, (list, tuple)) and len(coords) >= 2:
+            coords_tuple = (coords[0], coords[1])
 
         if action == "tap":
-            if element:
-                generator.add_tap(0, 0, element=element)
-            else:
-                generator.add_tap(coords[0], coords[1])
+            generator.add_rich_tap(
+                element=element,
+                coords=coords_tuple,
+                description=description,
+                verification=verification,
+            )
         elif action == "type":
             # Type action - text field was already tapped in a separate step
             text = step_data.get("text", "")
@@ -948,15 +1054,12 @@ def _start_preview_and_generate_yaml(
             # Long press is not directly supported in YAML format
             # For now, generate a tap with the element/coordinates
             # TODO: Add proper long_press support to YAML format
-            if element:
-                generator.add_tap(0, 0, element=element)
-            else:
-                generator.add_tap(coords[0], coords[1])
-
-    # Add approved verifications
-    for v in result.verifications:
-        if v.get("enabled", True) and v.get("description"):
-            generator.add_verify_screen(v["description"])
+            generator.add_rich_tap(
+                element=element,
+                coords=coords_tuple,
+                description=description,
+                verification=verification,
+            )
 
     generator.add_terminate_app()
 
@@ -1029,8 +1132,16 @@ def preview(
     else:
         video_duration = "0:00"
 
+    # Build verifications from preview steps (disabled by default, user opts in)
+    verifications = [
+        {"description": ps.suggested_verification, "after_step": ps.index, "enabled": False}
+        for ps in preview_steps
+        if ps.suggested_verification
+    ]
+
     console.print(f"[blue]Opening approval UI for:[/blue] {test_name}")
     console.print(f"  Steps: {len(preview_steps)}")
+    console.print(f"  Verifications: {len(verifications)} suggested")
     console.print(f"  Screen: {screen_width}x{screen_height}")
     console.print()
     console.print("[dim]Review and edit steps, then click 'Generate YAML'[/dim]")
@@ -1040,7 +1151,7 @@ def preview(
 
     server = PreviewServer(
         steps=preview_steps,
-        verifications=[],
+        verifications=verifications,
         test_name=test_name,
         app_package=app_package,
         recording_dir=test_dir,
@@ -1076,6 +1187,14 @@ def preview(
         if step.get("enabled", True) and step.get("action") != "app_launched":
             enabled_indices.append(i + 1)  # 1-based index
 
+    # Build verification map from approval result (only enabled ones)
+    verification_map: dict[int, str] = {}
+    for v in result.verifications:
+        if v.get("enabled", False) and v.get("description"):
+            after_step = v.get("after_step")
+            if after_step is not None:
+                verification_map[after_step] = v["description"]
+
     for idx in enabled_indices:
         preview_step = preview_lookup.get(idx)
         if not preview_step:
@@ -1085,7 +1204,8 @@ def preview(
         element = preview_step.element_text
         coords = preview_step.coordinates
         description = preview_step.action_description
-        verification = preview_step.suggested_verification
+        # Only include verification if user enabled it in approval UI
+        verification = verification_map.get(idx)
 
         if action == "tap":
             generator.add_rich_tap(
@@ -1111,11 +1231,6 @@ def preview(
                 description=description,
                 verification=verification,
             )
-
-    # Add any additional verifications from approval UI
-    for ver in result.verifications:
-        if ver.get("enabled", True):
-            generator.add_verify_screen(ver.get("description", ""))
 
     yaml_path = test_dir / "test.yaml"
     generator.save(yaml_path)
