@@ -450,9 +450,17 @@ class TouchMonitor:
         # Convert end position to screen pixels
         end_x, end_y = self._raw_to_screen(self._current_x, self._current_y)
 
-        # Use start position or fall back to end position
-        start_x = self._touch_start_x if self._touch_start_x is not None else end_x
-        start_y = self._touch_start_y if self._touch_start_y is not None else end_y
+        # Use first trajectory point as start position (most reliable)
+        # Fall back to _touch_start_x/y, then to end position
+        if self._trajectory:
+            start_x = self._trajectory[0].x
+            start_y = self._trajectory[0].y
+        elif self._touch_start_x is not None and self._touch_start_y is not None:
+            start_x = self._touch_start_x
+            start_y = self._touch_start_y
+        else:
+            start_x = end_x
+            start_y = end_y
 
         # Calculate path distance from full trajectory
         path_distance = self._calculate_path_distance(self._trajectory)
