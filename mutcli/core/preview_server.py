@@ -74,7 +74,7 @@ class PreviewServer:
     def start_and_wait(self) -> ApprovalResult | None:
         """Start server, open browser, wait for approval, return result."""
         handler = self._create_handler()
-        self._server = HTTPServer(("localhost", self.port), handler)
+        self._server = self._create_server_with_available_port(handler)
 
         # Open browser
         url = f"http://localhost:{self.port}/preview"
@@ -85,6 +85,25 @@ class PreviewServer:
             self._server.handle_request()
 
         return self.result
+
+    def _create_server_with_available_port(
+        self, handler: type[BaseHTTPRequestHandler], max_attempts: int = 10
+    ) -> HTTPServer:
+        """Create HTTP server, trying subsequent ports if default is busy."""
+        import errno
+
+        for attempt in range(max_attempts):
+            port = self.port + attempt
+            try:
+                server = HTTPServer(("localhost", port), handler)
+                self.port = port  # Update to actual port used
+                return server
+            except OSError as e:
+                if e.errno == errno.EADDRINUSE and attempt < max_attempts - 1:
+                    continue
+                raise
+
+        raise OSError(f"Could not find available port after {max_attempts} attempts")
 
     def _load_template(self) -> str:
         """Load HTML template from templates directory."""
