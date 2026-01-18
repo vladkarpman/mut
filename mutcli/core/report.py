@@ -3,6 +3,7 @@
 import base64
 import html
 import json
+import math
 from datetime import datetime
 from pathlib import Path
 from typing import Any
@@ -13,36 +14,58 @@ from mutcli.core.executor import TestResult
 class ReportGenerator:
     """Generate JSON and HTML test reports."""
 
-    # Status icons
+    # Status icons (Material Symbols names)
     STATUS_ICONS = {
-        "passed": "&#10003;",  # checkmark
-        "failed": "&#10007;",  # X mark
-        "skipped": "&#8212;",  # em dash
+        "passed": "check_circle",
+        "failed": "cancel",
+        "skipped": "remove_circle_outline",
     }
 
-    # Action CSS class mappings
-    ACTION_CLASSES = {
-        "tap": "tap",
-        "swipe": "swipe",
-        "verify_screen": "verify_screen",
-        "verify": "verify",
-        "wait": "wait",
-        "wait_for": "wait_for",
-        "type": "type",
-        "long_press": "long_press",
-        "scroll_to": "scroll_to",
-        "launch_app": "launch_app",
-        "terminate_app": "terminate_app",
+    # Gesture icons (Material Symbols names)
+    GESTURE_ICONS = {
+        "tap": "touch_app",
+        "double_tap": "ads_click",
+        "long_press": "pan_tool_alt",
+        "swipe": "swipe_vertical",
+        "verify_screen": "verified",
+        "verify": "verified",
+        "wait": "schedule",
+        "wait_for": "schedule",
+        "type": "keyboard",
+        "scroll_to": "unfold_more",
+        "launch_app": "rocket_launch",
+        "terminate_app": "cancel",
+        "back": "arrow_back",
+        "hide_keyboard": "keyboard_hide",
+        "if_present": "rule",
+        "if_absent": "rule",
+        "if_screen": "rule",
+        "repeat": "repeat",
     }
 
-    def __init__(self, output_dir: Path):
+    # Suggested failure reasons based on error patterns
+    FAILURE_SUGGESTIONS = {
+        "element not found": "The target element may have changed or doesn't exist. "
+        "Try updating the element selector or adding a wait_for step before this action.",
+        "timeout": "The operation took too long. Consider increasing the timeout "
+        "or adding a wait step to ensure the app is ready.",
+        "coordinates": "The tap coordinates may be incorrect for this screen size. "
+        "Consider using element text instead of fixed coordinates.",
+        "verify_screen failed": "The screen state doesn't match the expected description. "
+        "The app may be showing different content or the description may need adjustment.",
+        "unknown action": "This action type is not supported. Check the test YAML syntax.",
+    }
+
+    def __init__(self, output_dir: Path, source_video_path: Path | None = None):
         """Initialize generator.
 
         Args:
             output_dir: Directory to write reports
+            source_video_path: Optional path to source video from recording session
         """
         self._output_dir = Path(output_dir)
         self._output_dir.mkdir(parents=True, exist_ok=True)
+        self._source_video_path = Path(source_video_path) if source_video_path else None
 
     def _load_template(self) -> str:
         """Load HTML template from templates directory."""
@@ -96,11 +119,20 @@ class ReportGenerator:
         # Generate steps HTML
         steps_html = self._generate_steps_html(data["steps"])
 
+        # Determine status icon
+        status_icons = {
+            "passed": "check_circle",
+            "failed": "cancel",
+            "error": "error",
+        }
+        status_icon = status_icons.get(data["status"], "help")
+
         # Load and populate template
         template = self._load_template()
         html_content = template.replace("{{test_name}}", html.escape(data["test"]))
         html_content = html_content.replace("{{status}}", data["status"])
         html_content = html_content.replace("{{status_class}}", data["status"])
+        html_content = html_content.replace("{{status_icon}}", status_icon)
         html_content = html_content.replace("{{duration}}", data["duration"])
         html_content = html_content.replace("{{timestamp}}", data["timestamp"])
         html_content = html_content.replace("{{steps_html}}", steps_html)
@@ -119,6 +151,10 @@ class ReportGenerator:
         json_data = self._escape_json_for_html(json.dumps(data))
         html_content = html_content.replace("{{json_data}}", json_data)
         html_content = html_content.replace("{{video_html}}", self._generate_video_html())
+
+        # Convert escaped braces back to single braces for CSS/JS
+        # Template uses {{ and }} to avoid conflicts with placeholder syntax
+        html_content = html_content.replace("{{", "{").replace("}}", "}")
 
         path = self._output_dir / "report.html"
         path.write_text(html_content)
@@ -141,10 +177,26 @@ class ReportGenerator:
                     "number": s.step_number,
                     "action": s.action,
                     "status": s.status,
+                    "target": s.target,
+                    "description": s.description,
                     "duration": f"{s.duration:.1f}s",
                     "error": s.error,
                     "screenshot_before": self._encode_screenshot(s.screenshot_before),
                     "screenshot_after": self._encode_screenshot(s.screenshot_after),
+                    # Action screenshots (varies by gesture type)
+                    "screenshot_action": self._encode_screenshot(s.screenshot_action),
+                    "screenshot_action_end": self._encode_screenshot(s.screenshot_action_end),
+                    # AI analysis results
+                    "ai_verified": s.ai_verified,
+                    "ai_outcome": s.ai_outcome,
+                    "ai_suggestion": s.ai_suggestion,
+                    # Gesture coordinates for visualization
+                    "coords": s.details.get("coords"),
+                    "end_coords": s.details.get("end_coords"),
+                    "direction": s.details.get("direction"),
+                    # Trajectory data for swipe visualization
+                    "trajectory": s.details.get("trajectory"),
+                    "duration_ms": s.details.get("duration_ms"),
                 }
                 for s in result.steps
             ],
@@ -168,54 +220,237 @@ class ReportGenerator:
         """Generate HTML for a single step card."""
         status = step["status"]
         action = step["action"]
-        action_class = self.ACTION_CLASSES.get(action, action)
-        status_icon = self.STATUS_ICONS.get(status, "")
-        escaped_action = html.escape(action)
+        gesture_icon = self.GESTURE_ICONS.get(action, "radio_button_unchecked")
+        status_icon = self.STATUS_ICONS.get(status, "help")
 
-        # Error message HTML (if any)
-        error_html = ""
+        # Action class for CSS (no underscores)
+        action_class = action.replace("_", "")
+
+        # Step description: prefer description, fallback to target
+        step_desc = step.get("description") or step.get("target") or ""
+        escaped_desc = html.escape(str(step_desc))
+
+        # AI analysis section (if available)
+        ai_html = self._generate_ai_analysis_html(step)
+
+        # Failure section HTML (for failed steps)
+        failure_html = ""
         if step["error"]:
             escaped_error = html.escape(step["error"])
-            error_html = f'<div class="step-error">{escaped_error}</div>'
+            # Prefer AI suggestion over pattern-based suggestion
+            suggestion = step.get("ai_suggestion") or self._get_failure_suggestion(
+                step["error"]
+            )
+            failure_html = f"""
+            <div class="step-failure">
+                <div class="failure-header">
+                    <span class="material-symbols-outlined">error</span>
+                    Step Failed
+                </div>
+                <div class="failure-error">{escaped_error}</div>
+                <div class="failure-suggestion">
+                    <span class="failure-suggestion-label">Suggested Fix</span>
+                    <span class="failure-suggestion-text">{html.escape(suggestion)}</span>
+                </div>
+            </div>"""
 
         # Screenshots HTML (if any)
         screenshots_html = self._generate_screenshots_html(step)
 
-        return f"""<div class="step-card {status}" data-status="{status}" \
-data-index="{index}" onclick="selectStep({index})">
+        return f"""<div class="step-card" data-status="{status}" data-index="{index}">
     <div class="step-header">
         <div class="step-title">
             <div class="step-number {status}">{step["number"]}</div>
-            <span class="action-badge {action_class}">{escaped_action}</span>
-            <span class="step-description">{html.escape(str(step.get("target", "")))}</span>
+            <span class="gesture-badge {action_class}">
+                <span class="material-symbols-outlined">{gesture_icon}</span>
+                {action.upper().replace("_", " ")}
+            </span>
+            <span class="step-action-title">{escaped_desc}</span>
         </div>
-        <div class="step-meta">
+        <div class="step-status">
             <span class="step-duration">{step["duration"]}</span>
-            <span class="step-status-icon {status}">{status_icon}</span>
+            <div class="step-status-indicator {status}">
+                <span class="material-symbols-outlined">{status_icon}</span>
+            </div>
         </div>
     </div>
-    {error_html}
-    {screenshots_html}
+    <div class="step-content">
+        {screenshots_html}
+        {ai_html}
+        {failure_html}
+    </div>
 </div>"""
 
+    def _generate_ai_analysis_html(self, step: dict[str, Any]) -> str:
+        """Generate HTML for AI analysis section.
+
+        Distinguishes between:
+        - Verification: explicit verify_screen steps (pass/fail judgment)
+        - Observation: other steps where AI describes what happened (informational)
+        """
+        ai_outcome = step.get("ai_outcome")
+        ai_verified = step.get("ai_verified")
+        action = step.get("action", "")
+
+        if not ai_outcome:
+            return ""
+
+        # Check if this is an explicit verification step
+        is_verification = action in ("verify_screen", "verify")
+
+        if is_verification:
+            # Verification: prominent pass/fail styling
+            if ai_verified is True:
+                verify_icon = "verified"
+                verify_class = "verified"
+                header_text = "Verification Passed"
+            elif ai_verified is False:
+                verify_icon = "gpp_bad"
+                verify_class = "not-verified"
+                header_text = "Verification Failed"
+            else:
+                verify_icon = "verified"
+                verify_class = ""
+                header_text = "Verification"
+
+            return f"""
+        <div class="step-ai-analysis {verify_class}">
+            <div class="ai-header">
+                <span class="material-symbols-outlined">{verify_icon}</span>
+                {header_text}
+            </div>
+            <div class="ai-outcome">{html.escape(ai_outcome)}</div>
+        </div>"""
+        else:
+            # Observation: muted informational styling
+            return f"""
+        <div class="step-ai-observation">
+            <div class="ai-observation-header">
+                <span class="material-symbols-outlined">visibility</span>
+                AI Observation
+            </div>
+            <div class="ai-observation-text">{html.escape(ai_outcome)}</div>
+        </div>"""
+
+    def _get_failure_suggestion(self, error: str) -> str:
+        """Get a suggested reason based on the error message."""
+        error_lower = error.lower()
+        for pattern, suggestion in self.FAILURE_SUGGESTIONS.items():
+            if pattern in error_lower:
+                return suggestion
+        return (
+            "An unexpected error occurred. Check the error message for details "
+            "and verify the test configuration."
+        )
+
+    def _get_action_frame_for_step(self, step: dict[str, Any]) -> str | None:
+        """Select the primary action frame to display based on gesture type.
+
+        For swipe/long_press with two action frames, shows the more informative one.
+        """
+        action = step.get("action", "")
+        screenshot_action = step.get("screenshot_action")
+        screenshot_action_end = step.get("screenshot_action_end")
+
+        if action == "swipe":
+            # For swipe: prefer swipe_start (shows finger position at start)
+            return screenshot_action or screenshot_action_end
+        elif action == "long_press":
+            # For long_press: prefer press_held (shows held state)
+            return screenshot_action_end or screenshot_action
+        else:
+            # For tap/double_tap: single action frame
+            return screenshot_action
+
     def _generate_screenshots_html(self, step: dict[str, Any]) -> str:
-        """Generate HTML for before/after screenshots."""
+        """Generate HTML for before/action/after screenshots.
+
+        Uses 3-column layout when action screenshot is available,
+        falls back to 2-column layout otherwise.
+        """
         before = step.get("screenshot_before")
         after = step.get("screenshot_after")
+        action_frame = self._get_action_frame_for_step(step)
 
         if not before and not after:
             return ""
 
-        before_html = self._generate_frame_html("before", "Before", before)
+        # Generate gesture indicator for action frame
+        gesture_html = self._generate_gesture_indicator_html(step)
+
+        # 3-column layout if action frame available
+        if action_frame:
+            before_html = self._generate_frame_html("before", "Before", before)
+            action_html = self._generate_frame_html("action", "Action", action_frame, gesture_html)
+            after_html = self._generate_frame_html("after", "After", after)
+
+            return f"""<div class="step-frames">
+    {before_html}
+    {action_html}
+    {after_html}
+</div>"""
+
+        # 2-column fallback for steps without action frames
+        before_html = self._generate_frame_html("before", "Before", before, gesture_html)
         after_html = self._generate_frame_html("after", "After", after)
 
-        return f"""<div class="step-frames">
+        return f"""<div class="step-frames two-column">
     {before_html}
     {after_html}
 </div>"""
 
+    def _generate_gesture_indicator_html(self, step: dict[str, Any]) -> str:
+        """Generate HTML for gesture indicator overlay with animations."""
+        coords = step.get("coords")
+        if not coords:
+            return ""
+
+        action = step.get("action", "")
+        x = coords.get("x", 0)
+        y = coords.get("y", 0)
+
+        if action in ("tap", "double_tap"):
+            return f"""<div class="gesture-indicator-container">
+    <div class="tap-indicator" style="left: {x:.1f}%; top: {y:.1f}%;"></div>
+</div>"""
+
+        if action == "long_press":
+            return f"""<div class="gesture-indicator-container">
+    <div class="long-press-indicator" style="left: {x:.1f}%; top: {y:.1f}%;"></div>
+</div>"""
+
+        if action == "swipe":
+            end_coords = step.get("end_coords", {})
+            end_x = end_coords.get("x", x)
+            end_y = end_coords.get("y", y)
+
+            # Calculate line length and angle for trajectory
+            dx = end_x - x
+            dy = end_y - y
+            # Length in percentage units, convert to approximate pixels
+            length_pct = math.sqrt(dx**2 + dy**2)
+            line_length = max(30, length_pct * 5)  # Scale for visibility
+            angle = math.degrees(math.atan2(dy, dx))
+
+            return f"""<div class="gesture-indicator-container">
+    <div class="swipe-indicator" style="
+        --start-x: {x:.1f}%;
+        --start-y: {y:.1f}%;
+        --end-x: {end_x:.1f}%;
+        --end-y: {end_y:.1f}%;
+        --line-length: {line_length:.0f}px;
+        --line-angle: {angle:.1f}deg;
+    ">
+        <div class="swipe-trajectory-line"></div>
+        <div class="swipe-dot"></div>
+    </div>
+</div>"""
+
+        return ""
+
     def _generate_frame_html(
-        self, frame_type: str, label: str, image_data: str | None
+        self, frame_type: str, label: str, image_data: str | None,
+        overlay_html: str = ""
     ) -> str:
         """Generate HTML for a single frame column."""
         if image_data:
@@ -230,29 +465,55 @@ data-index="{index}" onclick="selectStep({index})">
     <div class="frame-column-header">{label}</div>
     <div class="frame-image-container">
         {image_html}
+        {overlay_html}
     </div>
 </div>"""
 
     def _generate_video_html(self) -> str:
-        """Generate video player HTML if video exists."""
-        video_path = self._output_dir / "recording" / "video.mp4"
-        if not video_path.exists():
-            return ""
+        """Generate video player HTML if video exists.
 
-        return """<div class="video-panel" id="videoPanel">
-    <div class="video-panel-header">Recording</div>
+        Checks multiple locations:
+        1. output_dir/recording/video.mp4 (from --video flag during test run)
+        2. source_video_path (from original recording session)
+        """
+        # Check for video recorded during test run
+        run_video_path = self._output_dir / "recording" / "video.mp4"
+        if run_video_path.exists():
+            return """<div class="video-panel" id="videoPanel">
     <div class="video-container">
         <div class="video-wrapper">
-            <video id="reportVideo" preload="metadata">
-                <source src="video.mp4" type="video/mp4">
-                Your browser does not support video playback.
-            </video>
+            <video id="reportVideo" src="recording/video.mp4" controls></video>
         </div>
-        <div class="video-controls">
-            <button class="video-play-btn" id="videoPlayBtn">&#9658;</button>
-            <input type="range" class="video-scrubber" id="videoScrubber"
-                   value="0" min="0" max="100">
-            <span class="video-time" id="videoTime">0:00 / 0:00</span>
+    </div>
+</div>"""
+
+        # Check for source video from recording session
+        if self._source_video_path and self._source_video_path.exists():
+            # Calculate relative path from output_dir to source video
+            try:
+                rel_path = self._source_video_path.resolve().relative_to(
+                    self._output_dir.resolve()
+                )
+                video_src = str(rel_path)
+            except ValueError:
+                # Not relative, use path relative to report's parent directories
+                # e.g., reports/2024-01-18/report.html -> ../../video.mp4
+                video_src = str(
+                    Path("..") / ".." / self._source_video_path.name
+                )
+            return f"""<div class="video-panel" id="videoPanel">
+    <div class="video-container">
+        <div class="video-wrapper">
+            <video id="reportVideo" src="{video_src}" controls></video>
+        </div>
+    </div>
+</div>"""
+
+        return """<div class="video-panel" id="videoPanel">
+    <div class="video-container">
+        <div class="no-video">
+            <span class="material-symbols-outlined">videocam_off</span>
+            <span>No recording available</span>
         </div>
     </div>
 </div>"""
