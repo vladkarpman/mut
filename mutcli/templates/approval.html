@@ -5702,11 +5702,12 @@
 
                 // Wait for image to load if not already
                 if (!img.complete) {
-                    img.onload = () => positionIndicatorInContainer(container, img, indicators);
+                    img.onload = () => requestAnimationFrame(() => requestAnimationFrame(() => positionIndicatorInContainer(container, img, indicators)));
                     return;
                 }
 
-                positionIndicatorInContainer(container, img, indicators);
+                // Double requestAnimationFrame ensures layout is fully settled before reading dimensions
+                requestAnimationFrame(() => requestAnimationFrame(() => positionIndicatorInContainer(container, img, indicators)));
             });
         }
 
@@ -5714,21 +5715,29 @@
             // Get the actual rendered image bounds (accounting for object-fit: contain)
             const bounds = getRenderedImageBounds(img);
 
+            // Get position of img element relative to container (accounts for flex centering)
+            const imgRect = img.getBoundingClientRect();
+            const containerRect = container.getBoundingClientRect();
+            const imgOffsetX = imgRect.left - containerRect.left;
+            const imgOffsetY = imgRect.top - containerRect.top;
+
             // Position the wrapper to match actual rendered content
+            // Add both the element offset (flex centering) and the letterbox offset
             const wrapper = indicators[0]?.parentElement;
             if (wrapper && wrapper.classList.contains('gesture-indicator-wrapper')) {
-                wrapper.style.left = bounds.x + 'px';
-                wrapper.style.top = bounds.y + 'px';
+                wrapper.style.left = (imgOffsetX + bounds.x) + 'px';
+                wrapper.style.top = (imgOffsetY + bounds.y) + 'px';
                 wrapper.style.width = bounds.width + 'px';
                 wrapper.style.height = bounds.height + 'px';
             }
 
-            // Calculate scale factor from original screen size to actual rendered size
+            // Calculate scale factor from device coordinates to rendered size
+            // Coordinates are in device space (SCREEN_*), scale to rendered bounds
             const scaleX = bounds.width / SCREEN_WIDTH;
             const scaleY = bounds.height / SCREEN_HEIGHT;
 
             indicators.forEach(indicator => {
-                // Get original pixel coordinates from data attributes
+                // Get original pixel coordinates from data attributes (in device coordinate space)
                 const x = parseFloat(indicator.dataset.x) || 0;
                 const y = parseFloat(indicator.dataset.y) || 0;
 
@@ -6167,7 +6176,7 @@
                         <div class="frame-column-header">Action</div>
                         <div class="frame-image-container clickable" onclick="openFramePickerForStep('${step.id}', 'action'); event.stopPropagation();" title="Click to change frame">
                             ${actionFrame && showActionFrame ? `
-                                <img src="${actionFrame}" onload="positionIndicator(this, '${step.id}')">
+                                <img src="${actionFrame}" onload="requestAnimationFrame(() => requestAnimationFrame(() => positionIndicator(this, '${step.id}')))">
                                 <div class="gesture-indicator-wrapper" data-step-id="${step.id}" data-x="${posX}" data-y="${posY}" data-action="${step.action}" data-direction="${step.direction || 'up'}">
                                     ${renderGestureIndicator()}
                                 </div>
@@ -8471,13 +8480,17 @@
 
             // Position wrapper to match actual rendered content within the element
             // Add both the element offset and the letterbox offset
-            wrapper.style.left = (imgOffsetX + bounds.x) + 'px';
-            wrapper.style.top = (imgOffsetY + bounds.y) + 'px';
+            const wrapperLeft = imgOffsetX + bounds.x;
+            const wrapperTop = imgOffsetY + bounds.y;
+            wrapper.style.left = wrapperLeft + 'px';
+            wrapper.style.top = wrapperTop + 'px';
             wrapper.style.width = bounds.width + 'px';
             wrapper.style.height = bounds.height + 'px';
 
             // Position gesture indicators within the wrapper
             const indicators = wrapper.querySelectorAll('.gesture-indicator');
+
+            // Scale from device coordinates to rendered size
             const scaleX = bounds.width / SCREEN_WIDTH;
             const scaleY = bounds.height / SCREEN_HEIGHT;
 
@@ -8485,7 +8498,7 @@
                 const x = parseFloat(indicator.dataset.x) || 0;
                 const y = parseFloat(indicator.dataset.y) || 0;
 
-                // Position relative to wrapper origin (no offset needed since wrapper is at rendered content bounds)
+                // Position relative to wrapper origin
                 indicator.style.left = (x * scaleX) + 'px';
                 indicator.style.top = (y * scaleY) + 'px';
 
