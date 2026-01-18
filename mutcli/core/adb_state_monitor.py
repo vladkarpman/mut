@@ -33,8 +33,11 @@ class ADBStateMonitor:
 
         # State storage: list of (timestamp, value) tuples
         self._keyboard_states: list[tuple[float, bool]] = []
-        self._activity_states: list[tuple[float, str]] = []
+        self._activity_states: list[tuple[float, str | None]] = []
         self._window_states: list[tuple[float, list[str]]] = []
+
+        # Lock for thread-safe access to state lists
+        self._lock = threading.Lock()
 
         # Daemon threads for polling
         self._keyboard_thread: threading.Thread | None = None
@@ -107,7 +110,8 @@ class ADBStateMonitor:
             try:
                 visible = self._poll_keyboard()
                 timestamp = self._get_relative_timestamp()
-                self._keyboard_states.append((timestamp, visible))
+                with self._lock:
+                    self._keyboard_states.append((timestamp, visible))
             except Exception as e:
                 logger.debug("Keyboard poll failed: %s", e)
             self._stop_event.wait(KEYBOARD_POLL_INTERVAL)
@@ -119,7 +123,8 @@ class ADBStateMonitor:
                 activity = self._poll_activity()
                 if activity:
                     timestamp = self._get_relative_timestamp()
-                    self._activity_states.append((timestamp, activity))
+                    with self._lock:
+                        self._activity_states.append((timestamp, activity))
             except Exception as e:
                 logger.debug("Activity poll failed: %s", e)
             self._stop_event.wait(FAST_POLL_INTERVAL)
@@ -130,7 +135,8 @@ class ADBStateMonitor:
             try:
                 windows = self._poll_windows()
                 timestamp = self._get_relative_timestamp()
-                self._window_states.append((timestamp, windows))
+                with self._lock:
+                    self._window_states.append((timestamp, windows))
             except Exception as e:
                 logger.debug("Windows poll failed: %s", e)
             self._stop_event.wait(FAST_POLL_INTERVAL)
@@ -210,17 +216,18 @@ class ADBStateMonitor:
         Returns:
             True if keyboard was visible, False otherwise
         """
-        if not self._keyboard_states:
-            return False
+        with self._lock:
+            if not self._keyboard_states:
+                return False
 
-        # Find the most recent state at or before the timestamp
-        result = False
-        for ts, visible in self._keyboard_states:
-            if ts <= timestamp:
-                result = visible
-            else:
-                break
-        return result
+            # Find the most recent state at or before the timestamp
+            result = False
+            for ts, visible in self._keyboard_states:
+                if ts <= timestamp:
+                    result = visible
+                else:
+                    break
+            return result
 
     def get_activity_state_at(self, timestamp: float) -> str | None:
         """Get current activity at a specific timestamp.
@@ -231,16 +238,17 @@ class ADBStateMonitor:
         Returns:
             Activity name or None
         """
-        if not self._activity_states:
-            return None
+        with self._lock:
+            if not self._activity_states:
+                return None
 
-        result = None
-        for ts, activity in self._activity_states:
-            if ts <= timestamp:
-                result = activity
-            else:
-                break
-        return result
+            result = None
+            for ts, activity in self._activity_states:
+                if ts <= timestamp:
+                    result = activity
+                else:
+                    break
+            return result
 
     def get_windows_state_at(self, timestamp: float) -> list[str]:
         """Get visible windows at a specific timestamp.
@@ -251,13 +259,14 @@ class ADBStateMonitor:
         Returns:
             List of window titles
         """
-        if not self._window_states:
-            return []
+        with self._lock:
+            if not self._window_states:
+                return []
 
-        result: list[str] = []
-        for ts, windows in self._window_states:
-            if ts <= timestamp:
-                result = windows
-            else:
-                break
-        return result
+            result: list[str] = []
+            for ts, windows in self._window_states:
+                if ts <= timestamp:
+                    result = windows
+                else:
+                    break
+            return result
