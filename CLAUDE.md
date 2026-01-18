@@ -16,7 +16,7 @@ pip install -e ".[dev]"
 mut devices                     # List connected devices
 mut run tests/login.yaml        # Execute test
 mut record my-test --app com.example.app  # Start recording
-mut stop                        # Stop recording, open approval UI
+mut analyze my-test             # Analyze recording, open approval UI
 
 # Tests
 pytest                          # Run all tests
@@ -36,7 +36,7 @@ python -m build
 
 ```
 mutcli/
-├── cli.py                     # Typer commands (run, record, stop, devices, report)
+├── cli.py                     # Typer commands (run, record, analyze, devices, report)
 ├── __init__.py                # Version
 ├── __main__.py                # Entry point
 ├── models/

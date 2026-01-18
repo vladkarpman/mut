@@ -38,9 +38,8 @@ mut run tests/login.yaml
 
 ```bash
 mut record login-flow --app com.example.app
-# Interact with your app...
-mut stop
-# Opens approval UI in browser
+# Interact with your app... Press Enter when done.
+# Approval UI opens automatically in browser
 ```
 
 ### List devices
@@ -154,12 +153,13 @@ Start recording user interactions.
 mut record checkout-flow --app com.example.shop
 ```
 
-### `mut stop`
+### `mut analyze <name>`
 
-Stop recording and generate YAML test.
+Re-analyze a recording and generate YAML test. Use this if you cancelled the approval UI
+or want to re-process the recording.
 
 ```bash
-mut stop
+mut analyze checkout-flow
 # Opens browser with approval UI
 # Review and edit steps
 # Export YAML when done
@@ -234,10 +234,12 @@ Logs include: step execution, element search, AI calls, timing, retries.
 
 1. **Start recording**: `mut record my-test --app com.example.app`
 2. **Interact with app**: Touch, type, swipe - all captured with video
-3. **Stop recording**: `mut stop`
+3. **Stop recording**: Press Enter (or Ctrl+C)
 4. **Review in browser**: Approval UI opens automatically
 5. **Edit steps**: Adjust descriptions, add verifications
-6. **Export YAML**: Download the generated test file
+6. **Export YAML**: Click "Generate YAML" to save
+
+To re-process a recording: `mut analyze my-test`
 
 **Recording folder structure:**
 

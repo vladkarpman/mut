@@ -1,4 +1,4 @@
-"""Tests for CLI stop command."""
+"""Tests for CLI analyze command."""
 
 import json
 from pathlib import Path
@@ -29,8 +29,8 @@ def create_mock_approval_result(
     return ApprovalResult(approved=approved, steps=steps, verifications=verifications)
 
 
-class TestStopCommand:
-    """Tests for the stop command."""
+class TestAnalyzeCommand:
+    """Tests for the analyze command."""
 
     @pytest.fixture
     def recording_dir(self, tmp_path: Path) -> Path:
@@ -66,7 +66,7 @@ class TestStopCommand:
 
         return test_dir
 
-    def test_stop_generates_yaml(self, recording_dir: Path) -> None:
+    def test_analyze_generates_yaml(self, recording_dir: Path) -> None:
         """Stop command should generate test.yaml file."""
         with (
             patch("mutcli.core.config.ConfigLoader.load") as mock_load,
@@ -92,12 +92,12 @@ class TestStopCommand:
             )
             mock_server_class.return_value = mock_server
 
-            result = runner.invoke(app, ["stop", str(recording_dir)])
+            result = runner.invoke(app, ["analyze", str(recording_dir)])
 
         assert result.exit_code == 0
         assert (recording_dir / "test.yaml").exists()
 
-    def test_stop_detects_typing_sequences(
+    def test_analyze_detects_typing_sequences(
         self, recording_dir_with_keyboard_taps: Path
     ) -> None:
         """Stop command should detect typing sequences from touch events."""
@@ -122,7 +122,7 @@ class TestStopCommand:
             mock_server_class.return_value = mock_server
 
             result = runner.invoke(
-                app, ["stop", str(recording_dir_with_keyboard_taps)]
+                app, ["analyze", str(recording_dir_with_keyboard_taps)]
             )
 
         assert result.exit_code == 0
@@ -130,7 +130,7 @@ class TestStopCommand:
         mock_detector_class.assert_called_once_with(2400, keyboard_states=None)
         mock_detector.detect.assert_called_once()
 
-    def test_stop_prompts_for_typed_text(
+    def test_analyze_prompts_for_typed_text(
         self, recording_dir_with_keyboard_taps: Path
     ) -> None:
         """Stop command should prompt user for typed text when typing detected."""
@@ -152,7 +152,7 @@ class TestStopCommand:
             # Simulate user input for typing prompt
             result = runner.invoke(
                 app,
-                ["stop", str(recording_dir_with_keyboard_taps)],
+                ["analyze", str(recording_dir_with_keyboard_taps)],
                 input="hello world\n",  # User types this text
             )
 
@@ -161,7 +161,7 @@ class TestStopCommand:
         output_lower = result.output.lower()
         assert "typing sequence" in output_lower or "typing pattern" in output_lower
 
-    def test_stop_uses_ai_analysis_when_api_key_available(
+    def test_analyze_uses_ai_analysis_when_api_key_available(
         self, recording_dir: Path
     ) -> None:
         """Stop command should use AI analysis when API key is configured."""
@@ -228,7 +228,7 @@ class TestStopCommand:
             mock_server.start_and_wait.return_value = create_mock_approval_result()
             mock_server_class.return_value = mock_server
 
-            result = runner.invoke(app, ["stop", str(recording_dir)])
+            result = runner.invoke(app, ["analyze", str(recording_dir)])
 
         assert result.exit_code == 0
         # Verify AI components were used
@@ -240,7 +240,7 @@ class TestStopCommand:
         # Check output mentions element extraction
         assert "Extracted" in result.output and "element names" in result.output
 
-    def test_stop_skips_ai_analysis_when_no_api_key(
+    def test_analyze_skips_ai_analysis_when_no_api_key(
         self, recording_dir: Path
     ) -> None:
         """Stop command should skip AI analysis gracefully when no API key."""
@@ -258,12 +258,12 @@ class TestStopCommand:
             mock_server.start_and_wait.return_value = create_mock_approval_result()
             mock_server_class.return_value = mock_server
 
-            result = runner.invoke(app, ["stop", str(recording_dir)])
+            result = runner.invoke(app, ["analyze", str(recording_dir)])
 
         assert result.exit_code == 0
         assert "AI analysis skipped (no API key)" in result.output
 
-    def test_stop_handles_ai_analysis_exception(
+    def test_analyze_handles_ai_analysis_exception(
         self, recording_dir: Path
     ) -> None:
         """Stop command should handle AI analysis exceptions gracefully."""
@@ -294,13 +294,13 @@ class TestStopCommand:
             mock_server.start_and_wait.return_value = create_mock_approval_result()
             mock_server_class.return_value = mock_server
 
-            result = runner.invoke(app, ["stop", str(recording_dir)])
+            result = runner.invoke(app, ["analyze", str(recording_dir)])
 
         assert result.exit_code == 0
         # Check that error was caught and reported
         assert "AI analysis skipped:" in result.output
 
-    def test_stop_warns_on_empty_touch_events(self, tmp_path: Path) -> None:
+    def test_analyze_warns_on_empty_touch_events(self, tmp_path: Path) -> None:
         """Stop command should warn when touch_events.json is empty."""
         test_dir = tmp_path / "empty-test"
         recording_dir = test_dir / "recording"
@@ -323,13 +323,13 @@ class TestStopCommand:
             mock_server.start_and_wait.return_value = create_mock_approval_result()
             mock_server_class.return_value = mock_server
 
-            result = runner.invoke(app, ["stop", str(test_dir)])
+            result = runner.invoke(app, ["analyze", str(test_dir)])
 
         assert result.exit_code == 0
         assert "Warning:" in result.output
         assert "No touch events found" in result.output
 
-    def test_stop_handles_json_decode_error(self, tmp_path: Path) -> None:
+    def test_analyze_handles_json_decode_error(self, tmp_path: Path) -> None:
         """Stop command should handle malformed touch_events.json."""
         test_dir = tmp_path / "malformed-test"
         recording_dir = test_dir / "recording"
@@ -338,12 +338,12 @@ class TestStopCommand:
         # Write malformed JSON
         (recording_dir / "touch_events.json").write_text("{invalid json")
 
-        result = runner.invoke(app, ["stop", str(test_dir)])
+        result = runner.invoke(app, ["analyze", str(test_dir)])
 
         assert result.exit_code == 2
         assert "Invalid JSON" in result.output
 
-    def test_stop_generates_yaml_with_analysis(
+    def test_analyze_generates_yaml_with_analysis(
         self, recording_dir: Path
     ) -> None:
         """Stop command should generate YAML with element names from AI analysis."""
@@ -419,7 +419,7 @@ class TestStopCommand:
             )
             mock_server_class.return_value = mock_server
 
-            result = runner.invoke(app, ["stop", str(recording_dir)])
+            result = runner.invoke(app, ["analyze", str(recording_dir)])
 
         assert result.exit_code == 0
         # Verify YAML was generated
@@ -429,7 +429,7 @@ class TestStopCommand:
         # Should have element-based taps (from AI analysis)
         assert "Login Button" in yaml_content or "Submit" in yaml_content
 
-    def test_stop_falls_back_to_coordinates_without_analysis(
+    def test_analyze_falls_back_to_coordinates_without_analysis(
         self, recording_dir: Path
     ) -> None:
         """Stop command should fall back to coordinates when no AI analysis."""
@@ -457,7 +457,7 @@ class TestStopCommand:
             )
             mock_server_class.return_value = mock_server
 
-            result = runner.invoke(app, ["stop", str(recording_dir)])
+            result = runner.invoke(app, ["analyze", str(recording_dir)])
 
         assert result.exit_code == 0
         # Verify YAML was generated with coordinates
@@ -467,32 +467,32 @@ class TestStopCommand:
         # Should have coordinate-based taps (fallback)
         assert "540" in yaml_content or "800" in yaml_content
 
-    def test_stop_handles_missing_touch_events_file(self, tmp_path: Path) -> None:
-        """Stop command should error when touch_events.json is missing."""
+    def test_analyze_handles_missing_touch_events_file(self, tmp_path: Path) -> None:
+        """Analyze command should error when touch_events.json is missing."""
         test_dir = tmp_path / "no-events"
         recording_dir = test_dir / "recording"
         recording_dir.mkdir(parents=True)
         # Don't create touch_events.json
 
-        result = runner.invoke(app, ["stop", str(test_dir)])
+        result = runner.invoke(app, ["analyze", str(test_dir)])
 
         assert result.exit_code == 2
-        assert "touch_events.json not found" in result.output
+        assert "No recording found" in result.output
 
-    def test_stop_handles_missing_recording_directory(self, tmp_path: Path) -> None:
-        """Stop command should handle when test directory exists but no recording."""
+    def test_analyze_handles_missing_recording_directory(self, tmp_path: Path) -> None:
+        """Analyze command should handle when test directory exists but no recording."""
         test_dir = tmp_path / "no-recording"
         test_dir.mkdir(parents=True)
         # Don't create recording subdirectory
 
-        result = runner.invoke(app, ["stop", str(test_dir)])
+        result = runner.invoke(app, ["analyze", str(test_dir)])
 
         assert result.exit_code == 2
-        assert "touch_events.json not found" in result.output
+        assert "No recording found" in result.output
 
 
-class TestStopCommandVideoExtraction:
-    """Tests for video frame extraction in stop command."""
+class TestAnalyzeCommandVideoExtraction:
+    """Tests for video frame extraction in analyze command."""
 
     @pytest.fixture
     def recording_with_video(self, tmp_path: Path) -> Path:
@@ -511,7 +511,7 @@ class TestStopCommandVideoExtraction:
 
         return test_dir
 
-    def test_stop_extracts_frames_from_video(
+    def test_analyze_extracts_frames_from_video(
         self, recording_with_video: Path
     ) -> None:
         """Stop command should extract frames when video exists."""
@@ -538,7 +538,7 @@ class TestStopCommandVideoExtraction:
             mock_server.start_and_wait.return_value = create_mock_approval_result()
             mock_server_class.return_value = mock_server
 
-            result = runner.invoke(app, ["stop", str(recording_with_video)])
+            result = runner.invoke(app, ["analyze", str(recording_with_video)])
 
         assert result.exit_code == 0
         # Verify frame extractor was called
@@ -546,7 +546,7 @@ class TestStopCommandVideoExtraction:
         mock_extractor.extract_for_collapsed_steps.assert_called_once()
         assert "Extracted 1 frames" in result.output
 
-    def test_stop_skips_extraction_when_no_video(
+    def test_analyze_skips_extraction_when_no_video(
         self, tmp_path: Path
     ) -> None:
         """Stop command should skip frame extraction when no video file."""
@@ -572,17 +572,17 @@ class TestStopCommandVideoExtraction:
             mock_server.start_and_wait.return_value = create_mock_approval_result()
             mock_server_class.return_value = mock_server
 
-            result = runner.invoke(app, ["stop", str(test_dir)])
+            result = runner.invoke(app, ["analyze", str(test_dir)])
 
         assert result.exit_code == 0
         assert "No video found, skipping frame extraction" in result.output
 
 
-class TestStopCommandIntegration:
-    """Integration tests for stop command with minimal mocking."""
+class TestAnalyzeCommandIntegration:
+    """Integration tests for analyze command with minimal mocking."""
 
-    def test_stop_end_to_end_without_api_key(self, tmp_path: Path) -> None:
-        """Full stop command flow without AI (no API key)."""
+    def test_analyze_end_to_end_without_api_key(self, tmp_path: Path) -> None:
+        """Full analyze command flow without AI (no API key)."""
         test_dir = tmp_path / "integration-test"
         recording_dir = test_dir / "recording"
         recording_dir.mkdir(parents=True)
@@ -625,7 +625,7 @@ class TestStopCommandIntegration:
             )
             mock_server_class.return_value = mock_server
 
-            result = runner.invoke(app, ["stop", str(test_dir)])
+            result = runner.invoke(app, ["analyze", str(test_dir)])
 
         assert result.exit_code == 0
         assert "Test generated!" in result.output
@@ -638,7 +638,7 @@ class TestStopCommandIntegration:
         assert "com.test.app" in yaml_content
         assert "tap:" in yaml_content
 
-    def test_stop_uses_correct_test_name_from_directory(
+    def test_analyze_uses_correct_test_name_from_directory(
         self, tmp_path: Path
     ) -> None:
         """Stop command should derive test name from directory."""
@@ -663,7 +663,7 @@ class TestStopCommandIntegration:
             mock_server.start_and_wait.return_value = create_mock_approval_result()
             mock_server_class.return_value = mock_server
 
-            result = runner.invoke(app, ["stop", str(test_dir)])
+            result = runner.invoke(app, ["analyze", str(test_dir)])
 
         assert result.exit_code == 0
         # Test name should be derived from directory name
@@ -671,10 +671,10 @@ class TestStopCommandIntegration:
         assert yaml_path.exists()
 
 
-class TestStopCommandEdgeCases:
-    """Edge case tests for stop command."""
+class TestAnalyzeCommandEdgeCases:
+    """Edge case tests for analyze command."""
 
-    def test_stop_handles_special_characters_in_path(self, tmp_path: Path) -> None:
+    def test_analyze_handles_special_characters_in_path(self, tmp_path: Path) -> None:
         """Stop command should handle paths with special characters."""
         test_dir = tmp_path / "test with spaces"
         recording_dir = test_dir / "recording"
@@ -697,12 +697,12 @@ class TestStopCommandEdgeCases:
             mock_server.start_and_wait.return_value = create_mock_approval_result()
             mock_server_class.return_value = mock_server
 
-            result = runner.invoke(app, ["stop", str(test_dir)])
+            result = runner.invoke(app, ["analyze", str(test_dir)])
 
         assert result.exit_code == 0
         assert (test_dir / "test.yaml").exists()
 
-    def test_stop_handles_config_load_exception(self, tmp_path: Path) -> None:
+    def test_analyze_handles_config_load_exception(self, tmp_path: Path) -> None:
         """Stop command should handle config loading exceptions gracefully."""
         test_dir = tmp_path / "config-error-test"
         recording_dir = test_dir / "recording"
@@ -723,14 +723,14 @@ class TestStopCommandEdgeCases:
             mock_server.start_and_wait.return_value = create_mock_approval_result()
             mock_server_class.return_value = mock_server
 
-            result = runner.invoke(app, ["stop", str(test_dir)])
+            result = runner.invoke(app, ["analyze", str(test_dir)])
 
         # Should still complete but use default app package
         assert result.exit_code == 0
         yaml_content = (test_dir / "test.yaml").read_text()
         assert "com.example.app" in yaml_content  # Default app package
 
-    def test_stop_with_single_touch_event(self, tmp_path: Path) -> None:
+    def test_analyze_with_single_touch_event(self, tmp_path: Path) -> None:
         """Stop command should handle single touch event."""
         test_dir = tmp_path / "single-touch-test"
         recording_dir = test_dir / "recording"
@@ -753,13 +753,13 @@ class TestStopCommandEdgeCases:
             mock_server.start_and_wait.return_value = create_mock_approval_result()
             mock_server_class.return_value = mock_server
 
-            result = runner.invoke(app, ["stop", str(test_dir)])
+            result = runner.invoke(app, ["analyze", str(test_dir)])
 
         assert result.exit_code == 0
         assert "Found 1 touch events" in result.output
         assert (test_dir / "test.yaml").exists()
 
-    def test_stop_uses_default_screen_height_when_missing(
+    def test_analyze_uses_default_screen_height_when_missing(
         self, tmp_path: Path
     ) -> None:
         """Stop command should use default screen height when not in events."""
@@ -788,7 +788,7 @@ class TestStopCommandEdgeCases:
             mock_server.start_and_wait.return_value = create_mock_approval_result()
             mock_server_class.return_value = mock_server
 
-            result = runner.invoke(app, ["stop", str(test_dir)])
+            result = runner.invoke(app, ["analyze", str(test_dir)])
 
         assert result.exit_code == 0
         # Test should complete successfully with default screen height

@@ -261,31 +261,50 @@ def record(
 
 
 @app.command()
-def stop(
-    test_dir: Path | None = typer.Argument(
-        None, help="Test directory (optional, uses most recent)"
-    ),
+def analyze(
+    test_name_or_path: str = typer.Argument(..., help="Test name or path to analyze"),
 ) -> None:
-    """Process recording and generate YAML test."""
-    # Find recording directory
-    recording_dir: Path
-    if test_dir:
-        recording_dir = test_dir / "recording"
-        if not recording_dir.exists():
-            # Maybe test_dir is the recording dir itself
-            recording_dir = test_dir
+    """Analyze recording and generate YAML test.
+
+    Processes an existing recording by extracting frames, running AI analysis,
+    and opening the approval UI to generate a YAML test file.
+
+    Examples:
+        mut analyze calculator-test    # Looks in tests/calculator-test/
+        mut analyze ./my-tests/foo     # Uses path directly
+    """
+    # Check if it's a path or a test name
+    path = Path(test_name_or_path)
+
+    if path.exists():
+        # Direct path provided
+        test_dir = path
+        test_name = path.name
     else:
-        maybe_recording_dir = _find_most_recent_recording()
-        if maybe_recording_dir is None:
-            console.print("[red]Error:[/red] No recordings found in tests/ directory")
+        # Try as test name under tests/
+        test_dir = Path("tests") / test_name_or_path
+        test_name = test_name_or_path
+
+        if not test_dir.exists():
+            console.print(f"[red]Error:[/red] Test not found: {test_name_or_path}")
+            console.print(f"  Tried: {path}")
+            console.print(f"  Tried: {test_dir}")
             console.print("\nRecord a test first with: mut record <name>")
             raise typer.Exit(2)
-        recording_dir = maybe_recording_dir
-        # Get parent (test_dir) from recording_dir
-        test_dir = recording_dir.parent
 
-    # Derive test name from directory
-    test_name = test_dir.name
+    # Check for touch_events.json - first in test_dir, then in recording/
+    touch_events_path = test_dir / "touch_events.json"
+    recording_dir = test_dir  # Default: flat structure
+
+    if not touch_events_path.exists():
+        # Try recording subdirectory (old structure)
+        recording_subdir = test_dir / "recording"
+        if recording_subdir.exists() and (recording_subdir / "touch_events.json").exists():
+            recording_dir = recording_subdir
+        else:
+            console.print(f"[red]Error:[/red] No recording found in {test_dir}")
+            console.print("Missing touch_events.json - recording may not have completed.")
+            raise typer.Exit(2)
 
     _process_recording(recording_dir, test_dir, test_name)
 
@@ -486,6 +505,16 @@ def _process_recording(
                 adb_data["window_states"] = json.load(f)
         except Exception as e:
             console.print(f"  [dim]Could not load window states: {e}[/dim]")
+
+    # Load UI hierarchy dumps for element enrichment
+    ui_dumps_path = test_dir / "ui_dumps.json"
+    if ui_dumps_path.exists():
+        try:
+            with open(ui_dumps_path) as f:
+                adb_data["ui_dumps"] = json.load(f)
+            console.print(f"  Loaded {len(adb_data['ui_dumps'])} UI hierarchy dumps")
+        except Exception as e:
+            console.print(f"  [dim]Could not load UI dumps: {e}[/dim]")
 
     # keyboard_states already loaded earlier for typing detection
     if keyboard_states:
@@ -924,33 +953,6 @@ def _start_preview_and_generate_yaml(
     console.print(f"  Output: {yaml_path}")
     console.print()
     console.print(f"[dim]Run with: mut run {yaml_path}[/dim]")
-
-
-def _find_most_recent_recording() -> Path | None:
-    """Find the most recent recording directory.
-
-    Looks for directories in tests/ that contain recording/touch_events.json.
-
-    Returns:
-        Path to the recording directory (tests/{name}/recording), or None if not found.
-    """
-    tests_dir = Path("tests")
-    if not tests_dir.exists():
-        return None
-
-    candidates: list[Path] = []
-    for d in tests_dir.iterdir():
-        if d.is_dir():
-            recording_dir = d / "recording"
-            touch_events = recording_dir / "touch_events.json"
-            if touch_events.exists():
-                candidates.append(recording_dir)
-
-    if not candidates:
-        return None
-
-    # Sort by modification time, return most recent
-    return max(candidates, key=lambda p: p.stat().st_mtime)
 
 
 @app.command()
