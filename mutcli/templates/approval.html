@@ -5552,6 +5552,18 @@
         let activeStepId = null;
         let stepIdCounter = 0;
 
+        // Debounce utility for input handlers
+        const debounceTimers = new Map();
+        function debounce(key, fn, delay = 150) {
+            if (debounceTimers.has(key)) {
+                clearTimeout(debounceTimers.get(key));
+            }
+            debounceTimers.set(key, setTimeout(() => {
+                debounceTimers.delete(key);
+                fn();
+            }, delay));
+        }
+
         // Utility: Escape HTML to prevent XSS
         function escapeHtml(str) {
             if (!str) return '';
@@ -5741,9 +5753,12 @@
                 const x = parseFloat(indicator.dataset.x) || 0;
                 const y = parseFloat(indicator.dataset.y) || 0;
 
+                // Apply global Y offset (percentage of screen height)
+                const yOffsetPixels = (GLOBAL_Y_OFFSET_PERCENT / 100) * SCREEN_HEIGHT;
+
                 // Position relative to wrapper (which is now at rendered content bounds)
                 const posLeft = x * scaleX;
-                const posTop = y * scaleY;
+                const posTop = (y + yOffsetPixels) * scaleY;
 
                 // Position indicator (centered on the point via CSS transform)
                 indicator.style.left = posLeft + 'px';
@@ -5807,6 +5822,10 @@
         // Screen dimensions for percentage calculations
         const SCREEN_WIDTH = SCREEN_WIDTH_PLACEHOLDER;
         const SCREEN_HEIGHT = SCREEN_HEIGHT_PLACEHOLDER;
+
+        // Global Y offset correction for indicator positions (in percentage)
+        // Compensates for systematic touch coordinate offset found in recordings
+        const GLOBAL_Y_OFFSET_PERCENT = 2;
 
         function toPercent(value, max) {
             return Math.round((value / max) * 100);
@@ -5958,14 +5977,14 @@
                             <div class="gesture-cell full-width">
                                 <span class="gesture-label">Tap Target:</span>
                                 <input type="text" value="${escapeHtml(step.target?.text || '')}"
-                                       onchange="updateStepTarget('${step.id}', this.value); event.stopPropagation();"
+                                       oninput="debounce('target-${step.id}', () => updateStepTarget('${step.id}', this.value)); event.stopPropagation();"
                                        onclick="event.stopPropagation();"
                                        placeholder="Element text">
                             </div>
                             <div class="gesture-cell">
                                 <span class="gesture-label">X:</span>
                                 <input type="number" value="${xPct}"
-                                       onchange="updateTapPosition('${step.id}', 'x', this.value); event.stopPropagation();"
+                                       oninput="debounce('x-${step.id}', () => updateTapPosition('${step.id}', 'x', this.value)); event.stopPropagation();"
                                        onclick="event.stopPropagation();"
                                        min="0" max="100" step="1">
                                 <span class="gesture-unit">%</span>
@@ -5973,7 +5992,7 @@
                             <div class="gesture-cell">
                                 <span class="gesture-label">Y:</span>
                                 <input type="number" value="${yPct}"
-                                       onchange="updateTapPosition('${step.id}', 'y', this.value); event.stopPropagation();"
+                                       oninput="debounce('y-${step.id}', () => updateTapPosition('${step.id}', 'y', this.value)); event.stopPropagation();"
                                        onclick="event.stopPropagation();"
                                        min="0" max="100" step="1">
                                 <span class="gesture-unit">%</span>
@@ -5982,7 +6001,7 @@
                                 <div class="gesture-cell full-width">
                                     <span class="gesture-label">Duration:</span>
                                     <input type="number" value="${step.duration || 500}"
-                                           onchange="updateStepDuration('${step.id}', this.value); event.stopPropagation();"
+                                           oninput="debounce('dur-${step.id}', () => updateStepDuration('${step.id}', this.value)); event.stopPropagation();"
                                            onclick="event.stopPropagation();"
                                            min="300" step="100">
                                     <span class="gesture-unit">ms</span>
@@ -6015,7 +6034,7 @@
                             <div class="gesture-cell">
                                 <span class="gesture-label">Start X:</span>
                                 <input type="number" value="${xPct}"
-                                       onchange="updateSwipeStart('${step.id}', 'x', this.value); event.stopPropagation();"
+                                       oninput="debounce('swx-${step.id}', () => updateSwipeStart('${step.id}', 'x', this.value)); event.stopPropagation();"
                                        onclick="event.stopPropagation();"
                                        min="0" max="100" step="1">
                                 <span class="gesture-unit">%</span>
@@ -6023,7 +6042,7 @@
                             <div class="gesture-cell">
                                 <span class="gesture-label">Start Y:</span>
                                 <input type="number" value="${yPct}"
-                                       onchange="updateSwipeStart('${step.id}', 'y', this.value); event.stopPropagation();"
+                                       oninput="debounce('swy-${step.id}', () => updateSwipeStart('${step.id}', 'y', this.value)); event.stopPropagation();"
                                        onclick="event.stopPropagation();"
                                        min="0" max="100" step="1">
                                 <span class="gesture-unit">%</span>
@@ -6031,7 +6050,7 @@
                             <div class="gesture-cell">
                                 <span class="gesture-label">Distance:</span>
                                 <input type="number" value="${distPct}"
-                                       onchange="updateSwipeDistancePercent('${step.id}', this.value); event.stopPropagation();"
+                                       oninput="debounce('swd-${step.id}', () => updateSwipeDistancePercent('${step.id}', this.value)); event.stopPropagation();"
                                        onclick="event.stopPropagation();"
                                        min="5" max="90" step="5">
                                 <span class="gesture-unit">%</span>
@@ -6047,7 +6066,7 @@
                             <div class="gesture-row">
                                 <span class="gesture-label">Text:${tapCountInfo}</span>
                                 <input type="text" value="${escapeHtml(step.text || '')}"
-                                       onchange="updateStepText('${step.id}', this.value); event.stopPropagation();"
+                                       oninput="debounce('text-${step.id}', () => updateStepText('${step.id}', this.value)); event.stopPropagation();"
                                        onclick="event.stopPropagation();"
                                        style="flex: 1;">
                             </div>
@@ -6249,7 +6268,7 @@
                         <div class="config-group">
                             <span class="config-label">Target:</span>
                             <input type="text" value="${escapeHtml(step.target?.text || '')}"
-                                   onchange="updateStepTarget('${step.id}', this.value); event.stopPropagation();"
+                                   oninput="debounce('ctarget-${step.id}', () => updateStepTarget('${step.id}', this.value)); event.stopPropagation();"
                                    placeholder="Element text">
                         </div>
                         <div class="config-group">
@@ -6260,7 +6279,7 @@
                         <div class="config-group">
                             <span class="config-label">Wait after:</span>
                             <input type="number" value="${step.waitAfter || 0}"
-                                   onchange="updateStepWait('${step.id}', this.value); event.stopPropagation();"
+                                   oninput="debounce('wait-${step.id}', () => updateStepWait('${step.id}', this.value)); event.stopPropagation();"
                                    min="0" step="100">
                             <span class="config-label">ms</span>
                         </div>
@@ -6291,7 +6310,7 @@
                         <div class="config-group">
                             <span class="config-label">Distance:</span>
                             <input type="number" value="${distance}"
-                                   onchange="updateSwipeDistance('${step.id}', this.value); event.stopPropagation();"
+                                   oninput="debounce('cdist-${step.id}', () => updateSwipeDistance('${step.id}', this.value)); event.stopPropagation();"
                                    min="100" step="50">
                             <span class="config-label">px (${distPct}%)</span>
                         </div>
@@ -6307,7 +6326,7 @@
                         <div class="config-group">
                             <span class="config-label">Target:</span>
                             <input type="text" value="${escapeHtml(step.target?.text || '')}"
-                                   onchange="updateStepTarget('${step.id}', this.value); event.stopPropagation();"
+                                   oninput="debounce('lptarget-${step.id}', () => updateStepTarget('${step.id}', this.value)); event.stopPropagation();"
                                    placeholder="Element text">
                         </div>
                         <div class="config-group">
@@ -6317,7 +6336,7 @@
                         <div class="config-group">
                             <span class="config-label">Duration:</span>
                             <input type="number" value="${duration}"
-                                   onchange="updateStepDuration('${step.id}', this.value); event.stopPropagation();"
+                                   oninput="debounce('lpdur-${step.id}', () => updateStepDuration('${step.id}', this.value)); event.stopPropagation();"
                                    min="300" step="100">
                             <span class="config-label">ms</span>
                         </div>
@@ -6332,7 +6351,7 @@
                         <div class="config-group">
                             <span class="config-label">Target:</span>
                             <input type="text" value="${escapeHtml(step.target?.text || '')}"
-                                   onchange="updateStepTarget('${step.id}', this.value); event.stopPropagation();"
+                                   oninput="debounce('dttarget-${step.id}', () => updateStepTarget('${step.id}', this.value)); event.stopPropagation();"
                                    placeholder="Element text">
                         </div>
                         <div class="config-group">
@@ -6352,7 +6371,7 @@
                         <div class="config-group" style="flex: 1;">
                             <span class="config-label">Text:</span>
                             <input type="text" value="${escapeHtml(text)}"
-                                   onchange="updateTypeText('${step.id}', this.value); event.stopPropagation();"
+                                   oninput="debounce('typetext-${step.id}', () => updateTypeText('${step.id}', this.value)); event.stopPropagation();"
                                    style="width: 200px;">
                             ${tapCountInfo}
                         </div>
@@ -6373,7 +6392,7 @@
                         <div class="config-group" style="flex: 1;">
                             <span class="config-label">Description:</span>
                             <input type="text" value="${escapeHtml(step.description || '')}"
-                                   onchange="updateStepDescription('${step.id}', this.value); event.stopPropagation();"
+                                   oninput="debounce('verdesc-${step.id}', () => updateStepDescription('${step.id}', this.value)); event.stopPropagation();"
                                    style="width: 300px;" placeholder="What should the screen show?">
                         </div>
                     </div>
@@ -6387,12 +6406,12 @@
                         <div class="config-group">
                             <span class="config-label">Wait for element:</span>
                             <input type="text" value="${escapeHtml(step.target?.text || '')}"
-                                   onchange="updateStepTarget('${step.id}', this.value); event.stopPropagation();">
+                                   oninput="debounce('wftarget-${step.id}', () => updateStepTarget('${step.id}', this.value)); event.stopPropagation();">
                         </div>
                         <div class="config-group">
                             <span class="config-label">Timeout:</span>
                             <input type="number" value="${step.timeout || 10}"
-                                   onchange="updateStepTimeout('${step.id}', this.value); event.stopPropagation();"
+                                   oninput="debounce('wftimeout-${step.id}', () => updateStepTimeout('${step.id}', this.value)); event.stopPropagation();"
                                    min="1" max="60">
                             <span class="config-label">s</span>
                         </div>
@@ -6407,7 +6426,7 @@
                         <div class="config-group">
                             <span class="config-label">Duration:</span>
                             <input type="number" value="${step.duration || 1000}"
-                                   onchange="updateStepDuration('${step.id}', this.value); event.stopPropagation();"
+                                   oninput="debounce('waitdur-${step.id}', () => updateStepDuration('${step.id}', this.value)); event.stopPropagation();"
                                    min="100" step="100">
                             <span class="config-label">ms</span>
                         </div>
@@ -6770,7 +6789,7 @@
                     return `
                         <label>Screen State:</label>
                         <input type="text" class="cond-value-input cond-screen-input" value="${escapeHtml(condValue)}"
-                               onchange="updateConditionalValue('${stepId}', this.value); event.stopPropagation();"
+                               oninput="debounce('condval-${stepId}', () => updateConditionalValue('${stepId}', this.value)); event.stopPropagation();"
                                placeholder="Describe expected screen state...">
                     `;
                 case 'if_all_present':
@@ -6778,7 +6797,7 @@
                     return `
                         <label>Elements:</label>
                         <input type="text" class="cond-value-input" value="${escapeHtml(condValue)}"
-                               onchange="updateConditionalValue('${stepId}', this.value); event.stopPropagation();"
+                               oninput="debounce('condval-${stepId}', () => updateConditionalValue('${stepId}', this.value)); event.stopPropagation();"
                                placeholder="Element1, Element2, ...">
                     `;
                 case 'if_present':
@@ -6787,7 +6806,7 @@
                     return `
                         <label>Element:</label>
                         <input type="text" class="cond-value-input" value="${escapeHtml(condValue)}"
-                               onchange="updateConditionalValue('${stepId}', this.value); event.stopPropagation();"
+                               oninput="debounce('condval-${stepId}', () => updateConditionalValue('${stepId}', this.value)); event.stopPropagation();"
                                placeholder="Button text or label...">
                     `;
             }
@@ -8256,9 +8275,10 @@
                 btn.innerHTML = '<span class="material-symbols-outlined">check_circle</span> Saved!';
                 btn.style.background = '#4caf50';
 
-                // Show success message
+                // Show success dialog
                 setTimeout(() => {
-                    alert(`Test saved successfully!\n\nYou can close this tab.`);
+                    const dialog = document.getElementById('success-dialog');
+                    dialog.show();
                 }, 100);
 
             } catch (error) {
@@ -8498,19 +8518,24 @@
                 const x = parseFloat(indicator.dataset.x) || 0;
                 const y = parseFloat(indicator.dataset.y) || 0;
 
+                // Apply global Y offset (percentage of screen height)
+                const yOffsetPixels = (GLOBAL_Y_OFFSET_PERCENT / 100) * SCREEN_HEIGHT;
+                const adjustedY = y + yOffsetPixels;
+
                 // Position relative to wrapper origin
                 indicator.style.left = (x * scaleX) + 'px';
-                indicator.style.top = (y * scaleY) + 'px';
+                indicator.style.top = (adjustedY * scaleY) + 'px';
 
                 // Handle swipe indicators
                 if (indicator.classList.contains('swipe-indicator')) {
                     const endX = parseFloat(indicator.dataset.endX) || x;
                     const endY = parseFloat(indicator.dataset.endY) || y;
+                    const adjustedEndY = endY + yOffsetPixels;
 
                     const startLeft = x * scaleX;
-                    const startTop = y * scaleY;
+                    const startTop = adjustedY * scaleY;
                     const endLeft = endX * scaleX;
-                    const endTop = endY * scaleY;
+                    const endTop = adjustedEndY * scaleY;
 
                     indicator.style.setProperty('--start-left', startLeft + 'px');
                     indicator.style.setProperty('--start-top', startTop + 'px');
@@ -8803,7 +8828,7 @@
                     <div class="condition-elements-list" id="condition-elements-${stepId}">
                         ${elements.map((el, i) => `
                             <div class="condition-element-row" data-index="${i}">
-                                <input type="text" value="${escapeHtml(el)}" onchange="updateConditionElement('${stepId}', ${i}, this.value)" onclick="event.stopPropagation()">
+                                <input type="text" value="${escapeHtml(el)}" oninput="debounce('condel-${stepId}-${i}', () => updateConditionElement('${stepId}', ${i}, this.value))" onclick="event.stopPropagation()">
                                 <button class="condition-element-remove" onclick="removeConditionElement('${stepId}', ${i})" title="Remove">&times;</button>
                             </div>
                         `).join('')}
@@ -8815,14 +8840,14 @@
             } else if (type === 'if_screen') {
                 valueField.innerHTML = `
                     <label>Value:</label>
-                    <input type="text" placeholder="Describe expected screen state..." value="${escapeHtml(value || '')}" onchange="updateConditionValue('${stepId}', this.value)" onclick="event.stopPropagation()" style="min-width: 280px;">
+                    <input type="text" placeholder="Describe expected screen state..." value="${escapeHtml(value || '')}" oninput="debounce('condv-${stepId}', () => updateConditionValue('${stepId}', this.value))" onclick="event.stopPropagation()" style="min-width: 280px;">
                 `;
                 valueField.style.flexDirection = 'row';
                 valueField.style.alignItems = 'center';
             } else {
                 valueField.innerHTML = `
                     <label>Value:</label>
-                    <input type="text" placeholder="Element text or label..." value="${escapeHtml(value || '')}" onchange="updateConditionValue('${stepId}', this.value)" onclick="event.stopPropagation()">
+                    <input type="text" placeholder="Element text or label..." value="${escapeHtml(value || '')}" oninput="debounce('condv-${stepId}', () => updateConditionValue('${stepId}', this.value))" onclick="event.stopPropagation()">
                 `;
                 valueField.style.flexDirection = 'row';
                 valueField.style.alignItems = 'center';
@@ -8883,7 +8908,7 @@
                         <div class="condition-elements-list" id="condition-elements-${step.id}">
                             ${elements.map((el, i) => `
                                 <div class="condition-element-row" data-index="${i}">
-                                    <input type="text" value="${escapeHtml(el)}" onchange="updateConditionElement('${step.id}', ${i}, this.value)" onclick="event.stopPropagation()">
+                                    <input type="text" value="${escapeHtml(el)}" oninput="debounce('condel2-${step.id}-${i}', () => updateConditionElement('${step.id}', ${i}, this.value))" onclick="event.stopPropagation()">
                                     <button class="condition-element-remove" onclick="removeConditionElement('${step.id}', ${i})" title="Remove">&times;</button>
                                 </div>
                             `).join('')}
@@ -8895,14 +8920,14 @@
                 valueFieldHtml = `
                     <div class="condition-field" id="condition-value-${step.id}">
                         <label>Value:</label>
-                        <input type="text" placeholder="Describe expected screen state..." value="${escapeHtml(value || '')}" onchange="updateConditionValue('${step.id}', this.value)" onclick="event.stopPropagation()" style="min-width: 280px;">
+                        <input type="text" placeholder="Describe expected screen state..." value="${escapeHtml(value || '')}" oninput="debounce('condv2-${step.id}', () => updateConditionValue('${step.id}', this.value))" onclick="event.stopPropagation()" style="min-width: 280px;">
                     </div>
                 `;
             } else {
                 valueFieldHtml = `
                     <div class="condition-field" id="condition-value-${step.id}">
                         <label>Value:</label>
-                        <input type="text" placeholder="Element text or label..." value="${escapeHtml(value || '')}" onchange="updateConditionValue('${step.id}', this.value)" onclick="event.stopPropagation()">
+                        <input type="text" placeholder="Element text or label..." value="${escapeHtml(value || '')}" oninput="debounce('condv2-${step.id}', () => updateConditionValue('${step.id}', this.value))" onclick="event.stopPropagation()">
                     </div>
                 `;
             }
@@ -9102,7 +9127,7 @@
                         <div class="verification-hint">Assert on AFTER frame:</div>
                         <textarea class="verification-textarea"
                                   placeholder="Describe what the screen should show after this action..."
-                                  onchange="updateVerificationDescription('${step.id}', this.value)"
+                                  oninput="debounce('verdesc2-${step.id}', () => updateVerificationDescription('${step.id}', this.value))"
                                   onclick="event.stopPropagation()">${escapeHtml(desc)}</textarea>
                     </div>
                 </div>
@@ -9724,5 +9749,19 @@
             box-shadow: 0 2px 8px rgba(208, 188, 255, 0.3);
         }
     </style>
+
+    <!-- Success Dialog -->
+    <md-dialog id="success-dialog">
+        <div slot="headline">
+            <span class="material-symbols-outlined" style="color: #4caf50; font-size: 28px; vertical-align: middle; margin-right: 8px;">check_circle</span>
+            Test saved successfully
+        </div>
+        <form slot="content" id="success-dialog-form" method="dialog">
+            <p style="color: var(--md-on-surface-variant); margin: 0;">You can close this tab.</p>
+        </form>
+        <div slot="actions">
+            <md-filled-tonal-button form="success-dialog-form" value="ok">OK</md-filled-tonal-button>
+        </div>
+    </md-dialog>
 </body>
 </html>
