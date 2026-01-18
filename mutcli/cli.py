@@ -1055,7 +1055,7 @@ def preview(
         console.print("[yellow]Cancelled[/yellow] - no YAML generated")
         return
 
-    # Generate YAML from approved steps
+    # Generate YAML from approved steps with rich details
     console.print()
     console.print("[blue]Generating YAML from approved steps...[/blue]")
 
@@ -1067,32 +1067,55 @@ def preview(
     )
     generator.add_launch_app()
 
-    enabled_steps = [
-        s for s in result.steps
-        if s.get("enabled", True) and s.get("action") != "app_launched"
-    ]
+    # Create lookup from preview_steps for rich data (by index)
+    preview_lookup = {ps.index: ps for ps in preview_steps}
 
-    for step_data in enabled_steps:
-        action = step_data.get("action", "tap")
-        element = step_data.get("element_text")
-        coordinates = step_data.get("coordinates", [0, 0])
-        coords = (coordinates[0], coordinates[1]) if coordinates else (0, 0)
+    # Filter to enabled steps, excluding app_launched
+    enabled_indices = []
+    for i, step in enumerate(result.steps):
+        if step.get("enabled", True) and step.get("action") != "app_launched":
+            enabled_indices.append(i + 1)  # 1-based index
+
+    for idx in enabled_indices:
+        preview_step = preview_lookup.get(idx)
+        if not preview_step:
+            continue
+
+        action = preview_step.action
+        element = preview_step.element_text
+        coords = preview_step.coordinates
+        description = preview_step.action_description
+        verification = preview_step.suggested_verification
 
         if action == "tap":
-            generator.add_tap(element=element, coords=coords if not element else None)
+            generator.add_rich_tap(
+                element=element,
+                coords=coords,
+                description=description,
+                verification=verification,
+            )
         elif action == "type":
-            generator.add_type(text=step_data.get("text", ""))
+            text = preview_step.text or ""
+            generator.add_type(text=text)
+            if verification:
+                generator.add_verify_screen(verification)
         elif action == "swipe":
-            direction = step_data.get("direction", "up")
+            direction = preview_step.direction or "up"
             generator.add_swipe(direction=direction)
+            if verification:
+                generator.add_verify_screen(verification)
         elif action == "long_press":
-            # Use add_tap for long_press (no separate method)
-            generator.add_tap(element=element, coords=coords if not element else None)
+            generator.add_rich_tap(
+                element=element,
+                coords=coords,
+                description=description,
+                verification=verification,
+            )
 
-    # Add verifications
+    # Add any additional verifications from approval UI
     for ver in result.verifications:
         if ver.get("enabled", True):
-            generator.add_verification(ver.get("description", ""))
+            generator.add_verify_screen(ver.get("description", ""))
 
     yaml_path = test_dir / "test.yaml"
     generator.save(yaml_path)

@@ -48,6 +48,14 @@ class YAMLGenerator:
         self._setup: list[Any] = []
         self._teardown: list[Any] = []
 
+    def _to_percent_coords(self, px: int, py: int) -> list[str]:
+        """Convert pixel coordinates to percentage strings."""
+        if self._screen_width and self._screen_height:
+            x_pct = round(px / self._screen_width * 100, 1)
+            y_pct = round(py / self._screen_height * 100, 1)
+            return [f"{x_pct}%", f"{y_pct}%"]
+        return [px, py]
+
     def add_tap(
         self,
         x: int = 0,
@@ -55,7 +63,7 @@ class YAMLGenerator:
         element: str | None = None,
         coords: tuple[int, int] | None = None,
     ) -> None:
-        """Add tap action.
+        """Add tap action (simple format).
 
         Element text preferred over coordinates when available.
         Coordinates are converted to percentages if screen dimensions are set.
@@ -69,15 +77,47 @@ class YAMLGenerator:
         if element:
             self._steps.append({"tap": element})
         else:
-            # Use coords if provided, otherwise fall back to x, y
             px, py = coords if coords else (x, y)
-            # Convert to percentages if screen dimensions are available
-            if self._screen_width and self._screen_height:
-                x_pct = round(px / self._screen_width * 100, 1)
-                y_pct = round(py / self._screen_height * 100, 1)
-                self._steps.append({"tap": [f"{x_pct}%", f"{y_pct}%"]})
-            else:
-                self._steps.append({"tap": [px, py]})
+            self._steps.append({"tap": self._to_percent_coords(px, py)})
+
+    def add_rich_tap(
+        self,
+        element: str | None = None,
+        coords: tuple[int, int] | None = None,
+        description: str | None = None,
+        verification: str | None = None,
+    ) -> None:
+        """Add tap action with full details.
+
+        Includes element text, fallback coordinates, description, and optional
+        verification step.
+
+        Args:
+            element: Element text for AI matching
+            coords: Fallback coordinates as (x, y) tuple in pixels
+            description: Human-readable description of the action
+            verification: If provided, adds verify_screen after this step
+        """
+        step: dict[str, Any] = {}
+
+        if element:
+            step["tap"] = element
+            # Add fallback coordinates if available
+            if coords:
+                step["at"] = self._to_percent_coords(coords[0], coords[1])
+        elif coords:
+            step["tap"] = self._to_percent_coords(coords[0], coords[1])
+        else:
+            step["tap"] = [0, 0]
+
+        if description:
+            step["description"] = description
+
+        self._steps.append(step)
+
+        # Add verification after the tap if provided
+        if verification:
+            self._steps.append({"verify_screen": verification})
 
     def add_type(
         self, text: str, field: str | None = None, submit: bool = False
