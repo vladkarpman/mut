@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import asyncio
+import logging
 import sys
 from datetime import datetime
 from pathlib import Path
@@ -11,6 +12,7 @@ from typing import TYPE_CHECKING
 import typer
 from dotenv import load_dotenv
 from rich.console import Console
+from rich.panel import Panel
 from rich.progress import BarColumn, Progress, TextColumn
 from rich.table import Table
 
@@ -189,19 +191,20 @@ def record(
     except Exception:
         config = None
 
-    # Determine device
+    # Determine device and get device info for display
     device_id = device
+    devices_list = DeviceController.list_devices()
     if not device_id:
-        devices_list = DeviceController.list_devices()
         if not devices_list:
             console.print("[red]Error:[/red] No devices found. Run 'mut devices' to check.")
             raise typer.Exit(2)
         device_id = devices_list[0]["id"]
 
-    console.print(f"[blue]Starting recording:[/blue] {name}")
-    console.print(f"[dim]Device: {device_id}[/dim]")
-    console.print(f"[dim]App: {app}[/dim]")
-    console.print()
+    device_info = next((d for d in devices_list if d["id"] == device_id), None)
+    device_display = f"{device_info['name']} ({device_id})" if device_info else device_id
+
+    # Suppress noisy myscrcpy library logs
+    logging.getLogger("myscrcpy").setLevel(logging.WARNING)
 
     # Create and start recorder
     recorder = Recorder(name=name, device_id=device_id, app_package=app)
@@ -217,27 +220,32 @@ def record(
         console.print(f"[red]Error:[/red] {result.get('error', 'Failed to start recording')}")
         raise typer.Exit(2)
 
-    console.print("[green]Recording started![/green]")
-    console.print("Interact with your device now.")
+    # Display info panel
+    content = f"[dim]Device:[/dim]  {device_display}\n"
+    content += f"[dim]App:[/dim]     {app}\n"
+    content += f"[dim]Output:[/dim]  {result['output_dir']}"
+    panel = Panel(
+        content,
+        title=f"[bold]Recording: {name}[/bold]",
+        border_style="blue",
+    )
+    console.print(panel)
+
+    # Status and prompt
     console.print()
+    console.print("🎬 [green]Recording...[/green] interact with your device")
+    console.print()
+    console.print("┌─────────────────────────┐")
+    console.print("│  Press Ctrl+C to stop   │")
+    console.print("└─────────────────────────┘")
 
-    # Wait for user input
+    # Wait for Ctrl+C
     try:
-        console.print("Press Enter when done recording...")
-        console.print("[dim](or Ctrl+C to cancel)[/dim]")
-        sys.stdout.flush()
-        sys.stderr.flush()
-
-        # Use select for more reliable input handling on Unix
         import select
         while True:
-            # Check if stdin has data available (timeout 0.5s)
-            readable, _, _ = select.select([sys.stdin], [], [], 0.5)
-            if readable:
-                sys.stdin.readline()
-                break
+            select.select([sys.stdin], [], [], 0.5)
     except (KeyboardInterrupt, EOFError):
-        console.print("\n[yellow]Recording interrupted[/yellow]")
+        console.print()
 
     # Stop recording
     stop_result = recorder.stop()
