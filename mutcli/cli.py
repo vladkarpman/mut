@@ -175,8 +175,8 @@ def run(
 @app.command()
 def record(
     name: str = typer.Argument(..., help="Test name"),
+    app: str = typer.Option(..., "--app", "-a", help="App package name (required for UI element capture)"),
     device: str | None = typer.Option(None, "--device", "-d", help="Device ID"),
-    app: str | None = typer.Option(None, "--app", "-a", help="App package name"),
 ) -> None:
     """Start recording user interactions."""
     from mutcli.core.config import ConfigLoader, setup_logging
@@ -200,8 +200,7 @@ def record(
 
     console.print(f"[blue]Starting recording:[/blue] {name}")
     console.print(f"[dim]Device: {device_id}[/dim]")
-    if app:
-        console.print(f"[dim]App: {app}[/dim]")
+    console.print(f"[dim]App: {app}[/dim]")
     console.print()
 
     # Create and start recorder
