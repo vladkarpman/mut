@@ -96,6 +96,10 @@ class TestExecutor:
         self._ai_recovery = AIRecovery(self._ai)
         self._scrcpy = scrcpy
         self._output_dir = output_dir or Path.cwd()
+
+        # Enable scrcpy injection for gestures if scrcpy has control
+        if scrcpy is not None and scrcpy.is_control_ready:
+            self._device.set_scrcpy_service(scrcpy)
         self._reporter = reporter
         self._screen_size: tuple[int, int] | None = None
         self._step_number = 0
@@ -1130,7 +1134,7 @@ class TestExecutor:
         self._step_action_timestamp = timestamp
 
         # Generate trajectory for visualization
-        duration_ms = 300
+        duration_ms = step.duration or 300  # Use recorded duration or default
         self._step_trajectory = self._synthesize_trajectory(
             (cx, cy), (end_x, end_y), duration_ms
         )

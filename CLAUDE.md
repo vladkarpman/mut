@@ -43,8 +43,8 @@ mutcli/
 │   └── test.py                # Test/Step data models
 ├── core/
 │   ├── config.py              # ConfigLoader, setup_logging
-│   ├── device_controller.py   # ADB wrapper: tap, swipe, type, elements, show_touches
-│   ├── scrcpy_service.py      # MYScrcpy: screenshots, video recording
+│   ├── device_controller.py   # Scrcpy injection: tap, swipe, long_press; ADB: type, elements
+│   ├── scrcpy_service.py      # MYScrcpy: screenshots, video recording, touch injection
 │   ├── ai_analyzer.py         # Gemini 2.5 Flash: verify_screen, find_element
 │   ├── executor.py            # TestExecutor: runs YAML tests, captures action screenshots
 │   ├── step_verifier.py       # StepVerifier: parallel AI analysis of executed steps
@@ -67,7 +67,7 @@ mutcli/
 
 ### Key Patterns
 
-**Dual interaction model**: `DeviceController` uses direct adb commands for device input (tap, swipe, type). `ScrcpyService` uses MYScrcpy for fast visual operations (screenshots ~50ms via frame buffer, video recording).
+**Scrcpy-based touch injection**: `DeviceController` uses scrcpy for gestures (tap, swipe, long_press) via control injection - more reliable than adb shell commands. Text input still uses adb. `ScrcpyService` provides fast screenshots (~50ms via frame buffer), video recording, and touch injection. Scrcpy connection with control is required for test execution.
 
 **Hybrid AI verification**:
 - `verify_screen` - Real-time AI call during test execution. Returns error if screen doesn't match.
@@ -85,14 +85,15 @@ mutcli/
 **Touch visualization**: During video recording, `show_touches` is enabled to display native touch indicators on screen. Original setting is restored after recording.
 
 **Recording pipeline**:
-1. `Recorder` orchestrates recording session
-2. `TouchMonitor` captures raw touch events via adb getevent
+1. `InteractiveRecorder` orchestrates recording session
+2. `TouchInjector` captures touch events from window input
 3. `ScrcpyService` records video with timestamps
-4. `FrameExtractor` extracts before/after frames for each touch
-5. `StepAnalyzer` uses AI to describe each step
-6. `TypingDetector` + `StepCollapsing` convert tap sequences to type actions
-7. `PreviewServer` serves approval UI for editing
-8. `YamlGenerator` exports final test file
+4. `UIHierarchyMonitor` captures UI dumps during recording (when `--app` provided)
+5. `FrameExtractor` extracts before/after frames for each touch
+6. `StepAnalyzer` uses AI to describe each step (with UI hierarchy context)
+7. `TypingDetector` + `StepCollapsing` convert tap sequences to type actions
+8. `PreviewServer` serves approval UI for editing
+9. `YamlGenerator` exports final test file
 
 **Test execution pipeline**:
 1. `TestExecutor` runs each step, capturing before/after/action screenshots
@@ -101,8 +102,8 @@ mutcli/
 
 ## External Dependencies
 
-- `adb` in PATH (device communication)
-- `scrcpy` 3.x (fast screenshots via MYScrcpy)
+- `adb` in PATH (device communication, text input)
+- `scrcpy` 3.x (required for test execution - screenshots, video, touch injection)
 - `GOOGLE_API_KEY` env var (optional, for AI features)
 
 ## YAML Test Format
@@ -136,7 +137,7 @@ tests:
 | `tap` | Tap element by text or coordinates |
 | `double_tap` | Double tap element |
 | `type` | Type text (supports `submit: true` to press Enter) |
-| `swipe` | Swipe gesture with direction/distance |
+| `swipe` | Swipe gesture with direction/distance/duration |
 | `long_press` | Long press element |
 | `back` | Press back button |
 | `hide_keyboard` | Dismiss keyboard |
@@ -169,6 +170,7 @@ tests/my-test/
 ├── video.mp4              # Screen recording
 ├── video.timestamps.json  # Frame timing
 ├── touch_events.json      # Raw touch data
+├── ui_hierarchy.json      # UI dumps at touch times (when --app provided)
 ├── analysis.json          # AI step analysis
 └── debug.log              # Verbose logs (if enabled)
 ```
@@ -192,6 +194,6 @@ tests/my-test/
 See `docs/DESIGN.md` for rationale on:
 - Why Gemini 2.5 Flash over Claude/GPT (cost: $0.30/1M tokens)
 - Why MYScrcpy over mobile-mcp (no MCP overhead, single connection)
-- Why direct adb over mobile-mcp (simpler, no dependency)
+- Why scrcpy injection over adb input (more reliable timing, no shell overhead)
 - AI-first element finding with semantic matching
 - Hybrid verification strategy details

@@ -1,15 +1,43 @@
-"""Device interaction via adb."""
+"""Device interaction via scrcpy injection."""
 
 import re
 import subprocess
+import threading
 import time
 import xml.etree.ElementTree as ET
 from pathlib import Path
-from typing import Any
+from typing import TYPE_CHECKING, Any, Callable
+
+if TYPE_CHECKING:
+    from mutcli.core.scrcpy_service import ScrcpyService
+
+
+class AsyncOperation:
+    """Async operation wrapper for scrcpy gestures.
+
+    Mimics subprocess.Popen interface for compatibility with executor.
+    """
+
+    def __init__(self, func: Callable[[], None]):
+        """Start async operation.
+
+        Args:
+            func: Function to run in background thread
+        """
+        self._thread = threading.Thread(target=func, daemon=True)
+        self._thread.start()
+
+    def wait(self) -> None:
+        """Wait for operation to complete."""
+        self._thread.join()
 
 
 class DeviceController:
-    """Device interaction via adb commands."""
+    """Device interaction via scrcpy injection.
+
+    Uses scrcpy control for accurate touch injection.
+    Must call `set_scrcpy_service()` before using gesture methods.
+    """
 
     def __init__(self, device_id: str):
         """Initialize controller for a specific device.
@@ -18,6 +46,22 @@ class DeviceController:
             device_id: ADB device identifier
         """
         self._device_id = device_id
+        self._scrcpy: ScrcpyService | None = None
+
+    def set_scrcpy_service(self, scrcpy: "ScrcpyService | None") -> None:
+        """Set scrcpy service for touch injection.
+
+        When set, tap/swipe/long_press use scrcpy injection instead of adb.
+
+        Args:
+            scrcpy: ScrcpyService instance with control enabled, or None to use adb
+        """
+        self._scrcpy = scrcpy
+
+    @property
+    def uses_scrcpy(self) -> bool:
+        """Check if using scrcpy injection mode."""
+        return self._scrcpy is not None and self._scrcpy.is_control_ready
 
     @staticmethod
     def list_devices() -> list[dict[str, str]]:
@@ -63,7 +107,9 @@ class DeviceController:
             x: X coordinate
             y: Y coordinate
         """
-        self._adb(["shell", "input", "tap", str(x), str(y)])
+        if not self.uses_scrcpy:
+            raise RuntimeError("Scrcpy not configured. Call set_scrcpy_service() first.")
+        self._scrcpy.tap(x, y)
 
     def long_press(self, x: int, y: int, duration_ms: int = 500) -> None:
         """Long press at coordinates.
@@ -77,13 +123,11 @@ class DeviceController:
             raise ValueError(f"Coordinates must be non-negative: ({x}, {y})")
         if duration_ms <= 0:
             raise ValueError(f"Duration must be positive: {duration_ms}")
-        # Swipe from same point to same point = long press
-        self._adb([
-            "shell", "input", "swipe",
-            str(x), str(y), str(x), str(y), str(duration_ms)
-        ])
+        if not self.uses_scrcpy:
+            raise RuntimeError("Scrcpy not configured. Call set_scrcpy_service() first.")
+        self._scrcpy.long_press(x, y, duration_ms)
 
-    def long_press_async(self, x: int, y: int, duration_ms: int = 500) -> subprocess.Popen:
+    def long_press_async(self, x: int, y: int, duration_ms: int = 500) -> "AsyncOperation":
         """Start long press without blocking.
 
         Args:
@@ -92,17 +136,19 @@ class DeviceController:
             duration_ms: Duration in milliseconds (default: 500)
 
         Returns:
-            Popen process to wait on for completion
+            AsyncOperation to wait on for completion
         """
         if x < 0 or y < 0:
             raise ValueError(f"Coordinates must be non-negative: ({x}, {y})")
         if duration_ms <= 0:
             raise ValueError(f"Duration must be positive: {duration_ms}")
-        cmd = [
-            "adb", "-s", self._device_id, "shell", "input", "swipe",
-            str(x), str(y), str(x), str(y), str(duration_ms)
-        ]
-        return subprocess.Popen(cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+        if not self.uses_scrcpy:
+            raise RuntimeError("Scrcpy not configured. Call set_scrcpy_service() first.")
+
+        def do_long_press() -> None:
+            self._scrcpy.long_press(x, y, duration_ms)
+
+        return AsyncOperation(do_long_press)
 
     def double_tap(self, x: int, y: int, delay_ms: int = 100) -> None:
         """Double tap at coordinates.
@@ -116,9 +162,11 @@ class DeviceController:
             raise ValueError(f"Coordinates must be non-negative: ({x}, {y})")
         if delay_ms < 0:
             raise ValueError(f"Delay must be non-negative: {delay_ms}")
-        self._adb(["shell", "input", "tap", str(x), str(y)])
+        if not self.uses_scrcpy:
+            raise RuntimeError("Scrcpy not configured. Call set_scrcpy_service() first.")
+        self._scrcpy.tap(x, y)
         time.sleep(delay_ms / 1000)
-        self._adb(["shell", "input", "tap", str(x), str(y)])
+        self._scrcpy.tap(x, y)
 
     def swipe(
         self,
@@ -137,10 +185,9 @@ class DeviceController:
             y2: End Y coordinate
             duration_ms: Swipe duration in milliseconds
         """
-        self._adb([
-            "shell", "input", "swipe",
-            str(x1), str(y1), str(x2), str(y2), str(duration_ms)
-        ])
+        if not self.uses_scrcpy:
+            raise RuntimeError("Scrcpy not configured. Call set_scrcpy_service() first.")
+        self._scrcpy.swipe(x1, y1, x2, y2, duration_ms)
 
     def swipe_async(
         self,
@@ -149,7 +196,7 @@ class DeviceController:
         x2: int,
         y2: int,
         duration_ms: int = 300,
-    ) -> subprocess.Popen:
+    ) -> AsyncOperation:
         """Start swipe gesture without blocking.
 
         Args:
@@ -160,13 +207,15 @@ class DeviceController:
             duration_ms: Swipe duration in milliseconds
 
         Returns:
-            Popen process to wait on for completion
+            AsyncOperation to wait on for completion
         """
-        cmd = [
-            "adb", "-s", self._device_id, "shell", "input", "swipe",
-            str(x1), str(y1), str(x2), str(y2), str(duration_ms)
-        ]
-        return subprocess.Popen(cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+        if not self.uses_scrcpy:
+            raise RuntimeError("Scrcpy not configured. Call set_scrcpy_service() first.")
+
+        def do_swipe() -> None:
+            self._scrcpy.swipe(x1, y1, x2, y2, duration_ms)
+
+        return AsyncOperation(do_swipe)
 
     def type_text(self, text: str) -> None:
         """Type text into focused field.

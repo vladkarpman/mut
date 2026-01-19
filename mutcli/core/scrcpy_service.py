@@ -100,13 +100,35 @@ class ScrcpyService:
                 control_args=control_args,
             )
 
-            # Wait for video stream to initialize
-            time.sleep(1.0)
+            # Wait for video stream to fully initialize
+            # MYScrcpy needs time to set up the native decoder
+            time.sleep(2.0)
 
             if self._session.va is None:
                 logger.error("Video stream failed to initialize")
                 self._session = None
                 return False
+
+            # Wait for first frame to be available before starting thread
+            # This prevents segfaults from accessing uninitialized native buffers
+            first_frame = None
+            for _ in range(20):  # Try for 2 seconds
+                try:
+                    first_frame = self._session.va.get_frame()
+                    if first_frame is not None:
+                        break
+                except Exception:
+                    pass
+                time.sleep(0.1)
+
+            if first_frame is None:
+                logger.error("Could not get first frame from video stream")
+                self._session = None
+                return False
+
+            # Store initial dimensions
+            self._height, self._width = first_frame.shape[:2]
+            logger.info(f"First frame received: {self._width}x{self._height}")
 
             # Start frame capture thread (not daemon - we need clean shutdown)
             self._stop_event.clear()
@@ -116,8 +138,8 @@ class ScrcpyService:
             )
             self._frame_thread.start()
 
-            # Wait for first frame
-            time.sleep(0.5)
+            # Give thread time to start
+            time.sleep(0.2)
 
             logger.info(f"Connected to {self._device_id}")
             return True
@@ -167,6 +189,9 @@ class ScrcpyService:
         IMPORTANT: This loop must check stop_event frequently and exit quickly
         when signaled. Never access session after stop_event is set.
         """
+        # Small delay to ensure session is fully ready
+        time.sleep(0.1)
+
         while not self._stop_event.is_set():
             # Check session validity AFTER checking stop_event
             session = self._session
@@ -318,7 +343,9 @@ class ScrcpyService:
 
             # Finalize video
             if self._video_writer:
+                logger.info("Closing video writer...")
                 self._video_writer.close()
+                logger.info("Video writer closed")
 
             file_size = Path(output_path).stat().st_size if output_path else 0
 
@@ -481,6 +508,22 @@ class ScrcpyService:
 
         Returns:
             True if tap succeeded
+        """
+        if not self.inject_touch(Action.DOWN.value, x, y):
+            return False
+        time.sleep(duration_ms / 1000)
+        return self.inject_touch(Action.RELEASE.value, x, y)
+
+    def long_press(self, x: int, y: int, duration_ms: int = 500) -> bool:
+        """Inject a long press gesture at coordinates.
+
+        Args:
+            x: Screen X coordinate
+            y: Screen Y coordinate
+            duration_ms: Duration to hold (default 500ms)
+
+        Returns:
+            True if long press succeeded
         """
         if not self.inject_touch(Action.DOWN.value, x, y):
             return False

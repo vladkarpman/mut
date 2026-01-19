@@ -189,7 +189,7 @@ class TestParser:
             if key == "at":
                 step.coordinates, step.coordinates_type = cls._parse_coordinates(value)
             elif key == "duration":
-                step.duration = int(value)
+                step.duration = cls._parse_duration_ms(value)
             elif key == "max_scrolls":
                 step.max_scrolls = int(value)
             elif key == "direction":
@@ -254,7 +254,7 @@ class TestParser:
 
         # Long press specific
         if "duration" in data:
-            step.duration = int(data["duration"])
+            step.duration = cls._parse_duration_ms(data["duration"])
 
         # Scroll specific
         if "max_scrolls" in data:
@@ -310,6 +310,23 @@ class TestParser:
             return float(s[:-1])
 
         return float(s)
+
+    @classmethod
+    def _parse_duration_ms(cls, value: Any) -> int:
+        """Parse duration like '500ms' or '2s' to milliseconds."""
+        if isinstance(value, int):
+            return value
+        if isinstance(value, float):
+            return int(value)
+
+        s = str(value).strip().lower()
+
+        if s.endswith("ms"):
+            return int(float(s[:-2]))
+        if s.endswith("s"):
+            return int(float(s[:-1]) * 1000)
+
+        return int(float(s))
 
     @classmethod
     def _parse_coordinates(

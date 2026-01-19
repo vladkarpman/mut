@@ -140,6 +140,7 @@ class YAMLGenerator:
         self,
         direction: str,
         distance: str | None = None,
+        duration_ms: int | None = None,
         description: str | None = None,
     ) -> None:
         """Add swipe action.
@@ -147,11 +148,14 @@ class YAMLGenerator:
         Args:
             direction: Swipe direction (up, down, left, right)
             distance: Swipe distance (e.g., "50%", optional)
+            duration_ms: Swipe duration in milliseconds (optional)
             description: Human-readable description of the action (optional)
         """
         swipe_data: dict[str, Any] = {"direction": direction}
         if distance:
             swipe_data["distance"] = distance
+        if duration_ms:
+            swipe_data["duration"] = f"{duration_ms}ms"
         step: dict[str, Any] = {"swipe": swipe_data}
         if description:
             step["description"] = description

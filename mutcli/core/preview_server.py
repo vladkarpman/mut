@@ -35,6 +35,7 @@ class PreviewStep:
     tap_count: int | None = None  # Number of keyboard taps for type action
     text: str | None = None  # User-entered text for type action
     end_coordinates: tuple[int, int] | None = None  # End position for swipe gestures
+    duration_ms: int | None = None  # Duration for swipe/long_press gestures
 
 
 @dataclass
@@ -310,6 +311,7 @@ class PreviewServer:
                 "enabled": step.enabled,
                 "tapCount": step.tap_count,
                 "text": step.text,
+                "durationMs": step.duration_ms,
             }
 
             steps_data.append(step_data)

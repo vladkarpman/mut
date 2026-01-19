@@ -5908,12 +5908,9 @@
                 const x = parseFloat(indicator.dataset.x) || 0;
                 const y = parseFloat(indicator.dataset.y) || 0;
 
-                // Apply global Y offset (percentage of screen height)
-                const yOffsetPixels = (GLOBAL_Y_OFFSET_PERCENT / 100) * SCREEN_HEIGHT;
-
                 // Position relative to wrapper (which is now at rendered content bounds)
                 const posLeft = x * scaleX;
-                const posTop = (y + yOffsetPixels) * scaleY;
+                const posTop = y * scaleY;
 
                 // Position indicator (centered on the point via CSS transform)
                 indicator.style.left = posLeft + 'px';
@@ -5925,7 +5922,7 @@
                     const endY = parseFloat(indicator.dataset.endY) || y;
 
                     const endLeft = endX * scaleX;
-                    const endTop = (endY + yOffsetPixels) * scaleY;
+                    const endTop = endY * scaleY;
 
                     // Calculate delta from start to end (relative to parent which is at start position)
                     const dx = endLeft - posLeft;
@@ -5986,9 +5983,7 @@
         const SCREEN_WIDTH = SCREEN_WIDTH_PLACEHOLDER;
         const SCREEN_HEIGHT = SCREEN_HEIGHT_PLACEHOLDER;
 
-        // Global Y offset correction for indicator positions (in percentage)
-        // Compensates for systematic touch coordinate offset found in recordings
-        const GLOBAL_Y_OFFSET_PERCENT = 2;
+        // No Y offset correction needed - coordinates are accurate
 
         function toPercent(value, max) {
             return Math.round((value / max) * 100);
@@ -8771,24 +8766,19 @@
                 const x = parseFloat(indicator.dataset.x) || 0;
                 const y = parseFloat(indicator.dataset.y) || 0;
 
-                // Apply global Y offset (percentage of screen height)
-                const yOffsetPixels = (GLOBAL_Y_OFFSET_PERCENT / 100) * SCREEN_HEIGHT;
-                const adjustedY = y + yOffsetPixels;
-
                 // Position relative to wrapper origin
                 indicator.style.left = (x * scaleX) + 'px';
-                indicator.style.top = (adjustedY * scaleY) + 'px';
+                indicator.style.top = (y * scaleY) + 'px';
 
                 // Handle swipe indicators - position trajectory line and animated dot
                 if (indicator.classList.contains('swipe-indicator')) {
                     const endX = parseFloat(indicator.dataset.endX) || x;
                     const endY = parseFloat(indicator.dataset.endY) || y;
-                    const adjustedEndY = endY + yOffsetPixels;
 
                     const startLeft = x * scaleX;
-                    const startTop = adjustedY * scaleY;
+                    const startTop = y * scaleY;
                     const endLeft = endX * scaleX;
-                    const endTop = adjustedEndY * scaleY;
+                    const endTop = endY * scaleY;
 
                     // Calculate delta from start to end (relative to parent which is at start position)
                     const dx = endLeft - startLeft;

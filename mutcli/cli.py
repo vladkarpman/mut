@@ -178,16 +178,29 @@ def run(
         # Default: tests/{name}/reports/{timestamp}/
         report_dir = test_file.parent / "reports" / timestamp
 
-    # Setup ScrcpyService if video recording requested
-    scrcpy = None
-    if video:
-        from mutcli.core.scrcpy_service import ScrcpyService
+    # Setup ScrcpyService for video recording and touch injection (required)
+    import time as _time
 
-        console.print("[dim]Connecting for video recording...[/dim]")
-        scrcpy = ScrcpyService(config.device)
-        if not scrcpy.connect():
-            console.print("[yellow]Warning:[/yellow] Could not connect scrcpy, video disabled")
-            scrcpy = None
+    from mutcli.core.scrcpy_service import ScrcpyService
+
+    console.print("[dim]Connecting scrcpy...[/dim]")
+    scrcpy = ScrcpyService(config.device, enable_control=True)
+    if not scrcpy.connect():
+        console.print("[red]Error:[/red] Could not connect scrcpy. Ensure scrcpy 3.x is installed.")
+        raise typer.Exit(2)
+
+    # Wait for control to be ready (up to 2 seconds)
+    retries = 10
+    while not scrcpy.is_control_ready and retries > 0:
+        _time.sleep(0.2)
+        retries -= 1
+
+    if not scrcpy.is_control_ready:
+        console.print("[red]Error:[/red] Scrcpy control not ready. Check device connection.")
+        scrcpy.disconnect()
+        raise typer.Exit(2)
+
+    console.print("[dim]  ✓ Scrcpy ready[/dim]")
 
     # Execute test with live output
     console.print()
@@ -394,6 +407,7 @@ def _record_interactive(
         name=name,
         device_id=device_id,
         window_scale=scale,
+        app_package=app,
     )
 
     # Setup verbose logging
@@ -757,9 +771,15 @@ def _process_recording(
         except Exception as e:
             console.print(f"  [dim]Could not load window states: {e}[/dim]")
 
-    # UI hierarchy dumps disabled - they caused timing issues where element data
-    # from wrong screen state was provided to AI, leading to incorrect analysis.
-    # AI vision analysis of screenshots is more reliable.
+    # Load UI hierarchy dumps for element context
+    ui_hierarchy_path = test_dir / "ui_hierarchy.json"
+    if ui_hierarchy_path.exists():
+        try:
+            with open(ui_hierarchy_path) as f:
+                adb_data["ui_dumps"] = json.load(f)
+            console.print(f"  Loaded {len(adb_data['ui_dumps'])} UI hierarchy dumps")
+        except Exception as e:
+            console.print(f"  [dim]Could not load UI hierarchy: {e}[/dim]")
 
     # keyboard_states already loaded earlier for typing detection
     if keyboard_states:
@@ -927,6 +947,7 @@ def _build_preview_steps(
             suggested_verification=suggested_verification,
             scroll_to_target=scroll_to_target,
             end_coordinates=end_coords,
+            duration_ms=step.duration_ms,
         ))
 
     return preview_steps
@@ -1005,6 +1026,7 @@ def _build_preview_steps_from_analysis(
             suggested_verification=step_data.get("suggested_verification"),
             scroll_to_target=step_data.get("scroll_to_target"),
             end_coordinates=end_coords,
+            duration_ms=step_data.get("duration_ms"),
         ))
 
     return preview_steps
@@ -1226,6 +1248,7 @@ def _start_preview_and_generate_yaml(
                 generator.add_type(text, submit=submit)
         elif action == "swipe":
             direction = step_data.get("direction", "up")
+            duration_ms = step_data.get("durationMs") or step_data.get("duration_ms")
             # Calculate distance from start/end coordinates
             distance_str = None
             end_coords = step_data.get("end_coordinates", {})
@@ -1239,7 +1262,9 @@ def _start_preview_and_generate_yaml(
                 elif direction in ("left", "right") and screen_width:
                     distance_pct = abs(end_x - start_x) / screen_width * 100
                     distance_str = f"{round(distance_pct)}%"
-            generator.add_swipe(direction, distance=distance_str, description=description)
+            generator.add_swipe(
+                direction, distance=distance_str, duration_ms=duration_ms, description=description
+            )
         elif action == "long_press":
             # Long press is not directly supported in YAML format
             # For now, generate a tap with the element/coordinates
@@ -1425,7 +1450,12 @@ def preview(
                 elif direction in ("left", "right") and screen_width:
                     distance_pct = abs(end_x - start_x) / screen_width * 100
                     distance_str = f"{round(distance_pct)}%"
-            generator.add_swipe(direction=direction, distance=distance_str, description=description)
+            generator.add_swipe(
+                direction=direction,
+                distance=distance_str,
+                duration_ms=preview_step.duration_ms,
+                description=description,
+            )
             if verification:
                 generator.add_verify_screen(verification)
         elif action == "long_press":

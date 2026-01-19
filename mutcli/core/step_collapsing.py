@@ -171,6 +171,7 @@ def collapse_steps(
                 start={"x": start_x, "y": start_y},
                 end={"x": end_x, "y": end_y},
                 direction=direction,
+                duration_ms=event.get("duration_ms"),
             ))
 
         elif gesture == "long_press":

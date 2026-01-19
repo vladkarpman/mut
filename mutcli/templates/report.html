@@ -1197,9 +1197,22 @@
             }});
         }}
 
-        function positionIndicator(container, img, indicatorContainer) {{
+        function positionIndicator(container, img, indicatorContainer, retryCount = 0) {{
             // Get the actual rendered image bounds (accounting for object-fit: contain)
             const bounds = getRenderedImageBounds(img);
+
+            // Guard: if bounds are invalid (element not laid out yet), retry later
+            // This can happen when positioning runs before layout is complete
+            if (bounds.width <= 0 || bounds.height <= 0) {{
+                if (retryCount < 10) {{
+                    requestAnimationFrame(() =>
+                        requestAnimationFrame(() =>
+                            positionIndicator(container, img, indicatorContainer, retryCount + 1)
+                        )
+                    );
+                }}
+                return;
+            }}
 
             // Get position of img element relative to container (accounts for flex centering)
             const imgRect = img.getBoundingClientRect();

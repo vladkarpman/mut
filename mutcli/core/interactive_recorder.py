@@ -14,6 +14,7 @@ from typing import Any
 from mutcli.core.recording_window import RecordingWindow
 from mutcli.core.scrcpy_service import ScrcpyService
 from mutcli.core.touch_injector import TouchInjector
+from mutcli.core.ui_hierarchy_monitor import UIHierarchyMonitor
 
 logger = logging.getLogger("mut.interactive_recorder")
 
@@ -73,6 +74,7 @@ class InteractiveRecorder:
         device_id: str,
         output_dir: Path | None = None,
         window_scale: float = 0.5,
+        app_package: str | None = None,
     ):
         """Initialize interactive recorder.
 
@@ -81,15 +83,18 @@ class InteractiveRecorder:
             device_id: ADB device identifier
             output_dir: Output directory (defaults to tests/{name}/)
             window_scale: Scale factor for recording window (0.5 = half size)
+            app_package: App package name for UI hierarchy capture
         """
         self._name = name
         self._device_id = device_id
         self._output_dir = output_dir or Path(f"tests/{name}")
         self._window_scale = window_scale
+        self._app_package = app_package
 
         self._scrcpy: ScrcpyService | None = None
         self._injector: TouchInjector | None = None
         self._window: RecordingWindow | None = None
+        self._ui_monitor: UIHierarchyMonitor | None = None
         self._start_time: float | None = None
 
     @property
@@ -145,6 +150,12 @@ class InteractiveRecorder:
             # Create touch injector
             self._injector = TouchInjector(self._scrcpy, self._start_time)
 
+            # Start UI hierarchy monitoring if app_package is provided
+            if self._app_package:
+                self._ui_monitor = UIHierarchyMonitor(self._device_id, self._app_package)
+                self._ui_monitor.start(reference_time=self._start_time)
+                logger.info("UI hierarchy monitoring started")
+
             # Save state file
             state = RecordingState(
                 name=self._name,
@@ -165,12 +176,15 @@ class InteractiveRecorder:
             logger.info("Recording window opened, waiting for user interaction...")
             self._window.run()  # Blocks until window closed
 
+            logger.info("Window closed, stopping recording...")
+
+            # Stop video recording FIRST before anything else
+            stop_result = self._scrcpy.stop_recording()
+            logger.info(f"Stop recording result: {stop_result}")
+
             # Get events from injector
             events = self._injector.get_events()
             logger.info(f"Recording complete: {len(events)} events captured")
-
-            # Stop video recording
-            stop_result = self._scrcpy.stop_recording()
 
             # Save touch events
             touch_events_path = self._output_dir / "touch_events.json"
@@ -183,6 +197,19 @@ class InteractiveRecorder:
             screen_width, screen_height = self._scrcpy.get_screen_size()
             with open(screen_size_path, "w") as f:
                 json.dump({"width": screen_width, "height": screen_height}, f, indent=2)
+
+            # Stop UI hierarchy monitoring and save dumps
+            if self._ui_monitor:
+                try:
+                    self._ui_monitor.stop()
+                    ui_dumps = self._ui_monitor.get_dumps()
+                    if ui_dumps:
+                        ui_dumps_path = self._output_dir / "ui_hierarchy.json"
+                        with open(ui_dumps_path, "w") as f:
+                            json.dump(ui_dumps, f, indent=2)
+                        logger.info(f"Saved {len(ui_dumps)} UI hierarchy dumps")
+                except Exception as e:
+                    logger.warning(f"Error saving UI hierarchy: {e}")
 
             # Cleanup
             self._cleanup()
@@ -208,6 +235,13 @@ class InteractiveRecorder:
 
     def _cleanup(self) -> None:
         """Clean up resources."""
+        if self._ui_monitor:
+            try:
+                self._ui_monitor.stop()
+            except Exception:
+                pass
+            self._ui_monitor = None
+
         if self._window:
             try:
                 self._window.close()
