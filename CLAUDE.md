@@ -36,7 +36,7 @@ python -m build
 
 ```
 mutcli/
-├── cli.py                     # Typer commands (run, record, analyze, devices, report)
+├── cli.py                     # Typer commands (run, record, analyze, preview, devices, report)
 ├── __init__.py                # Version
 ├── __main__.py                # Entry point
 ├── models/
@@ -46,11 +46,16 @@ mutcli/
 │   ├── device_controller.py   # Touch gestures via ADB or scrcpy injection; ADB: type, elements
 │   ├── scrcpy_service.py      # MYScrcpy: screenshots, video recording, touch injection
 │   ├── ai_analyzer.py         # Gemini 2.5 Flash: verify_screen, find_element
+│   ├── ai_recovery.py         # AI-based error recovery suggestions
 │   ├── executor.py            # TestExecutor: runs YAML tests, captures action screenshots
 │   ├── step_verifier.py       # StepVerifier: parallel AI analysis of executed steps
 │   ├── parser.py              # YAML test file parser
 │   ├── recorder.py            # Recording session manager
+│   ├── interactive_recorder.py # Interactive recording with GUI window
+│   ├── recording_window.py    # Recording control window UI
 │   ├── touch_monitor.py       # ADB getevent touch capture
+│   ├── touch_injector.py      # Touch injection via scrcpy
+│   ├── adb_state_monitor.py   # Monitor ADB state (keyboard, activity, window)
 │   ├── frame_extractor.py     # Extract frames from video at timestamps
 │   ├── step_analyzer.py       # AI analysis of recorded steps
 │   ├── typing_detector.py     # Detect typing from touch patterns
@@ -60,10 +65,15 @@ mutcli/
 │   ├── preview_server.py      # HTTP server for approval UI
 │   ├── analysis_io.py         # Save/load analysis JSON
 │   ├── report.py              # ReportGenerator: JSON + HTML with gesture visualization
-│   └── report_server.py       # Local HTTP server for viewing reports
-└── templates/
-    ├── approval.html          # Browser-based approval UI
-    └── report.html            # Test report template with gesture indicators
+│   ├── report_server.py       # Local HTTP server for viewing reports
+│   ├── console_reporter.py    # Console output formatting for test results
+│   ├── screenshot_saver.py    # Save screenshots to files
+│   ├── ui_element_parser.py   # Parse UI hierarchy XML
+│   └── ui_hierarchy_monitor.py # Monitor UI hierarchy during recording
+├── templates/
+│   ├── approval.html          # Browser-based approval UI
+│   └── report.html            # Test report template with gesture indicators
+└── utils/                     # Shared utilities
 ```
 
 ### Key Patterns
@@ -175,8 +185,12 @@ tests/my-test/
 ├── video.mp4              # Screen recording
 ├── video.timestamps.json  # Frame timing
 ├── touch_events.json      # Raw touch data
-├── ui_hierarchy.json      # UI dumps at touch times (when --app provided)
 ├── analysis.json          # AI step analysis
+├── activity_states.json   # Activity state changes during recording
+├── keyboard_states.json   # Keyboard visibility changes
+├── window_states.json     # Window focus changes
+├── screen_size.json       # Device screen dimensions
+├── screenshots/           # Extracted frames for analysis
 └── debug.log              # Verbose logs (if enabled)
 ```
 

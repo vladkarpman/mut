@@ -180,6 +180,15 @@ mut analyze checkout-flow
 # Export YAML when done
 ```
 
+### `mut preview <name>`
+
+Open the approval UI for an existing analysis without re-running AI analysis.
+
+```bash
+mut preview checkout-flow
+# Opens browser with approval UI for existing analysis.json
+```
+
 ### `mut devices`
 
 List connected devices.
@@ -264,6 +273,11 @@ tests/my-test/
 ├── video.timestamps.json  # Frame timing data
 ├── touch_events.json      # Raw touch data
 ├── analysis.json          # AI step analysis
+├── activity_states.json   # Activity state changes
+├── keyboard_states.json   # Keyboard visibility
+├── window_states.json     # Window focus changes
+├── screen_size.json       # Device dimensions
+├── screenshots/           # Extracted frames
 └── debug.log              # Verbose logs (if enabled)
 ```
 
@@ -274,11 +288,12 @@ Each test run creates a timestamped folder:
 ```
 tests/my-test/
 ├── test.yaml              # Test definition
-└── runs/
+└── reports/
     └── 2026-01-17_14-30-25/
         ├── debug.log      # Run logs (if MUT_VERBOSE=true)
-        ├── results.json   # Full test results
+        ├── report.json    # Full test results
         ├── report.html    # Interactive HTML report
+        ├── screenshots/   # Step screenshots
         └── recording/     # Video recording (if --video)
             └── video.mp4
 ```

@@ -1,0 +1,104 @@
+config:
+  app: tap.photo.boost.restoration
+setup:
+- launch_app
+steps:
+- tap: Cancel
+  at:
+  - 87.2%
+  - 6.2%
+  description: User taps on Cancel
+- verify_screen: The upgrade paywall is closed and the app's main dashboard/home screen
+    is displayed.
+- tap:
+  - 17.4%
+  - 56.1%
+  description: User taps on a photo thumbnail in the 'Enhance a photo' section
+- verify_screen: The selected photo is now displayed in a large preview mode with
+    an 'Enhance+' button at the bottom.
+- tap: Enhance+
+  at:
+  - 58.1%
+  - 91.8%
+  description: User taps on the Enhance+ button
+- verify_screen: The screen title has changed to 'Edit Photo' and a progress indicator is visible'
+- tap: Low-light fix
+  at:
+  - 56.8%
+  - 92.4%
+  description: User taps on the Low-light fix button
+- tap: Save
+  at:
+  - 87.3%
+  - 7.0%
+  description: User taps on Save button
+- verify_screen: A 'Saved To Device' confirmation is displayed and the 'Save' button
+    has changed to an 'Export' button.
+- tap: All
+  at:
+  - 91.2%
+  - 75.2%
+  description: User taps on All
+- verify_screen: The screen title changes to 'Looks' and a grid of various artistic
+    styles is displayed.
+- swipe:
+    direction: left
+    distance: 80%
+    duration: 941ms
+    from:
+    - 80.6%
+    - 15.9%
+  description: User swipes left to browse additional style categories in the top navigation
+    menu.
+- tap: Time Traveling ⏳
+  at:
+  - 61.3%
+  - 15.0%
+  description: User taps on Time Traveling ⏳
+- verify_screen: The 'Time Traveling ⏳' tab is highlighted in purple and the images
+    in the grid have changed to historical-themed styles.
+- swipe:
+    direction: up
+    distance: 85%
+    duration: 3139ms
+    from:
+    - 71.1%
+    - 90.8%
+  description: User swipes up to scroll through the 'Time Traveling' look styles
+- tap:
+  - 31.2%
+  - 79.4%
+  description: User taps on the saxophone player style image
+- verify_screen: The screen title changes to 'SaxPlay' and a photo generation progress
+    modal appears.
+- swipe:
+    direction: left
+    distance: 73%
+    duration: 1122ms
+    from:
+    - 88.4%
+    - 88.1%
+  description: User swipes left to switch the photo style category to 'Modeling Photoshoot'
+- swipe:
+    direction: left
+    distance: 66%
+    duration: 983ms
+    from:
+    - 86.3%
+    - 89.2%
+  description: User swipes left to browse more photo styling options
+- swipe:
+    direction: left
+    distance: 60%
+    duration: 882ms
+    from:
+    - 79.8%
+    - 88.5%
+  description: User swipes left on the filter carousel to browse more options
+- tap: FutureUX
+  at:
+  - 48.7%
+  - 88.0%
+  description: User taps on FutureUX filter
+teardown:
+- terminate_app

@@ -2,6 +2,7 @@
 
 **Date:** 2026-01-16
 **Status:** Approved
+**Note:** This is a historical design document. Some details (e.g., directory structure, command names) evolved during implementation. See CLAUDE.md for current architecture.
 
 ## Summary
 

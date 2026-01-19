@@ -55,7 +55,13 @@ htmlcov/
 # Test artifacts
 tests/*/recording/
 tests/*/reports/
+tests/*/screenshots/
 reports/
+
+# Test recording files (keep test.yaml only)
+tests/*/*.mp4
+tests/*/*.json
+!tests/*/test.yaml
 
 # OS
 .DS_Store
