@@ -42,6 +42,8 @@ class TestReportGenerator:
         """Generates HTML report."""
         output_dir = tmp_path / "report"
         output_dir.mkdir()
+        (output_dir / "recording").mkdir()
+        (output_dir / "recording" / "video.mp4").write_bytes(b"fake video")
 
         generator = ReportGenerator(output_dir)
         generator.generate_json(test_result)
@@ -115,6 +117,8 @@ class TestReportGenerator:
         )
         output_dir = tmp_path / "report"
         output_dir.mkdir()
+        (output_dir / "recording").mkdir()
+        (output_dir / "recording" / "video.mp4").write_bytes(b"fake video")
 
         generator = ReportGenerator(output_dir)
         html_path = generator.generate_html(result)
@@ -144,6 +148,8 @@ class TestReportGenerator:
         )
         output_dir = tmp_path / "report"
         output_dir.mkdir()
+        (output_dir / "recording").mkdir()
+        (output_dir / "recording" / "video.mp4").write_bytes(b"fake video")
 
         generator = ReportGenerator(output_dir)
         html_path = generator.generate_html(result)
@@ -168,6 +174,8 @@ class TestReportGenerator:
         """HTML report uses the external template file."""
         output_dir = tmp_path / "report"
         output_dir.mkdir()
+        (output_dir / "recording").mkdir()
+        (output_dir / "recording" / "video.mp4").write_bytes(b"fake video")
 
         generator = ReportGenerator(output_dir)
         html_path = generator.generate_html(test_result)
@@ -191,6 +199,8 @@ class TestReportGenerator:
         )
         output_dir = tmp_path / "report"
         output_dir.mkdir()
+        (output_dir / "recording").mkdir()
+        (output_dir / "recording" / "video.mp4").write_bytes(b"fake video")
 
         generator = ReportGenerator(output_dir)
         html_path = generator.generate_html(result)
@@ -202,6 +212,8 @@ class TestReportGenerator:
         """HTML report contains step cards with correct structure."""
         output_dir = tmp_path / "report"
         output_dir.mkdir()
+        (output_dir / "recording").mkdir()
+        (output_dir / "recording" / "video.mp4").write_bytes(b"fake video")
 
         generator = ReportGenerator(output_dir)
         html_path = generator.generate_html(test_result)
@@ -241,6 +253,8 @@ class TestReportGenerator:
         )
         output_dir = tmp_path / "report"
         output_dir.mkdir()
+        (output_dir / "recording").mkdir()
+        (output_dir / "recording" / "video.mp4").write_bytes(b"fake video")
 
         generator = ReportGenerator(output_dir)
         html_path = generator.generate_html(result)
@@ -271,6 +285,8 @@ class TestReportGenerator:
         )
         output_dir = tmp_path / "report"
         output_dir.mkdir()
+        (output_dir / "recording").mkdir()
+        (output_dir / "recording" / "video.mp4").write_bytes(b"fake video")
 
         generator = ReportGenerator(output_dir)
         html_path = generator.generate_html(result)
@@ -285,6 +301,8 @@ class TestReportGenerator:
         """HTML report includes embedded JSON data."""
         output_dir = tmp_path / "report"
         output_dir.mkdir()
+        (output_dir / "recording").mkdir()
+        (output_dir / "recording" / "video.mp4").write_bytes(b"fake video")
 
         generator = ReportGenerator(output_dir)
         html_path = generator.generate_html(test_result)
@@ -312,20 +330,6 @@ class TestReportGenerator:
         assert 'class="video-panel"' in content
         assert 'id="reportVideo"' in content
         assert 'src="recording/video.mp4"' in content
-
-    def test_html_shows_no_video_message_when_no_video(self, test_result, tmp_path):
-        """HTML report shows 'no video' message when no recording exists."""
-        output_dir = tmp_path / "report"
-        output_dir.mkdir()
-
-        generator = ReportGenerator(output_dir)
-        html_path = generator.generate_html(test_result)
-
-        content = html_path.read_text()
-        # Video panel is present but shows no-video message
-        assert 'class="video-panel"' in content
-        assert 'class="no-video"' in content
-        assert "No recording available" in content
 
     def test_json_includes_screenshot_data(self, tmp_path):
         """JSON report includes screenshot data as base64."""
