@@ -77,6 +77,26 @@ class ReportGenerator:
             return None
         return f"data:image/png;base64,{base64.b64encode(data).decode()}"
 
+    def _get_screenshot_src(self, path: Path | None, fallback_bytes: bytes | None) -> str | None:
+        """Get screenshot source - prefer file path, fall back to base64.
+
+        Args:
+            path: Path to screenshot file (relative to output_dir)
+            fallback_bytes: Screenshot bytes for base64 encoding
+
+        Returns:
+            Relative path string, base64 data URI, or None
+        """
+        if path is not None and path.exists():
+            # Return path relative to output_dir
+            try:
+                return str(path.relative_to(self._output_dir))
+            except ValueError:
+                return str(path.name)
+        if fallback_bytes is not None:
+            return self._encode_screenshot(fallback_bytes)
+        return None
+
     def _escape_json_for_html(self, json_str: str) -> str:
         """Escape JSON string for safe embedding in HTML script tags.
 
@@ -180,11 +200,11 @@ class ReportGenerator:
                     "description": s.description,
                     "duration": f"{s.duration:.1f}s",
                     "error": s.error,
-                    "screenshot_before": self._encode_screenshot(s.screenshot_before),
-                    "screenshot_after": self._encode_screenshot(s.screenshot_after),
+                    "screenshot_before": self._get_screenshot_src(s.screenshot_before_path, s.screenshot_before),
+                    "screenshot_after": self._get_screenshot_src(s.screenshot_after_path, s.screenshot_after),
                     # Action screenshots (varies by gesture type)
-                    "screenshot_action": self._encode_screenshot(s.screenshot_action),
-                    "screenshot_action_end": self._encode_screenshot(s.screenshot_action_end),
+                    "screenshot_action": self._get_screenshot_src(s.screenshot_action_path, s.screenshot_action),
+                    "screenshot_action_end": self._get_screenshot_src(s.screenshot_action_end_path, s.screenshot_action_end),
                     # AI analysis results
                     "ai_verified": s.ai_verified,
                     "ai_outcome": s.ai_outcome,

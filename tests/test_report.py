@@ -357,3 +357,41 @@ class TestReportGenerator:
         assert step["screenshot_before"] is not None
         assert step["screenshot_before"].startswith("data:image/png;base64,")
         assert step["screenshot_after"] is None
+
+    def test_html_references_screenshot_files(self, tmp_path):
+        """HTML report references screenshot files instead of base64."""
+        # Create video and screenshots
+        output_dir = tmp_path / "report"
+        output_dir.mkdir()
+        (output_dir / "recording").mkdir()
+        (output_dir / "recording" / "video.mp4").write_bytes(b"fake video")
+
+        screenshots_dir = output_dir / "screenshots"
+        screenshots_dir.mkdir()
+        (screenshots_dir / "001_tap_before.png").write_bytes(b'\x89PNG...')
+        (screenshots_dir / "001_tap_after.png").write_bytes(b'\x89PNG...')
+
+        result = TestResult(
+            name="file-screenshot-test",
+            status="passed",
+            duration=1.0,
+            steps=[
+                StepResult(
+                    step_number=1,
+                    action="tap",
+                    status="passed",
+                    duration=0.5,
+                    screenshot_before_path=screenshots_dir / "001_tap_before.png",
+                    screenshot_after_path=screenshots_dir / "001_tap_after.png",
+                ),
+            ],
+        )
+
+        generator = ReportGenerator(output_dir)
+        html_path = generator.generate_html(result)
+
+        content = html_path.read_text()
+        # Should reference files, not base64
+        assert 'src="screenshots/001_tap_before.png"' in content
+        assert 'src="screenshots/001_tap_after.png"' in content
+        assert "data:image/png;base64" not in content
