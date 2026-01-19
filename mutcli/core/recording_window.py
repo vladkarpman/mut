@@ -63,35 +63,38 @@ class RecordingWindow:
         self._canvas_width = 0
         self._canvas_height = 0
 
-        # Create window
+        # Create window - minimal, clean, device-like
         self._root = tk.Tk()
         self._root.title(title)
         self._root.protocol("WM_DELETE_WINDOW", self._handle_close)
         self._root.configure(bg="#000000")
 
-        # Prevent window resizing to maintain aspect ratio
-        self._root.resizable(False, False)
+        # Start with typical phone aspect ratio (will be updated with actual size)
+        initial_width = 270  # 540 * 0.5
+        initial_height = 585  # ~1170 * 0.5 (9:19.5 ratio)
+        self._root.geometry(f"{initial_width}x{initial_height}")
 
-        # Canvas for screen display (fixed size, set after first frame)
+        # Canvas for screen display - will be resized when first frame arrives
         self._canvas = tk.Canvas(
             self._root,
             bg="#000000",
             highlightthickness=0,
             borderwidth=0,
+            width=initial_width,
+            height=initial_height - 20,
         )
-        self._canvas.pack(side=tk.TOP, fill=tk.NONE, expand=False, padx=0, pady=0)
+        self._canvas.pack(side=tk.TOP)
 
-        # Status bar at bottom
+        # Minimal status bar
         self._status_var = tk.StringVar(value="Connecting...")
         self._status_bar = tk.Label(
             self._root,
             textvariable=self._status_var,
             anchor="center",
-            bg="#2d2d2d",
-            fg="#ffffff",
-            padx=10,
-            pady=5,
-            font=("Helvetica", 11),
+            bg="#1a1a1a",
+            fg="#888888",
+            pady=2,
+            font=("Helvetica", 10),
         )
         self._status_bar.pack(side=tk.BOTTOM, fill=tk.X)
 
@@ -181,15 +184,19 @@ class RecordingWindow:
                     self._canvas_width = int(self._screen_width * self._scale)
                     self._canvas_height = int(self._screen_height * self._scale)
 
-                    # Set fixed canvas size
+                    # Resize canvas and window to match device aspect ratio
                     self._canvas.configure(
                         width=self._canvas_width,
                         height=self._canvas_height,
                     )
 
-                    # Force window to exact size (canvas + status bar ~25px)
-                    self._root.geometry(f"{self._canvas_width}x{self._canvas_height + 25}")
-                    self._root.update_idletasks()
+                    # Calculate total window height (canvas + status bar)
+                    window_height = self._canvas_height + 18
+
+                    # Apply geometry and lock size
+                    self._root.geometry(f"{self._canvas_width}x{window_height}")
+                    self._root.update()
+                    self._root.resizable(False, False)
 
                     self._update_status(
                         f"Recording ({self._screen_width}x{self._screen_height}) | "
