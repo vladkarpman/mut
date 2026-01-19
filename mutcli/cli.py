@@ -93,7 +93,7 @@ def run(
     from mutcli.core.device_controller import DeviceController
     from mutcli.core.executor import TestExecutor
     from mutcli.core.parser import ParseError, TestParser
-    from mutcli.core.report import ReportGenerator
+    from mutcli.core.report import NoVideoError, ReportGenerator
 
     # Check test file exists
     if not test_file.exists():
@@ -178,29 +178,16 @@ def run(
         # Default: tests/{name}/reports/{timestamp}/
         report_dir = test_file.parent / "reports" / timestamp
 
-    # Setup ScrcpyService for video recording and touch injection (required)
-    import time as _time
-
+    # Setup ScrcpyService for screenshots/video (control not required - using ADB for gestures)
     from mutcli.core.scrcpy_service import ScrcpyService
 
-    console.print("[dim]Connecting scrcpy...[/dim]")
-    scrcpy = ScrcpyService(config.device, enable_control=True)
+    console.print("[dim]Connecting scrcpy (screenshots)...[/dim]")
+    scrcpy = ScrcpyService(config.device, enable_control=False)
     if not scrcpy.connect():
         console.print("[red]Error:[/red] Could not connect scrcpy. Ensure scrcpy 3.x is installed.")
         raise typer.Exit(2)
 
-    # Wait for control to be ready (up to 2 seconds)
-    retries = 10
-    while not scrcpy.is_control_ready and retries > 0:
-        _time.sleep(0.2)
-        retries -= 1
-
-    if not scrcpy.is_control_ready:
-        console.print("[red]Error:[/red] Scrcpy control not ready. Check device connection.")
-        scrcpy.disconnect()
-        raise typer.Exit(2)
-
-    console.print("[dim]  ✓ Scrcpy ready[/dim]")
+    console.print("[dim]  ✓ Scrcpy ready (ADB mode)[/dim]")
 
     # Execute test with live output
     console.print()
@@ -280,15 +267,20 @@ def run(
     # Check for source video from recording session
     source_video = test_file.parent / "video.mp4"
     generator = ReportGenerator(
-        report_dir,
+        run_folder,
         source_video_path=source_video if source_video.exists() else None,
     )
     generator.generate_json(result)
-    html_path = generator.generate_html(result)
 
-    # Show report path (result status already shown by reporter)
-    console.print()
-    console.print(f"[dim]Report: {html_path}[/dim]")
+    # Generate HTML report (requires video)
+    try:
+        html_path = generator.generate_html(result)
+        console.print()
+        console.print(f"[dim]Report: {html_path}[/dim]")
+    except NoVideoError:
+        console.print()
+        console.print("[dim]HTML report skipped (no video recording)[/dim]")
+        console.print(f"[dim]JSON results: {run_folder / 'results.json'}[/dim]")
 
     # Generate JUnit if requested
     if junit:
@@ -344,8 +336,8 @@ def record(
         ..., "--app", "-a", help="App package name (required for UI element capture)"
     ),
     device: str | None = typer.Option(None, "--device", "-d", help="Device ID"),
-    legacy: bool = typer.Option(
-        False, "--legacy", help="Use legacy getevent-based recording (touch physical device)"
+    interactive: bool = typer.Option(
+        False, "--interactive", "-i", help="Use interactive GUI mode (click window instead of device)"
     ),
     scale: float = typer.Option(
         0.5, "--scale", "-s", help="Window scale for interactive mode (0.5 = half size)"
@@ -353,10 +345,9 @@ def record(
 ) -> None:
     """Start recording user interactions.
 
-    By default, opens a GUI window showing the device screen.
-    Click/drag on the window to record touches with perfect accuracy.
+    By default, touch the physical device to record (ADB getevent capture).
 
-    Use --legacy to record by touching the physical device (less accurate).
+    Use --interactive to open a GUI window and click on it instead.
     """
     from mutcli.core.config import ConfigLoader, setup_logging
     from mutcli.core.device_controller import DeviceController
@@ -382,12 +373,12 @@ def record(
     # Suppress noisy myscrcpy library logs
     logging.getLogger("myscrcpy").setLevel(logging.WARNING)
 
-    if legacy:
-        # Legacy mode: use getevent-based recording (touch physical device)
-        _record_legacy(name, device_id, device_display, app, config)
-    else:
+    if interactive:
         # Interactive mode: GUI window with injection-based recording
         _record_interactive(name, device_id, device_display, app, config, scale)
+    else:
+        # Default: ADB getevent-based recording (touch physical device)
+        _record_legacy(name, device_id, device_display, app, config)
 
 
 def _record_interactive(

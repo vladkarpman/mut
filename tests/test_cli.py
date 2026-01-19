@@ -793,3 +793,78 @@ class TestAnalyzeCommandEdgeCases:
         assert result.exit_code == 0
         # Test should complete successfully with default screen height
         assert (test_dir / "test.yaml").exists()
+
+
+class TestRunCommandReportGeneration:
+    """Tests for report generation in run command."""
+
+    def test_run_without_video_skips_html_report(self, tmp_path: Path) -> None:
+        """Running without --video skips HTML report with message."""
+        # Create test file
+        test_file = tmp_path / "test.yaml"
+        test_file.write_text("""
+config:
+  app: com.example.app
+tests:
+  - name: Simple
+    steps:
+      - tap: "Button"
+""")
+
+        with (
+            patch("mutcli.core.device_controller.DeviceController.list_devices") as mock_devices,
+            patch("mutcli.core.config.ConfigLoader.load") as mock_config_load,
+            patch("mutcli.core.parser.TestParser.parse") as mock_parse,
+            patch("mutcli.core.executor.TestExecutor") as mock_executor_class,
+            patch("mutcli.core.scrcpy_service.ScrcpyService") as mock_scrcpy_class,
+            patch("mutcli.core.console_reporter.ConsoleReporter") as mock_reporter_class,
+            patch("mutcli.core.report.ReportGenerator") as mock_generator_class,
+        ):
+            # Mock devices
+            mock_devices.return_value = [{"id": "device1", "name": "Test"}]
+
+            # Mock config
+            mock_config = MagicMock()
+            mock_config.device = None
+            mock_config.verbose = False
+            mock_config_load.return_value = mock_config
+
+            # Mock test parser
+            mock_test = MagicMock()
+            mock_test.setup = []
+            mock_test.steps = [MagicMock()]
+            mock_test.teardown = []
+            mock_test.config.app = "com.example.app"
+            mock_parse.return_value = mock_test
+
+            # Mock executor
+            mock_executor = MagicMock()
+            mock_result = MagicMock()
+            mock_result.status = "passed"
+            mock_result.duration = 1.0
+            mock_result.steps = []
+            mock_executor.execute_test.return_value = mock_result
+            mock_executor_class.return_value = mock_executor
+
+            # Mock scrcpy
+            mock_scrcpy = MagicMock()
+            mock_scrcpy.connect.return_value = True
+            mock_scrcpy_class.return_value = mock_scrcpy
+
+            # Mock reporter
+            mock_reporter = MagicMock()
+            mock_reporter_class.return_value = mock_reporter
+
+            # Mock ReportGenerator to raise NoVideoError on generate_html
+            from mutcli.core.report import NoVideoError
+
+            mock_generator = MagicMock()
+            mock_generator.generate_json.return_value = tmp_path / "report.json"
+            mock_generator.generate_html.side_effect = NoVideoError("No video")
+            mock_generator_class.return_value = mock_generator
+
+            result = runner.invoke(app, ["run", str(test_file), "--no-video"])
+
+        # Should succeed (exit 0) and mention skipping HTML
+        assert result.exit_code == 0
+        assert "html report skipped" in result.output.lower() or "no video" in result.output.lower()
