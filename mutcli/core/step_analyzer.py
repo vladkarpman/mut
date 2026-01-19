@@ -59,6 +59,7 @@ class AnalyzedStep:
         before_description: Description of screen state before tap
         after_description: Description of screen state after tap
         suggested_verification: Optional verification suggestion
+        scroll_to_target: For swipes: element that appeared (suggests scroll_to conversion)
     """
 
     index: int
@@ -68,6 +69,7 @@ class AnalyzedStep:
     before_description: str = ""
     after_description: str = ""
     suggested_verification: str | None = None
+    scroll_to_target: str | None = None
 
 
 class StepAnalyzer:
@@ -616,6 +618,7 @@ class StepAnalyzer:
             before_description=result.get("before_description", ""),
             after_description=result.get("after_description", ""),
             suggested_verification=result.get("suggested_verification"),
+            scroll_to_target=result.get("scroll_to_target"),
         )
 
     async def _analyze_long_press_step(

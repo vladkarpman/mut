@@ -15,6 +15,7 @@ from mutcli.core.device_controller import DeviceController
 from mutcli.models.test import Step, TestFile
 
 if TYPE_CHECKING:
+    from mutcli.core.console_reporter import ConsoleReporter
     from mutcli.core.scrcpy_service import ScrcpyService
 
 logger = logging.getLogger("mut.executor")
@@ -77,6 +78,7 @@ class TestExecutor:
         ai_analyzer: AIAnalyzer | None = None,
         scrcpy: ScrcpyService | None = None,
         output_dir: Path | None = None,
+        reporter: ConsoleReporter | None = None,
     ):
         """Initialize executor.
 
@@ -86,6 +88,7 @@ class TestExecutor:
             ai_analyzer: AI analyzer (creates new if not provided)
             scrcpy: Optional ScrcpyService for fast screenshots and video recording
             output_dir: Output directory for reports and recordings
+            reporter: Optional ConsoleReporter for live CLI output
         """
         self._device = DeviceController(device_id)
         self._config = config or ConfigLoader.load()
@@ -93,6 +96,7 @@ class TestExecutor:
         self._ai_recovery = AIRecovery(self._ai)
         self._scrcpy = scrcpy
         self._output_dir = output_dir or Path.cwd()
+        self._reporter = reporter
         self._screen_size: tuple[int, int] | None = None
         self._step_number = 0
         self._test_start: float = 0.0  # Track test start time for timestamps
@@ -242,6 +246,18 @@ class TestExecutor:
         step_desc = self._format_step_description(step)
         logger.debug("Step %d: Starting %s", self._step_number, step_desc)
 
+        # Notify reporter that step is starting
+        if self._reporter:
+            self._reporter.step_started(
+                step_num=self._step_number,
+                action=step.action,
+                target=step.target or step.condition_target,
+            )
+
+        # Maestro-style: wait for screen to settle before action
+        if self._step_number > 1:
+            self._wait_to_settle(step)
+
         # Capture before screenshot and timestamp
         screenshot_before, ts_before = self._capture_screenshot_or_timestamp()
 
@@ -315,7 +331,7 @@ class TestExecutor:
             # Use explicit description if provided, otherwise generate from step data
             description = step.description or self._format_step_description(step)
 
-            return StepResult(
+            result = StepResult(
                 step_number=self._step_number,
                 action=step.action,
                 status="failed" if error else "passed",
@@ -334,6 +350,16 @@ class TestExecutor:
                 _ts_action_end=self._step_action_end_timestamp,
             )
 
+            # Notify reporter that step completed
+            if self._reporter:
+                self._reporter.step_completed(
+                    step_num=self._step_number,
+                    status=result.status,
+                    error=result.error,
+                )
+
+            return result
+
         except Exception as e:
             elapsed = time.time() - start
             logger.exception(
@@ -341,7 +367,7 @@ class TestExecutor:
             )
             # Use explicit description if provided, otherwise generate from step data
             description = step.description or self._format_step_description(step)
-            return StepResult(
+            result = StepResult(
                 step_number=self._step_number,
                 action=step.action,
                 status="failed",
@@ -351,6 +377,16 @@ class TestExecutor:
                 error=str(e),
                 screenshot_before=screenshot_before,
             )
+
+            # Notify reporter that step completed (with failure)
+            if self._reporter:
+                self._reporter.step_completed(
+                    step_num=self._step_number,
+                    status=result.status,
+                    error=result.error,
+                )
+
+            return result
 
     def _format_step_description(self, step: Step) -> str:
         """Format step for logging purposes.
@@ -586,6 +622,67 @@ class TestExecutor:
             self._screen_size = self._device.get_screen_size()
         return self._screen_size
 
+    def _wait_for_screen_stability(self, timeout: float = 2.0) -> bool:
+        """Wait for screen to stabilize (stop changing).
+
+        Uses hash comparison to detect when UI animations complete.
+
+        Args:
+            timeout: Maximum time to wait in seconds
+
+        Returns:
+            True if screen stabilized, False if timeout reached
+        """
+        poll_interval = self._config.resilience.poll_interval
+        stability_threshold = self._config.resilience.stability_frames
+
+        start = time.time()
+        last_hash: int | None = None
+        stable_count = 0
+
+        while time.time() - start < timeout:
+            screenshot = self._capture_screenshot()
+            if screenshot:
+                current_hash = hash(screenshot)
+                if current_hash == last_hash:
+                    stable_count += 1
+                    if stable_count >= stability_threshold:
+                        elapsed = time.time() - start
+                        logger.debug("Screen stabilized after %.2fs", elapsed)
+                        return True
+                else:
+                    stable_count = 0
+                    last_hash = current_hash
+
+            time.sleep(poll_interval)
+
+        logger.debug("Screen stability timeout after %.2fs", timeout)
+        return False
+
+    def _wait_to_settle(self, step: Step) -> None:
+        """Wait for screen to settle before executing a step (Maestro-style).
+
+        Like Maestro's waitToSettleTimeoutMs - waits until screen stops changing,
+        not for a fixed duration. This handles animations, loading states, etc.
+
+        Args:
+            step: Step about to be executed
+        """
+        # Skip for non-UI actions
+        if step.action in ("wait", "launch_app", "terminate_app"):
+            return
+
+        # Use step-level timeout if specified, otherwise use config default
+        timeout = step.wait_to_settle_timeout
+        if timeout is None:
+            timeout = self._config.resilience.wait_to_settle_timeout
+
+        if timeout <= 0:
+            return
+
+        logger.debug("Waiting for screen to settle (max %.1fs)...", timeout)
+        self._wait_for_screen_stability(timeout=timeout)
+
     def _coordinates_to_pixels(self, step: Step) -> tuple[int, int] | None:
         """Convert step coordinates to pixels.
 
@@ -699,7 +796,7 @@ class TestExecutor:
             )
 
             if should_search:
-                # Try accessibility tree first (fast)
+                # Try accessibility tree first (fast, always enabled)
                 coords = self._device.find_element(target)
                 if coords:
                     elapsed = time.time() - start
@@ -709,8 +806,8 @@ class TestExecutor:
                     )
                     return coords
 
-                # Try AI vision if screenshot available
-                if screenshot:
+                # Try AI vision only if ai_fallback is enabled
+                if self._config.resilience.ai_fallback and screenshot:
                     coords = self._ai.find_element(screenshot, target, width, height)
                     if coords:
                         elapsed = time.time() - start
@@ -834,8 +931,62 @@ class TestExecutor:
 
     # Action handlers
 
+    def _tap_with_retry(self, x: int, y: int, step: Step) -> bool:
+        """Execute tap with retry-if-no-change behavior (Maestro-style).
+
+        Like Maestro's retryTapIfNoChange - if screen doesn't change after tap,
+        retry the tap. Handles race conditions where tap fires before element
+        is fully interactive.
+
+        Args:
+            x: X coordinate
+            y: Y coordinate
+            step: Step being executed (for retry settings)
+
+        Returns:
+            True if tap caused screen change, False if no change after retries
+        """
+        # Determine if retry is enabled
+        retry_enabled = step.retry_if_no_change
+        if retry_enabled is None:
+            retry_enabled = self._config.resilience.retry_if_no_change
+
+        max_retries = self._config.resilience.retry_if_no_change_limit if retry_enabled else 1
+
+        for attempt in range(max_retries):
+            # Capture screenshot before tap
+            before_screenshot = self._capture_screenshot()
+            before_hash = hash(before_screenshot) if before_screenshot else None
+
+            # Perform tap
+            self._device.tap(x, y)
+
+            # Wait briefly for UI to respond
+            time.sleep(0.3)
+
+            # Check if screen changed
+            after_screenshot = self._capture_screenshot()
+            after_hash = hash(after_screenshot) if after_screenshot else None
+
+            if before_hash != after_hash:
+                # Screen changed - tap was successful
+                if attempt > 0:
+                    logger.debug("Tap succeeded on attempt %d/%d", attempt + 1, max_retries)
+                return True
+
+            if attempt < max_retries - 1:
+                logger.debug(
+                    "Screen didn't change after tap, retrying (%d/%d)...",
+                    attempt + 1, max_retries
+                )
+                # Wait a bit before retrying
+                time.sleep(0.2)
+
+        logger.debug("Screen didn't change after %d tap attempts", max_retries)
+        return False
+
     def _action_tap(self, step: Step) -> str | None:
-        """Execute tap action using AI-first approach."""
+        """Execute tap action with retry-if-no-change (Maestro-style)."""
         coords, error = self._resolve_coordinates_ai(step)
         if error:
             return error
@@ -843,8 +994,11 @@ class TestExecutor:
             return "Could not resolve coordinates for tap"
 
         self._step_coords = coords  # Store for report gesture indicator
-        self._device.tap(coords[0], coords[1])
-        # Capture action screenshot and timestamp immediately after tap
+
+        # Use tap with retry behavior
+        self._tap_with_retry(coords[0], coords[1], step)
+
+        # Capture action screenshot and timestamp
         screenshot, timestamp = self._capture_screenshot_or_timestamp()
         self._step_action_screenshot = screenshot
         self._step_action_timestamp = timestamp
@@ -875,8 +1029,63 @@ class TestExecutor:
         self._device.type_text(text)
         return None
 
+    def _swipe_with_retry(
+        self,
+        start_x: int, start_y: int,
+        end_x: int, end_y: int,
+        duration_ms: int,
+        step: Step,
+    ) -> bool:
+        """Execute swipe with retry-if-no-change behavior (Maestro-style).
+
+        Args:
+            start_x, start_y: Start coordinates
+            end_x, end_y: End coordinates
+            duration_ms: Swipe duration in milliseconds
+            step: Step being executed (for retry settings)
+
+        Returns:
+            True if swipe caused screen change, False if no change after retries
+        """
+        # Determine if retry is enabled
+        retry_enabled = step.retry_if_no_change
+        if retry_enabled is None:
+            retry_enabled = self._config.resilience.retry_if_no_change
+
+        max_retries = self._config.resilience.retry_if_no_change_limit if retry_enabled else 1
+
+        for attempt in range(max_retries):
+            # Capture screenshot before swipe
+            before_screenshot = self._capture_screenshot()
+            before_hash = hash(before_screenshot) if before_screenshot else None
+
+            # Perform swipe
+            self._device.swipe(start_x, start_y, end_x, end_y, duration_ms)
+
+            # Wait for UI to settle
+            time.sleep(0.3)
+
+            # Check if screen changed
+            after_screenshot = self._capture_screenshot()
+            after_hash = hash(after_screenshot) if after_screenshot else None
+
+            if before_hash != after_hash:
+                if attempt > 0:
+                    logger.debug("Swipe succeeded on attempt %d/%d", attempt + 1, max_retries)
+                return True
+
+            if attempt < max_retries - 1:
+                logger.debug(
+                    "Screen didn't change after swipe, retrying (%d/%d)...",
+                    attempt + 1, max_retries
+                )
+                time.sleep(0.2)
+
+        logger.debug("Screen didn't change after %d swipe attempts", max_retries)
+        return False
+
     def _action_swipe(self, step: Step) -> str | None:
-        """Execute swipe action with mid-action screenshot capture."""
+        """Execute swipe action with retry-if-no-change (Maestro-style)."""
         width, height = self._get_screen_size()
 
         # Default: center of screen
@@ -909,30 +1118,30 @@ class TestExecutor:
         else:
             return f"Unknown swipe direction: {direction}"
 
+        # Clamp coordinates to screen boundaries (mobile-mcp pattern)
+        end_x = max(0, min(width - 1, end_x))
+        end_y = max(0, min(height - 1, end_y))
+
         self._step_end_coords = (end_x, end_y)  # Store end coords for report
 
-        # Capture swipe_start screenshot and timestamp before swipe begins
+        # Capture swipe_start screenshot before swipe
         screenshot, timestamp = self._capture_screenshot_or_timestamp()
         self._step_action_screenshot = screenshot
         self._step_action_timestamp = timestamp
 
-        # Execute swipe asynchronously to capture mid-action
-        duration_ms = 300
-
         # Generate trajectory for visualization
+        duration_ms = 300
         self._step_trajectory = self._synthesize_trajectory(
             (cx, cy), (end_x, end_y), duration_ms
         )
-        process = self._device.swipe_async(cx, cy, end_x, end_y, duration_ms)
 
-        # Wait 90% of duration, then capture swipe_end
-        time.sleep(duration_ms * 0.9 / 1000)
+        # Execute swipe with retry behavior
+        self._swipe_with_retry(cx, cy, end_x, end_y, duration_ms, step)
+
+        # Capture swipe_end screenshot
         screenshot, timestamp = self._capture_screenshot_or_timestamp()
         self._step_action_end_screenshot = screenshot
         self._step_action_end_timestamp = timestamp
-
-        # Wait for swipe to complete
-        process.wait()
 
         return None
 

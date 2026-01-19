@@ -73,12 +73,12 @@ class TestScrcpyServiceUnit:
         """Should clear all state on disconnect."""
         service = ScrcpyService("fake-device-id")
         # Manually set some state to verify cleanup
-        service._running = True
+        service._stop_event.clear()  # Simulate "running" state
         service._frame_buffer.append({"frame": None, "timestamp": 0})
 
         service.disconnect()
 
-        assert service._running is False
+        assert service._stop_event.is_set()  # Stop event should be signaled
         assert len(service._frame_buffer) == 0
         assert service._session is None
 

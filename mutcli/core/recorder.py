@@ -229,16 +229,12 @@ class Recorder:
                 self._touch_monitor = None
                 return {"success": False, "error": "Failed to start touch monitor"}
 
-            # Start UI hierarchy monitor with same reference time
-            # This ensures UI dump timestamps are synchronized with video and touch
+            # Start UI hierarchy monitoring (mobile-mcp style fast dump)
+            # Captures element data in background for accurate element identification
             if self._app_package:
                 self._ui_monitor = UIHierarchyMonitor(self._device_id, self._app_package)
                 self._ui_monitor.start(reference_time=video_start_time)
-            else:
-                logger.warning(
-                    "No app_package provided - UI hierarchy monitoring disabled. "
-                    "Provide --app to enable element identification."
-                )
+                logger.info("UI hierarchy monitoring started")
 
             # Set recording state BEFORE saving state file (Issue 5)
             self._start_time = time.time()
@@ -348,17 +344,18 @@ class Recorder:
             except Exception as e:
                 logger.warning(f"Error saving ADB state data: {e}")
 
-        # Save UI hierarchy dumps
+        # Stop UI hierarchy monitoring and save dumps
         if self._ui_monitor:
             try:
                 self._ui_monitor.stop()
                 ui_dumps = self._ui_monitor.get_dumps()
-                ui_dumps_path = self._output_dir / "ui_dumps.json"
-                with open(ui_dumps_path, "w") as f:
-                    json.dump(ui_dumps, f, indent=2)
-                logger.info(f"Saved {len(ui_dumps)} UI hierarchy dumps")
+                if ui_dumps:
+                    ui_dumps_path = self._output_dir / "ui_hierarchy.json"
+                    with open(ui_dumps_path, "w") as f:
+                        json.dump(ui_dumps, f, indent=2)
+                    logger.info(f"Saved {len(ui_dumps)} UI hierarchy dumps")
             except Exception as e:
-                logger.warning(f"Error saving UI hierarchy dumps: {e}")
+                logger.warning(f"Error saving UI hierarchy: {e}")
 
         # Restore original show_touches setting
         if self._original_show_touches is not None and not self._original_show_touches:

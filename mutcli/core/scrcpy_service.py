@@ -35,7 +35,7 @@ class ScrcpyService:
         self._session: Session | None = None
         self._frame_buffer: deque[Any] = deque(maxlen=self.FRAME_BUFFER_SIZE)
         self._lock = threading.Lock()
-        self._running = False
+        self._stop_event = threading.Event()  # For clean shutdown signaling
         self._frame_thread: threading.Thread | None = None
         self._width = 0
         self._height = 0
@@ -54,7 +54,7 @@ class ScrcpyService:
         session = self._session
         return (
             session is not None
-            and self._running
+            and not self._stop_event.is_set()
             and session.va is not None
         )
 
@@ -103,11 +103,11 @@ class ScrcpyService:
                 self._session = None
                 return False
 
-            # Start frame capture thread
-            self._running = True
+            # Start frame capture thread (not daemon - we need clean shutdown)
+            self._stop_event.clear()
             self._frame_thread = threading.Thread(
                 target=self._frame_loop,
-                daemon=True,
+                daemon=False,  # Must exit cleanly before session.stop()
             )
             self._frame_thread.start()
 
@@ -123,13 +123,25 @@ class ScrcpyService:
             return False
 
     def disconnect(self) -> None:
-        """Disconnect from device and clean up."""
-        self._running = False
+        """Disconnect from device and clean up.
 
+        IMPORTANT: We must stop the frame thread BEFORE calling session.stop()
+        to avoid segfaults. The native scrcpy code can't be safely interrupted.
+        """
+        # Signal thread to stop
+        self._stop_event.set()
+
+        # Wait for frame thread to exit (it checks stop_event frequently)
         if self._frame_thread:
-            self._frame_thread.join(timeout=2)
+            # Give it time to finish current iteration and exit
+            self._frame_thread.join(timeout=5)
+            if self._frame_thread.is_alive():
+                # Thread didn't exit cleanly - log warning but proceed
+                # This is safer than segfaulting
+                logger.warning("Frame thread did not exit cleanly, proceeding with disconnect")
             self._frame_thread = None
 
+        # NOW it's safe to stop the session
         if self._session:
             try:
                 self._session.stop()
@@ -145,10 +157,28 @@ class ScrcpyService:
         logger.info("Disconnected")
 
     def _frame_loop(self) -> None:
-        """Continuous frame capture loop."""
-        while self._running and self._session and self._session.va:
+        """Continuous frame capture loop.
+
+        IMPORTANT: This loop must check stop_event frequently and exit quickly
+        when signaled. Never access session after stop_event is set.
+        """
+        while not self._stop_event.is_set():
+            # Check session validity AFTER checking stop_event
+            session = self._session
+            if session is None or session.va is None:
+                break
+
             try:
-                frame = self._session.va.get_frame()
+                # Check stop_event again right before native call
+                if self._stop_event.is_set():
+                    break
+
+                frame = session.va.get_frame()
+
+                # Check again after native call returns
+                if self._stop_event.is_set():
+                    break
+
                 if frame is not None:
                     timestamp = time.time()
 
@@ -166,14 +196,18 @@ class ScrcpyService:
                         recording = self._recording
 
                     # Write to video if recording
-                    if recording:
+                    if recording and not self._stop_event.is_set():
                         self._write_frame(frame, timestamp)
 
                 time.sleep(0.016)  # ~60 fps polling
 
             except Exception as e:
+                if self._stop_event.is_set():
+                    break  # Expected during shutdown
                 logger.debug(f"Frame loop error: {e}")
                 time.sleep(0.1)
+
+        logger.debug("Frame loop exited cleanly")
 
     def screenshot(self) -> bytes:
         """Get latest frame as PNG from buffer.

@@ -34,6 +34,23 @@ class TestAnalyzedStep:
         assert step.before_description == "Login form displayed"
         assert step.after_description == "Loading spinner appeared"
         assert step.suggested_verification == "Login form submitted"
+        assert step.scroll_to_target is None  # Default is None
+
+    def test_creation_with_scroll_to_target(self):
+        """AnalyzedStep should store scroll_to_target for swipe steps."""
+        original_swipe = {"start_x": 540, "start_y": 1500, "x": 540, "y": 500}
+        step = AnalyzedStep(
+            index=2,
+            original_tap=original_swipe,
+            element_text="swipe up",
+            before_description="List showing items 1-5",
+            after_description="List showing items 6-10, Settings visible",
+            suggested_verification="Settings visible",
+            scroll_to_target="Settings",
+        )
+
+        assert step.index == 2
+        assert step.scroll_to_target == "Settings"
 
     def test_creation_with_none_element_text(self):
         """AnalyzedStep should allow None element_text."""

@@ -400,6 +400,7 @@ class TestAnalyzeSwipe:
             assert "unavailable" in result["before_description"].lower()
             assert "unavailable" in result["after_description"].lower()
             assert result["suggested_verification"] is None
+            assert result["scroll_to_target"] is None
 
     @pytest.mark.asyncio
     @patch("mutcli.core.ai_analyzer.genai")
@@ -470,6 +471,81 @@ class TestAnalyzeSwipe:
         assert "failed" in result["content_changed"].lower()
         assert "failed" in result["before_description"].lower()
         assert "failed" in result["after_description"].lower()
+        assert result["scroll_to_target"] is None
+
+    @pytest.mark.asyncio
+    @patch("mutcli.core.ai_analyzer.genai")
+    async def test_scroll_to_target_returned(self, mock_genai):
+        """Should parse scroll_to_target from API response."""
+        mock_client = MagicMock()
+        mock_genai.Client.return_value = mock_client
+
+        mock_response = MagicMock()
+        mock_response.text = '''{
+            "direction": "up",
+            "content_changed": "Settings button scrolled into view",
+            "before_description": "List showing items 1-5",
+            "after_description": "List showing items 6-10, Settings visible",
+            "suggested_verification": "Settings button visible",
+            "scroll_to_target": "Settings"
+        }'''
+
+        async def mock_generate(*args, **kwargs):
+            return mock_response
+
+        mock_client.aio.models.generate_content = mock_generate
+
+        analyzer = AIAnalyzer(api_key="test-key")
+
+        result = await analyzer.analyze_swipe(
+            before=_make_test_image(),
+            swipe_start=_make_test_image("blue"),
+            swipe_end=_make_test_image("green"),
+            after=_make_test_image("red"),
+            start_x=540,
+            start_y=1500,
+            end_x=540,
+            end_y=500,
+        )
+
+        assert result["scroll_to_target"] == "Settings"
+
+    @pytest.mark.asyncio
+    @patch("mutcli.core.ai_analyzer.genai")
+    async def test_scroll_to_target_null_for_dismiss(self, mock_genai):
+        """Should return null scroll_to_target for dismiss swipes."""
+        mock_client = MagicMock()
+        mock_genai.Client.return_value = mock_client
+
+        mock_response = MagicMock()
+        mock_response.text = '''{
+            "direction": "left",
+            "content_changed": "Drawer dismissed",
+            "before_description": "Navigation drawer open",
+            "after_description": "Main content visible",
+            "suggested_verification": null,
+            "scroll_to_target": null
+        }'''
+
+        async def mock_generate(*args, **kwargs):
+            return mock_response
+
+        mock_client.aio.models.generate_content = mock_generate
+
+        analyzer = AIAnalyzer(api_key="test-key")
+
+        result = await analyzer.analyze_swipe(
+            before=_make_test_image(),
+            swipe_start=_make_test_image("blue"),
+            swipe_end=_make_test_image("green"),
+            after=_make_test_image("red"),
+            start_x=800,
+            start_y=500,
+            end_x=100,
+            end_y=500,
+        )
+
+        assert result["scroll_to_target"] is None
 
 
 class TestAnalyzeLongPress:
@@ -685,7 +761,7 @@ class TestAnalyzeType:
             after=_make_test_image("blue"),
         )
 
-        # Should have 2 image parts + 1 text prompt = 3 total
+        # Should have 2 labels + 2 image parts + 1 text prompt = 5 total
         assert len(captured_contents) == 1
         contents = captured_contents[0]
-        assert len(contents) == 3
+        assert len(contents) == 5

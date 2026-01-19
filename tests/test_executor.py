@@ -17,6 +17,8 @@ class TestExecutorBasicActions:
         device = MagicMock()
         device.get_screen_size.return_value = (1080, 2340)
         device.find_element.return_value = (540, 1200)
+        # Mock take_screenshot for stability detection
+        device.take_screenshot.return_value = b"fake_screenshot"
         # Mock async methods to return mock process
         mock_process = MagicMock()
         mock_process.wait.return_value = None
@@ -70,7 +72,7 @@ class TestExecutorBasicActions:
         result = executor.execute_step(step)
 
         assert result.status == "passed"
-        mock_device.swipe_async.assert_called()
+        mock_device.swipe.assert_called()
 
     def test_tap_fails_when_element_not_found(self, executor, mock_device):
         """Tap fails gracefully when element not found."""
@@ -207,10 +209,16 @@ class TestExecutorCoordinateResolution:
 
     @pytest.fixture
     def executor(self, mock_device, mock_ai):
-        """Create executor with mocked device and AI."""
+        """Create executor with mocked device and AI with AI fallback enabled."""
+        from mutcli.core.config import MutConfig, ResilienceConfig
+
+        # Enable AI fallback for these tests
+        config = MutConfig(
+            resilience=ResilienceConfig(ai_fallback=True)
+        )
         with patch("mutcli.core.executor.DeviceController", return_value=mock_device):
             with patch("mutcli.core.executor.AIAnalyzer", return_value=mock_ai):
-                return TestExecutor(device_id="test-device")
+                return TestExecutor(device_id="test-device", config=config)
 
     def test_tap_by_pixel_coordinates(self, executor, mock_device):
         """Tap at pixel coordinates (no text = no AI needed)."""
@@ -225,9 +233,28 @@ class TestExecutorCoordinateResolution:
         assert result.status == "passed"
         mock_device.tap.assert_called_with(100, 200)
 
-    def test_text_and_coordinates_validates_with_ai(self, executor, mock_device, mock_ai):
-        """When both text and coordinates specified, AI validates then uses coordinates."""
-        mock_ai.validate_element_at.return_value = {"valid": True, "reason": "Button found"}
+    def test_text_and_coordinates_finds_by_text_first(self, executor, mock_device, mock_ai):
+        """When both text and coordinates specified, finds element by text first."""
+        mock_device.find_element.return_value = (300, 400)  # Element found at different coords
+        step = Step(
+            action="tap",
+            target="Button",
+            coordinates=(50.0, 80.0),  # Recorded coords (different from found)
+            coordinates_type="percent",
+        )
+
+        result = executor.execute_step(step)
+
+        assert result.status == "passed"
+        # Uses found coordinates, not recorded ones
+        mock_device.tap.assert_called_with(300, 400)
+        # No AI validation call - we just find by text
+        mock_ai.validate_element_at.assert_not_called()
+
+    def test_text_and_coordinates_falls_back_to_recorded(self, executor, mock_device, mock_ai):
+        """When text + coords but element not found by text, falls back to recorded coords."""
+        mock_device.find_element.return_value = None  # Not found by text
+        mock_ai.find_element.return_value = None  # Not found by AI either
         step = Step(
             action="tap",
             target="Button",
@@ -238,8 +265,7 @@ class TestExecutorCoordinateResolution:
         result = executor.execute_step(step)
 
         assert result.status == "passed"
-        mock_ai.validate_element_at.assert_called_once()
-        # Uses validated coordinates (50% of 1080 = 540, 80% of 2340 = 1872)
+        # Falls back to recorded coords (50% of 1080 = 540, 80% of 2340 = 1872)
         mock_device.tap.assert_called_with(540, 1872)
 
     def test_text_only_uses_device_finder_first(self, executor, mock_device, mock_ai):
@@ -297,10 +323,8 @@ class TestExecutorSwipeActions:
         """Mock DeviceController."""
         device = MagicMock()
         device.get_screen_size.return_value = (1080, 2340)
-        # Mock swipe_async to return a mock process
-        mock_process = MagicMock()
-        mock_process.wait.return_value = None
-        device.swipe_async.return_value = mock_process
+        # Mock take_screenshot for retry-if-no-change detection
+        device.take_screenshot.return_value = b"fake_screenshot"
         return device
 
     @pytest.fixture
@@ -316,8 +340,8 @@ class TestExecutorSwipeActions:
         result = executor.execute_step(step)
 
         assert result.status == "passed"
-        # Should swipe from center upward (uses swipe_async now)
-        args = mock_device.swipe_async.call_args[0]
+        # Should swipe from center upward (uses sync swipe with retry)
+        args = mock_device.swipe.call_args[0]
         assert args[1] > args[3]  # y1 > y2 for up swipe
 
     def test_swipe_down(self, executor, mock_device):
@@ -327,7 +351,7 @@ class TestExecutorSwipeActions:
         result = executor.execute_step(step)
 
         assert result.status == "passed"
-        args = mock_device.swipe_async.call_args[0]
+        args = mock_device.swipe.call_args[0]
         assert args[1] < args[3]  # y1 < y2 for down swipe
 
     def test_swipe_left(self, executor, mock_device):
@@ -337,7 +361,7 @@ class TestExecutorSwipeActions:
         result = executor.execute_step(step)
 
         assert result.status == "passed"
-        args = mock_device.swipe_async.call_args[0]
+        args = mock_device.swipe.call_args[0]
         assert args[0] > args[2]  # x1 > x2 for left swipe
 
     def test_swipe_right(self, executor, mock_device):
@@ -347,7 +371,7 @@ class TestExecutorSwipeActions:
         result = executor.execute_step(step)
 
         assert result.status == "passed"
-        args = mock_device.swipe_async.call_args[0]
+        args = mock_device.swipe.call_args[0]
         assert args[0] < args[2]  # x1 < x2 for right swipe
 
     def test_swipe_with_custom_distance(self, executor, mock_device):
@@ -357,7 +381,7 @@ class TestExecutorSwipeActions:
         result = executor.execute_step(step)
 
         assert result.status == "passed"
-        mock_device.swipe_async.assert_called()
+        mock_device.swipe.assert_called()
 
 
 class TestExecutorErrorHandling:
@@ -1063,13 +1087,21 @@ class TestExecuteTestMethod:
         device = MagicMock()
         device.get_screen_size.return_value = (1080, 2340)
         device.find_element.return_value = (540, 1200)
+        # Return same screenshot for stability detection
+        device.take_screenshot.return_value = b"fake_screenshot"
         return device
 
     @pytest.fixture
     def executor(self, mock_device):
-        """Create executor with mocked device."""
+        """Create executor with mocked device and retry disabled for simpler tests."""
+        from mutcli.core.config import MutConfig, ResilienceConfig
+
+        # Disable retry-if-no-change for these orchestration tests
+        config = MutConfig(
+            resilience=ResilienceConfig(retry_if_no_change=False)
+        )
         with patch("mutcli.core.executor.DeviceController", return_value=mock_device):
-            return TestExecutor(device_id="test-device")
+            return TestExecutor(device_id="test-device", config=config)
 
     def test_execute_test_runs_setup_before_steps(self, executor, mock_device):
         """Setup steps run before main steps."""

@@ -27,6 +27,10 @@ class Step:
     retry: int | None = None
     ai_recovery: bool | None = None  # Per-step AI recovery override (None = use config)
 
+    # Maestro-style options
+    wait_to_settle_timeout: float | None = None  # Max seconds to wait for screen stability
+    retry_if_no_change: bool | None = None  # Retry tap if screen didn't change
+
     # For type action
     text: str | None = None
     target_field: str | None = None  # Named target_field to avoid shadowing dataclasses.field

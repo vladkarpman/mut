@@ -413,7 +413,7 @@ class TestAddAnalyzedStep:
     """Test add_analyzed_step method."""
 
     def test_uses_element_text_when_available(self):
-        """add_analyzed_step should use element_text when provided."""
+        """add_analyzed_step should use element_text with fallback coordinates."""
         gen = YAMLGenerator("test", "com.example.app")
         step = AnalyzedStep(
             index=0,
@@ -427,7 +427,8 @@ class TestAddAnalyzedStep:
         gen.add_analyzed_step(step)
 
         assert len(gen._steps) == 1
-        assert gen._steps[0] == {"tap": "Login Button"}
+        # Rich format: element text primary, coordinates as fallback
+        assert gen._steps[0] == {"tap": "Login Button", "at": [540, 1200]}
 
     def test_falls_back_to_coordinates_when_no_element_text(self):
         """add_analyzed_step should use coordinates when element_text is None."""
@@ -544,8 +545,9 @@ class TestGenerateFromAnalysis:
         data = yaml.safe_load(yaml_str)
 
         assert len(data["steps"]) == 2
-        assert data["steps"][0] == {"tap": "Login"}
-        assert data["steps"][1] == {"tap": "Submit"}
+        # Rich format: element text primary, coordinates as fallback
+        assert data["steps"][0] == {"tap": "Login", "at": [100, 200]}
+        assert data["steps"][1] == {"tap": "Submit", "at": [300, 400]}
 
     def test_inserts_type_commands_at_correct_positions(self):
         """generate_from_analysis should replace typing sequence taps with type command."""
@@ -611,9 +613,9 @@ class TestGenerateFromAnalysis:
 
         # Should have: tap Email field, type text, tap Submit
         assert len(data["steps"]) == 3
-        assert data["steps"][0] == {"tap": "Email field"}
+        assert data["steps"][0] == {"tap": "Email field", "at": [100, 200]}
         assert data["steps"][1] == {"type": "test@email.com"}
-        assert data["steps"][2] == {"tap": "Submit"}
+        assert data["steps"][2] == {"tap": "Submit", "at": [200, 500]}
 
     def test_inserts_verify_screen_at_suggested_points(self):
         """generate_from_analysis should insert verify_screen after specified steps."""
@@ -652,8 +654,8 @@ class TestGenerateFromAnalysis:
 
         # Should have: tap Login, tap Submit, verify_screen
         assert len(data["steps"]) == 3
-        assert data["steps"][0] == {"tap": "Login"}
-        assert data["steps"][1] == {"tap": "Submit"}
+        assert data["steps"][0] == {"tap": "Login", "at": [100, 200]}
+        assert data["steps"][1] == {"tap": "Submit", "at": [300, 400]}
         assert data["steps"][2] == {"verify_screen": "Dashboard is displayed with welcome message"}
 
     def test_handles_overlapping_typing_and_verifications(self):
@@ -721,7 +723,7 @@ class TestGenerateFromAnalysis:
 
         # Should have: tap Email field, type text, verify_screen
         assert len(data["steps"]) == 3
-        assert data["steps"][0] == {"tap": "Email field"}
+        assert data["steps"][0] == {"tap": "Email field", "at": [100, 200]}
         assert data["steps"][1] == {"type": "user@test.com"}
         assert data["steps"][2] == {"verify_screen": "Email field shows entered text"}
 
@@ -826,11 +828,11 @@ class TestGenerateFromAnalysis:
 
         # Should have: tap Email, type email, tap Password, type password, tap Login
         assert len(data["steps"]) == 5
-        assert data["steps"][0] == {"tap": "Email"}
+        assert data["steps"][0] == {"tap": "Email", "at": [100, 200]}
         assert data["steps"][1] == {"type": "user@test.com"}
-        assert data["steps"][2] == {"tap": "Password"}
+        assert data["steps"][2] == {"tap": "Password", "at": [100, 400]}
         assert data["steps"][3] == {"type": "secret123"}
-        assert data["steps"][4] == {"tap": "Login"}
+        assert data["steps"][4] == {"tap": "Login", "at": [200, 600]}
 
     def test_handles_empty_inputs(self):
         """generate_from_analysis should handle empty inputs gracefully."""
@@ -906,8 +908,8 @@ class TestGenerateFromAnalysis:
         # Without text, typing taps are skipped entirely (no type command generated)
         # Result: tap Email, tap Submit
         assert len(data["steps"]) == 2
-        assert data["steps"][0] == {"tap": "Email"}
-        assert data["steps"][1] == {"tap": "Submit"}
+        assert data["steps"][0] == {"tap": "Email", "at": [100, 200]}
+        assert data["steps"][1] == {"tap": "Submit", "at": [200, 500]}
 
     def test_multiple_verifications_at_different_steps(self):
         """generate_from_analysis should insert multiple verifications at correct positions."""
@@ -960,8 +962,8 @@ class TestGenerateFromAnalysis:
 
         # Should have: tap Login, tap Submit, verify, tap Dashboard, verify
         assert len(data["steps"]) == 5
-        assert data["steps"][0] == {"tap": "Login"}
-        assert data["steps"][1] == {"tap": "Submit"}
+        assert data["steps"][0] == {"tap": "Login", "at": [100, 200]}
+        assert data["steps"][1] == {"tap": "Submit", "at": [200, 300]}
         assert data["steps"][2] == {"verify_screen": "Loading indicator appears"}
-        assert data["steps"][3] == {"tap": "Dashboard"}
+        assert data["steps"][3] == {"tap": "Dashboard", "at": [300, 400]}
         assert data["steps"][4] == {"verify_screen": "Menu is displayed"}

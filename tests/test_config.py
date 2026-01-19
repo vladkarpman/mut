@@ -306,10 +306,16 @@ class TestResilienceConfig:
         with patch.object(Path, "exists", return_value=False):
             config = ConfigLoader.load()
 
+        # Maestro-style defaults
+        assert config.resilience.wait_to_settle_timeout == 3.0
+        assert config.resilience.retry_if_no_change is True
+        assert config.resilience.retry_if_no_change_limit == 3
         assert config.resilience.implicit_wait == 5.0
-        assert config.resilience.poll_interval == 0.5
+        assert config.resilience.poll_interval == 0.3
         assert config.resilience.stability_frames == 2
-        assert config.resilience.ai_recovery is True
+        # AI disabled by default (accessibility tree first)
+        assert config.resilience.ai_fallback is False
+        assert config.resilience.ai_recovery is False
         assert config.resilience.ai_retry_limit == 1
 
     def test_resilience_from_yaml(self, tmp_path):
@@ -386,6 +392,6 @@ resilience:
 
         # Overridden value
         assert config.resilience.implicit_wait == 8.0
-        # Default values
-        assert config.resilience.poll_interval == 0.5
-        assert config.resilience.ai_recovery is True
+        # Default values (Maestro-style)
+        assert config.resilience.poll_interval == 0.3
+        assert config.resilience.ai_recovery is False

@@ -2,10 +2,8 @@
 
 import logging
 import subprocess
-import tempfile
 import threading
 import time
-from pathlib import Path
 from typing import Any
 
 from mutcli.core.ui_element_parser import UIElement, UIElementParser
@@ -244,61 +242,75 @@ class UIHierarchyMonitor:
             # Each dump takes ~500ms-1s naturally
 
     def _dump_hierarchy(self) -> list[dict[str, Any]] | None:
-        """Execute uiautomator dump and parse XML.
+        """Execute uiautomator dump using mobile-mcp style fast method.
+
+        Uses exec-out to dump directly to stdout (no file write/pull).
+        Includes retry logic for "null root node" errors.
 
         Returns:
             List of element dicts, or None on failure.
         """
-        remote_path = "/sdcard/ui_dump.xml"
+        max_retries = 3  # Fewer retries during recording to keep pace
 
-        # Create temp file for local copy
-        with tempfile.NamedTemporaryFile(suffix=".xml", delete=False) as tmp:
-            local_path = Path(tmp.name)
-
-        try:
-            # Dump UI hierarchy on device
-            # Timeout set to 10s as uiautomator dump can take 2-5s depending on UI complexity
-            result = subprocess.run(
-                ["adb", "-s", self._device_id, "shell", "uiautomator", "dump", remote_path],
-                capture_output=True,
-                text=True,
-                timeout=10,
-            )
-
-            if result.returncode != 0:
-                logger.debug(f"uiautomator dump failed: {result.stderr}")
-                return None
-
-            # Pull XML to local
-            result = subprocess.run(
-                ["adb", "-s", self._device_id, "pull", remote_path, str(local_path)],
-                capture_output=True,
-                text=True,
-                timeout=5,
-            )
-
-            if result.returncode != 0:
-                logger.debug(f"adb pull failed: {result.stderr}")
-                return None
-
-            # Parse XML
-            ui_elements = self._parser.parse_xml_file(local_path)
-
-            # Convert UIElement objects to dicts
-            return [self._element_to_dict(elem) for elem in ui_elements]
-
-        except subprocess.TimeoutExpired:
-            logger.debug("UI dump timed out")
-            return None
-        except Exception as e:
-            logger.debug(f"UI dump error: {e}")
-            return None
-        finally:
-            # Cleanup temp file
+        for attempt in range(max_retries):
             try:
-                local_path.unlink()
-            except Exception:
-                pass
+                # Fast dump directly to stdout (mobile-mcp style)
+                result = subprocess.run(
+                    ["adb", "-s", self._device_id, "exec-out", "uiautomator", "dump", "/dev/tty"],
+                    capture_output=True,
+                    text=True,
+                    timeout=10,
+                )
+
+                output = result.stdout
+
+                # Check for known error that requires retry
+                if "null root node returned" in output.lower():
+                    if attempt < max_retries - 1:
+                        time.sleep(0.2)
+                        continue
+                    return None
+
+                # Extract XML portion (skip any warnings before <?xml)
+                xml_start = output.find("<?xml")
+                if xml_start == -1:
+                    xml_start = output.find("<hierarchy")
+                if xml_start == -1:
+                    if attempt < max_retries - 1:
+                        time.sleep(0.2)
+                        continue
+                    return None
+
+                xml_content = output[xml_start:]
+
+                # Parse XML directly
+                ui_elements = self._parser.parse_xml_string(xml_content)
+
+                # Convert UIElement objects to dicts, filter positive dimensions
+                elements = []
+                for elem in ui_elements:
+                    if elem.bounds and len(elem.bounds) == 4:
+                        left, top, right, bottom = elem.bounds
+                        if right > left and bottom > top:
+                            elements.append(self._element_to_dict(elem))
+
+                if elements:
+                    return elements
+
+                # Empty result - retry
+                if attempt < max_retries - 1:
+                    time.sleep(0.2)
+
+            except subprocess.TimeoutExpired:
+                logger.debug("UI dump timed out")
+                if attempt < max_retries - 1:
+                    time.sleep(0.2)
+            except Exception as e:
+                logger.debug(f"UI dump error: {e}")
+                if attempt < max_retries - 1:
+                    time.sleep(0.2)
+
+        return None
 
     def _element_to_dict(self, elem: UIElement) -> dict[str, Any]:
         """Convert UIElement to serializable dict.

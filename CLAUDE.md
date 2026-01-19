@@ -43,10 +43,11 @@ mutcli/
 │   └── test.py                # Test/Step data models
 ├── core/
 │   ├── config.py              # ConfigLoader, setup_logging
-│   ├── device_controller.py   # ADB wrapper: tap, swipe, type, elements
+│   ├── device_controller.py   # ADB wrapper: tap, swipe, type, elements, show_touches
 │   ├── scrcpy_service.py      # MYScrcpy: screenshots, video recording
 │   ├── ai_analyzer.py         # Gemini 2.5 Flash: verify_screen, find_element
-│   ├── executor.py            # TestExecutor: runs YAML tests
+│   ├── executor.py            # TestExecutor: runs YAML tests, captures action screenshots
+│   ├── step_verifier.py       # StepVerifier: parallel AI analysis of executed steps
 │   ├── parser.py              # YAML test file parser
 │   ├── recorder.py            # Recording session manager
 │   ├── touch_monitor.py       # ADB getevent touch capture
@@ -58,9 +59,10 @@ mutcli/
 │   ├── yaml_generator.py      # Generate YAML from analyzed steps
 │   ├── preview_server.py      # HTTP server for approval UI
 │   ├── analysis_io.py         # Save/load analysis JSON
-│   └── report.py              # ReportGenerator: JSON + HTML reports
+│   └── report.py              # ReportGenerator: JSON + HTML with gesture visualization
 └── templates/
-    └── approval.html          # Browser-based approval UI
+    ├── approval.html          # Browser-based approval UI
+    └── report.html            # Test report template with gesture indicators
 ```
 
 ### Key Patterns
@@ -68,10 +70,19 @@ mutcli/
 **Dual interaction model**: `DeviceController` uses direct adb commands for device input (tap, swipe, type). `ScrcpyService` uses MYScrcpy for fast visual operations (screenshots ~50ms via frame buffer, video recording).
 
 **Hybrid AI verification**:
-- `verify_screen` - Deferred. Captures screenshot, continues test, batches AI calls at end. Fast execution, no state loss.
-- `if_screen` - Real-time. Must call AI immediately for branching decisions.
+- `verify_screen` - Real-time AI call during test execution. Returns error if screen doesn't match.
+- `if_screen` - Real-time AI call for branching decisions.
+
+**Post-execution AI analysis**: After test completes, `StepVerifier` analyzes all steps in parallel using before/after screenshots. Provides AI-verified outcomes and suggestions for failures.
 
 **Frame buffer**: `ScrcpyService` maintains a 10-frame circular buffer. `screenshot()` returns the latest frame instantly without triggering capture.
+
+**Action screenshot capture**: `TestExecutor` captures screenshots at key moments during gestures:
+- tap/double_tap: screenshot_action captured immediately after touch
+- swipe: screenshot_action at start, screenshot_action_end near end of swipe
+- long_press: screenshot_action at press start, screenshot_action_end while held
+
+**Touch visualization**: During video recording, `show_touches` is enabled to display native touch indicators on screen. Original setting is restored after recording.
 
 **Recording pipeline**:
 1. `Recorder` orchestrates recording session
@@ -82,6 +93,11 @@ mutcli/
 6. `TypingDetector` + `StepCollapsing` convert tap sequences to type actions
 7. `PreviewServer` serves approval UI for editing
 8. `YamlGenerator` exports final test file
+
+**Test execution pipeline**:
+1. `TestExecutor` runs each step, capturing before/after/action screenshots
+2. `StepVerifier` runs parallel AI analysis on all steps post-execution
+3. `ReportGenerator` creates JSON results and HTML report with gesture visualization
 
 ## External Dependencies
 
@@ -118,6 +134,7 @@ tests:
 | Action | Description |
 |--------|-------------|
 | `tap` | Tap element by text or coordinates |
+| `double_tap` | Double tap element |
 | `type` | Type text (supports `submit: true` to press Enter) |
 | `swipe` | Swipe gesture with direction/distance |
 | `long_press` | Long press element |
@@ -128,10 +145,11 @@ tests:
 | `scroll_to` | Scroll until element visible |
 | `launch_app` | Launch configured app |
 | `terminate_app` | Force stop app |
-| `verify_screen` | AI verification (deferred) |
+| `verify_screen` | AI verification (real-time, fails test if screen doesn't match) |
 | `if_present` | Conditional on element presence |
 | `if_absent` | Conditional on element absence |
 | `if_screen` | Conditional on screen state (AI) |
+| `repeat` | Execute nested steps multiple times |
 
 ## Configuration
 
@@ -161,7 +179,12 @@ tests/my-test/
 ├── test.yaml
 └── runs/
     └── 2026-01-17_14-30-25/
-        └── debug.log      # Run-specific logs
+        ├── debug.log           # Run-specific logs (if MUT_VERBOSE=true)
+        ├── results.json        # Full test results with step data
+        ├── report.html         # Interactive HTML report with gesture visualization
+        ├── results.xml         # JUnit XML report (if --junit specified)
+        └── recording/          # Video recording (if --video specified)
+            └── video.mp4
 ```
 
 ## Design Decisions

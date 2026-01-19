@@ -3,7 +3,6 @@
 import base64
 import html
 import json
-import math
 from datetime import datetime
 from pathlib import Path
 from typing import Any
@@ -150,7 +149,7 @@ class ReportGenerator:
         )
         json_data = self._escape_json_for_html(json.dumps(data))
         html_content = html_content.replace("{{json_data}}", json_data)
-        html_content = html_content.replace("{{video_html}}", self._generate_video_html())
+        html_content = html_content.replace("{{video_html}}", self._generate_video_html(data))
 
         # Convert escaped braces back to single braces for CSS/JS
         # Template uses {{ and }} to avoid conflicts with placeholder syntax
@@ -400,7 +399,12 @@ class ReportGenerator:
 </div>"""
 
     def _generate_gesture_indicator_html(self, step: dict[str, Any]) -> str:
-        """Generate HTML for gesture indicator overlay with animations."""
+        """Generate HTML for gesture indicator overlay with animations.
+
+        Uses data attributes for coordinates so JavaScript can position
+        indicators relative to actual rendered image bounds (accounting for
+        object-fit: contain letterboxing).
+        """
         coords = step.get("coords")
         if not coords:
             return ""
@@ -409,14 +413,22 @@ class ReportGenerator:
         x = coords.get("x", 0)
         y = coords.get("y", 0)
 
-        if action in ("tap", "double_tap"):
+        if action == "tap":
             return f"""<div class="gesture-indicator-container">
-    <div class="tap-indicator" style="left: {x:.1f}%; top: {y:.1f}%;"></div>
+    <div class="tap-indicator" data-x="{x:.1f}" data-y="{y:.1f}"></div>
+</div>"""
+
+        if action == "double_tap":
+            return f"""<div class="gesture-indicator-container">
+    <div class="double-tap-indicator" data-x="{x:.1f}" data-y="{y:.1f}">
+        <div class="tap-circle tap-1"></div>
+        <div class="tap-circle tap-2"></div>
+    </div>
 </div>"""
 
         if action == "long_press":
             return f"""<div class="gesture-indicator-container">
-    <div class="long-press-indicator" style="left: {x:.1f}%; top: {y:.1f}%;"></div>
+    <div class="long-press-indicator" data-x="{x:.1f}" data-y="{y:.1f}"></div>
 </div>"""
 
         if action == "swipe":
@@ -463,21 +475,28 @@ class ReportGenerator:
     </div>
 </div>"""
 
-    def _generate_video_html(self) -> str:
-        """Generate video player HTML if video exists.
+    def _generate_video_html(self, data: dict[str, Any]) -> str:
+        """Generate video player HTML with quick navigation.
 
-        Checks multiple locations:
+        Checks multiple locations for video:
         1. output_dir/recording/video.mp4 (from --video flag during test run)
         2. source_video_path (from original recording session)
+
+        Args:
+            data: Report data dict with test info and steps
         """
+        # Generate quick navigation
+        quick_nav_html = self._generate_quick_nav_html(data["steps"])
+
         # Check for video recorded during test run
         run_video_path = self._output_dir / "recording" / "video.mp4"
         if run_video_path.exists():
-            return """<div class="video-panel" id="videoPanel">
+            return f"""<div class="video-panel" id="videoPanel">
     <div class="video-container">
         <div class="video-wrapper">
             <video id="reportVideo" src="recording/video.mp4" controls></video>
         </div>
+        {quick_nav_html}
     </div>
 </div>"""
 
@@ -500,14 +519,41 @@ class ReportGenerator:
         <div class="video-wrapper">
             <video id="reportVideo" src="{video_src}" controls></video>
         </div>
+        {quick_nav_html}
     </div>
 </div>"""
 
-        return """<div class="video-panel" id="videoPanel">
+        return f"""<div class="video-panel" id="videoPanel">
     <div class="video-container">
         <div class="no-video">
             <span class="material-symbols-outlined">videocam_off</span>
             <span>No recording available</span>
         </div>
+        {quick_nav_html}
+    </div>
+</div>"""
+
+    def _generate_quick_nav_html(self, steps: list[dict[str, Any]]) -> str:
+        """Generate quick navigation section with clickable step indicators."""
+        if not steps:
+            return ""
+
+        step_buttons = []
+        for i, step in enumerate(steps):
+            status = step.get("status", "skipped")
+            number = step.get("number", i + 1)
+            step_buttons.append(
+                f'<button class="quick-nav-step {status}" '
+                f'onclick="selectStep({i})" '
+                f'data-index="{i}">{number}</button>'
+            )
+
+        return f"""<div class="quick-nav">
+    <div class="quick-nav-header">
+        <span class="material-symbols-outlined">format_list_numbered</span>
+        Step Navigator
+    </div>
+    <div class="quick-nav-steps">
+        {"".join(step_buttons)}
     </div>
 </div>"""

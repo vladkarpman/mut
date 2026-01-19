@@ -136,17 +136,26 @@ class YAMLGenerator:
         else:
             self._steps.append({"type": text})
 
-    def add_swipe(self, direction: str, distance: str | None = None) -> None:
+    def add_swipe(
+        self,
+        direction: str,
+        distance: str | None = None,
+        description: str | None = None,
+    ) -> None:
         """Add swipe action.
 
         Args:
             direction: Swipe direction (up, down, left, right)
             distance: Swipe distance (e.g., "50%", optional)
+            description: Human-readable description of the action (optional)
         """
-        swipe_data: dict[str, str] = {"direction": direction}
+        swipe_data: dict[str, Any] = {"direction": direction}
         if distance:
             swipe_data["distance"] = distance
-        self._steps.append({"swipe": swipe_data})
+        step: dict[str, Any] = {"swipe": swipe_data}
+        if description:
+            step["description"] = description
+        self._steps.append(step)
 
     def add_wait(self, duration: str) -> None:
         """Add wait action.
@@ -237,19 +246,24 @@ class YAMLGenerator:
         path.write_text(content, encoding="utf-8")
 
     def add_analyzed_step(self, step: AnalyzedStep) -> None:
-        """Add step using AI-extracted element text.
+        """Add step using AI-extracted element text with coordinates as fallback.
 
-        Uses element_text if available, falls back to coordinates.
+        Maestro-style: element text is primary, coordinates are secondary fallback.
+        Always includes coordinates when available for resilience.
 
         Args:
-            step: AnalyzedStep with element_text and original_tap data
+            step: AnalyzedStep with element_text, action_description, and original_tap data
         """
-        if step.element_text:
-            self.add_tap(0, 0, element=step.element_text)
-        else:
-            x = int(step.original_tap.get("x", 0))
-            y = int(step.original_tap.get("y", 0))
-            self.add_tap(x, y)
+        x = int(step.original_tap.get("x", 0))
+        y = int(step.original_tap.get("y", 0))
+        coords = (x, y) if x > 0 or y > 0 else None
+
+        # Use rich tap format: element text primary, coordinates as fallback
+        self.add_rich_tap(
+            element=step.element_text,  # Primary (may be None)
+            coords=coords,  # Fallback coordinates
+            description=step.action_description,  # Human-readable description
+        )
 
     def add_typing_sequence(self, sequence: TypingSequence) -> None:
         """Add type command for detected typing sequence.

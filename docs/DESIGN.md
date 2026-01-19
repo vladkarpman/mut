@@ -784,15 +784,28 @@ jobs:
 - [x] Timestamped run folders
 - [x] JUnit XML report output
 
+### Phase 7: Report & Execution Improvements (2026-01-18)
+- [x] Action screenshots (capture mid-gesture screenshots)
+- [x] Gesture visualization in reports (animated indicators)
+- [x] Trajectory synthesis for swipes
+- [x] Parallel AI analysis (StepVerifier)
+- [x] Enhanced AI prompts with context
+- [x] Real-time verify_screen action
+- [x] Touch visualization during recording (show_touches)
+- [x] double_tap and repeat actions
+- [x] Async gesture methods (swipe_async, long_press_async)
+
 ## Success Criteria
 
 - [x] `mut run` executes tests without Claude Code
 - [x] `mut run` works in CI (AI features require API key)
 - [x] Screenshots < 100ms (scrcpy frame buffer)
 - [x] Video recording works reliably
-- [x] Deferred verify_screen doesn't block test execution
+- [x] Real-time verify_screen validates screen state
 - [x] Real-time if_screen makes correct branching decisions
 - [x] Reports include video, screenshots, pass/fail status
+- [x] Reports show gesture indicators with animations
+- [x] Parallel AI analysis completes efficiently
 
 ## Migration Path
 
@@ -829,6 +842,158 @@ Enable DEBUG-level file logging for troubleshooting via `MUT_VERBOSE=true` in `.
 - **File only**: No console spam, logs preserved for later analysis
 - **Timestamped run folders**: Each `mut run` gets its own folder, enabling comparison across runs
 - **DEBUG level**: Captures everything needed for debugging without filtering
+
+## Post-Execution AI Analysis
+
+**Date Added:** 2026-01-18
+
+After test execution completes, `StepVerifier` analyzes all steps in parallel using before/after screenshots.
+
+### StepVerifier
+
+```python
+class StepVerifier:
+    """AI-powered verification of test step execution."""
+
+    def analyze_all_steps_parallel(
+        self,
+        steps: list[dict],
+        on_progress: Callable[[int, int], None] | None = None,
+        app_package: str | None = None,
+        test_name: str | None = None,
+    ) -> list[StepAnalysis]:
+        """Analyze all steps in parallel with progress callback."""
+```
+
+### StepAnalysis Result
+
+```python
+@dataclass
+class StepAnalysis:
+    verified: bool        # AI confirms step succeeded visually
+    outcome_description: str  # What actually happened on screen
+    suggestion: str | None    # Suggested fix if step failed
+```
+
+### Enhanced AI Prompt
+
+The AI prompt includes:
+- App and test context
+- Step position in sequence
+- Previous step history
+- Tap coordinates
+- Common failure patterns to check
+
+### Design Rationale
+
+- **Parallel execution**: Analyze all steps concurrently with rate limit retry
+- **Context-aware**: AI sees test context, not just isolated screenshots
+- **Actionable suggestions**: Specific fix recommendations for failures
+
+## Action Screenshots
+
+**Date Added:** 2026-01-18
+
+The executor captures screenshots at key moments during gestures to enable better visualization in reports.
+
+### Screenshot Types
+
+| Type | When Captured | Use Case |
+|------|---------------|----------|
+| `screenshot_before` | Before action starts | Baseline state |
+| `screenshot_action` | During/at action | Touch moment, swipe start |
+| `screenshot_action_end` | Late in action | Swipe end, long press held |
+| `screenshot_after` | After action completes | Result state |
+
+### Gesture-Specific Capture
+
+| Gesture | action screenshot | action_end screenshot |
+|---------|-------------------|----------------------|
+| tap | After touch | - |
+| double_tap | After touches | - |
+| swipe | At swipe start | 90% through swipe |
+| long_press | At press start | 70% through duration |
+
+### Async Gesture Methods
+
+For swipe and long_press, async methods allow mid-action screenshot capture:
+
+```python
+def swipe_async(self, x1, y1, x2, y2, duration_ms) -> subprocess.Popen
+def long_press_async(self, x, y, duration_ms) -> subprocess.Popen
+```
+
+## Report Gesture Visualization
+
+**Date Added:** 2026-01-18
+
+Reports display animated gesture indicators on before-frame screenshots.
+
+### Indicator Types
+
+| Gesture | Visualization |
+|---------|---------------|
+| tap | Bouncing dot with ripple animation |
+| double_tap | Staggered double circles |
+| long_press | Pulsing dot with progress arc |
+| swipe | Gradient trail with animated dot following trajectory |
+
+### Trajectory Synthesis
+
+For swipes, the executor synthesizes 15 trajectory points with ease-out-quad easing for natural finger motion:
+
+```python
+def _synthesize_trajectory(
+    self,
+    start: tuple[int, int],
+    end: tuple[int, int],
+    duration_ms: int,
+    num_points: int = 15
+) -> list[dict]:
+    """Generate trajectory points for swipe visualization."""
+```
+
+### Data Model
+
+```python
+details = {
+    "coords": {"x": 50.0, "y": 60.0},      # Start position (%)
+    "end_coords": {"x": 50.0, "y": 30.0},  # End position for swipes (%)
+    "direction": "up",                      # Swipe direction
+    "trajectory": [                         # Synthesized path
+        {"x": 50.0, "y": 60.0, "t": 0},
+        {"x": 50.0, "y": 30.0, "t": 300}
+    ],
+    "duration_ms": 300
+}
+```
+
+## Touch Visualization During Recording
+
+**Date Added:** 2026-01-18
+
+During video recording, native touch indicators are enabled to visualize interactions.
+
+### Implementation
+
+```python
+# Enable show_touches before recording
+self._original_show_touches = self._device.get_show_touches()
+if not self._original_show_touches:
+    self._device.set_show_touches(True)
+
+# ... recording ...
+
+# Restore original setting after recording
+if self._original_show_touches is not None and not self._original_show_touches:
+    self._device.set_show_touches(False)
+```
+
+### Design Rationale
+
+- **User visibility**: Touch points visible in recorded video
+- **Non-intrusive**: Original setting restored after recording
+- **Native indicators**: Uses Android's built-in touch visualization
 
 ## Future Considerations
 

@@ -231,6 +231,74 @@
             margin-bottom: var(--space-3);
         }}
 
+        /* Quick Navigation */
+        .quick-nav {{
+            margin-top: var(--space-4);
+            padding: var(--space-3);
+            background: var(--md-surface);
+            border-radius: var(--radius-md);
+        }}
+
+        .quick-nav-header {{
+            display: flex;
+            align-items: center;
+            gap: var(--space-2);
+            margin-bottom: var(--space-3);
+            font-size: 0.7rem;
+            font-weight: 600;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+            color: var(--md-on-surface-variant);
+        }}
+
+        .quick-nav-header .material-symbols-outlined {{
+            font-size: 14px;
+        }}
+
+        .quick-nav-steps {{
+            display: flex;
+            flex-wrap: wrap;
+            gap: var(--space-2);
+        }}
+
+        .quick-nav-step {{
+            width: 24px;
+            height: 24px;
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 0.7rem;
+            font-weight: 600;
+            font-family: 'IBM Plex Mono', monospace;
+            cursor: pointer;
+            transition: all var(--md-duration-short3) var(--md-easing-standard);
+            border: none;
+        }}
+
+        .quick-nav-step.passed {{
+            background: var(--pass-bg);
+            color: var(--pass-color);
+        }}
+
+        .quick-nav-step.failed {{
+            background: var(--fail-bg);
+            color: var(--fail-color);
+        }}
+
+        .quick-nav-step.skipped {{
+            background: var(--skip-bg);
+            color: var(--skip-color);
+        }}
+
+        .quick-nav-step:hover {{
+            transform: scale(1.15);
+        }}
+
+        .quick-nav-step.active {{
+            box-shadow: 0 0 0 2px var(--md-primary);
+        }}
+
         /* Steps Panel (Right) */
         .steps-panel {{
             flex: 1;
@@ -841,24 +909,23 @@
             z-index: 10;
         }}
 
-        /* Trajectory line - smooth gradient with glow */
+        /* Trajectory line - matches primary color */
         .swipe-indicator .swipe-trajectory-line {{
             position: absolute;
             left: var(--start-x);
             top: var(--start-y);
             width: var(--line-length);
-            height: 3px;
+            height: 4px;
             background: linear-gradient(
                 90deg,
-                rgba(208, 188, 255, 0.1) 0%,
-                rgba(208, 188, 255, 0.4) 20%,
-                rgba(208, 188, 255, 0.8) 80%,
+                rgba(208, 188, 255, 0.2) 0%,
+                rgba(208, 188, 255, 0.6) 30%,
                 var(--md-primary) 100%
             );
             transform-origin: 0 50%;
             transform: rotate(var(--line-angle)) translateY(-50%);
             border-radius: 2px;
-            filter: drop-shadow(0 0 6px rgba(208, 188, 255, 0.5));
+            filter: drop-shadow(0 0 6px rgba(208, 188, 255, 0.7));
             animation: swipeTrailPulse 1.8s ease-in-out infinite;
         }}
 
@@ -871,51 +938,42 @@
             transform: translateY(-50%);
             width: 0;
             height: 0;
-            border-left: 10px solid var(--md-primary);
-            border-top: 6px solid transparent;
-            border-bottom: 6px solid transparent;
+            border-left: 12px solid var(--md-primary);
+            border-top: 7px solid transparent;
+            border-bottom: 7px solid transparent;
             filter: drop-shadow(0 0 4px rgba(208, 188, 255, 0.8));
         }}
 
-        /* Animated dot with comet trail */
+        /* Animated dot - matches tap indicator size and style */
         .swipe-indicator .swipe-dot {{
             position: absolute;
-            width: 20px;
-            height: 20px;
+            width: 36px;
+            height: 36px;
             border-radius: 50%;
-            background: radial-gradient(circle, #fff 30%, var(--md-primary) 100%);
+            background: var(--md-primary);
+            border: 3px solid #fff;
             transform: translate(-50%, -50%);
             left: var(--start-x);
             top: var(--start-y);
             animation: swipeMove 1.8s cubic-bezier(0.4, 0, 0.2, 1) infinite;
-            filter: drop-shadow(0 0 10px rgba(208, 188, 255, 0.9));
+            box-shadow:
+                0 0 0 2px rgba(0, 0, 0, 0.8),
+                0 4px 12px rgba(0, 0, 0, 0.5),
+                0 0 20px rgba(208, 188, 255, 0.6);
         }}
 
-        /* Comet trail effect */
-        .swipe-indicator .swipe-dot::before {{
-            content: '';
-            position: absolute;
-            top: 50%;
-            right: 100%;
-            width: 30px;
-            height: 4px;
-            background: linear-gradient(90deg, transparent, rgba(208, 188, 255, 0.8));
-            transform: translateY(-50%);
-            border-radius: 2px;
-            opacity: 0;
-            animation: swipeTrail 1.8s cubic-bezier(0.4, 0, 0.2, 1) infinite;
-        }}
-
+        /* Inner white dot - matches tap indicator */
         .swipe-indicator .swipe-dot::after {{
             content: '';
             position: absolute;
             top: 50%;
             left: 50%;
-            width: 8px;
-            height: 8px;
+            width: 14px;
+            height: 14px;
             background: #fff;
             border-radius: 50%;
             transform: translate(-50%, -50%);
+            box-shadow: 0 2px 8px rgba(0, 0, 0, 0.4);
         }}
 
         @keyframes swipeTrailPulse {{
@@ -959,12 +1017,6 @@
             }}
         }}
 
-        @keyframes swipeTrail {{
-            0%, 56%, 100% {{ opacity: 0; width: 20px; }}
-            10% {{ opacity: 0.8; }}
-            45% {{ opacity: 0.8; width: 40px; }}
-            55% {{ opacity: 0; }}
-        }}
     </style>
 </head>
 <body>
@@ -1025,8 +1077,10 @@
         const reportData = {{json_data}};
         let activeStepIndex = -1;
         const stepCards = document.querySelectorAll('.step-card');
+        const quickNavSteps = document.querySelectorAll('.quick-nav-step');
 
         function selectStep(index) {{
+            // Update step cards
             stepCards.forEach(card => card.classList.remove('active'));
             activeStepIndex = index;
             if (stepCards[index]) {{
@@ -1038,6 +1092,12 @@
                 if (video && timestamp) {{
                     video.currentTime = parseFloat(timestamp);
                 }}
+            }}
+
+            // Update quick-nav buttons
+            quickNavSteps.forEach(btn => btn.classList.remove('active'));
+            if (quickNavSteps[index]) {{
+                quickNavSteps[index].classList.add('active');
             }}
         }}
 
@@ -1120,8 +1180,10 @@
                 const indicatorContainer = container.querySelector('.gesture-indicator-container');
                 if (!img || !indicatorContainer) return;
 
-                // Wait for image to load if not already
-                if (!img.complete) {{
+                // Check if image is actually decoded (has natural dimensions)
+                // Note: img.complete is true for base64 images even before decode
+                if (!img.naturalWidth || !img.naturalHeight) {{
+                    // Image not decoded yet, wait for load event
                     img.onload = () => requestAnimationFrame(() =>
                         requestAnimationFrame(() => positionIndicator(container, img, indicatorContainer))
                     );
@@ -1151,10 +1213,18 @@
             indicatorContainer.style.width = bounds.width + 'px';
             indicatorContainer.style.height = bounds.height + 'px';
 
-            // Position individual indicators within container
-            indicatorContainer.querySelectorAll('.tap-indicator, .long-press-indicator').forEach(indicator => {{
-                // These use percentage-based positioning from data attributes
-                // CSS transform: translate(-50%, -50%) handles centering
+            // Position tap, long-press, and double-tap indicators
+            indicatorContainer.querySelectorAll('.tap-indicator, .long-press-indicator, .double-tap-indicator').forEach(indicator => {{
+                const x = parseFloat(indicator.dataset.x) || 0;
+                const y = parseFloat(indicator.dataset.y) || 0;
+
+                // Convert percentages to pixels within rendered bounds
+                const posX = (x / 100) * bounds.width;
+                const posY = (y / 100) * bounds.height;
+
+                // Position indicator (CSS transform handles centering)
+                indicator.style.left = posX + 'px';
+                indicator.style.top = posY + 'px';
             }});
 
             // Handle swipe indicators with trajectory
@@ -1184,15 +1254,19 @@
                 indicator.style.setProperty('--line-length', length + 'px');
                 indicator.style.setProperty('--line-angle', angle + 'deg');
 
-                // Set end position for dot animation
-                indicator.style.setProperty('--end-left', dx + 'px');
-                indicator.style.setProperty('--end-top', dy + 'px');
+                // Set CSS custom properties for animation (start and end positions)
+                indicator.style.setProperty('--start-x', sx + 'px');
+                indicator.style.setProperty('--start-y', sy + 'px');
+                indicator.style.setProperty('--end-x', ex + 'px');
+                indicator.style.setProperty('--end-y', ey + 'px');
             }});
         }}
 
         // Position indicators on load and resize
         positionGestureIndicators();
         window.addEventListener('resize', positionGestureIndicators);
+        // Fallback: reposition after all resources loaded (catches async image decoding)
+        window.addEventListener('load', positionGestureIndicators);
     </script>
 </body>
 </html>

@@ -34,6 +34,7 @@ class SwipeAnalysisResult(TypedDict):
     before_description: str
     after_description: str
     suggested_verification: str | None
+    scroll_to_target: str | None  # Element that appeared after swipe (for scroll_to suggestion)
 
 
 class LongPressAnalysisResult(TypedDict):
@@ -168,6 +169,57 @@ Respond with JSON only (no markdown, no code blocks):
         result = self.verify_screen(screenshot, condition)
         return bool(result.get("pass", False))
 
+    def check_screen_ready(
+        self, screenshot: bytes, step_description: str, target: str | None = None
+    ) -> dict[str, Any]:
+        """Quick check if screen is ready for the next action.
+
+        This is a lightweight pre-step check to ensure UI is in expected state
+        before executing an action. Uses a fast, focused prompt.
+
+        Args:
+            screenshot: PNG image bytes
+            step_description: Description of the action about to be performed
+            target: Optional target element text (for text-based actions)
+
+        Returns:
+            Dict with ready (bool), reason (str), wait_ms (int if should wait)
+        """
+        if not self.is_available or self._client is None:
+            return {"ready": True, "reason": "AI unavailable, assuming ready", "skipped": True}
+
+        # Build a focused prompt for quick evaluation
+        target_hint = f'The action will target "{target}".' if target else ""
+
+        prompt = f'''Quick check: Is this mobile app screen ready for the following action?
+
+Action: {step_description}
+{target_hint}
+
+Check for:
+1. Is the screen fully loaded (no loading spinners, no partial content)?
+2. Is there an animation in progress?
+3. Is there a modal/dialog blocking the UI?
+{f'4. Is "{target}" visible and tappable?' if target else ''}
+
+Respond with JSON only (no markdown):
+{{"ready": true/false, "reason": "brief reason", "wait_ms": milliseconds to wait if not ready (0-2000) or 0}}'''
+
+        try:
+            image_part = types.Part.from_bytes(data=screenshot, mime_type="image/png")
+
+            response = self._client.models.generate_content(
+                model=self._model,
+                contents=[image_part, prompt],  # type: ignore[arg-type]
+            )
+
+            response_text = response.text or ""
+            return self._parse_json_response(response_text)
+
+        except Exception as e:
+            logger.error(f"check_screen_ready failed: {e}")
+            return {"ready": True, "reason": f"Check failed: {e}", "error": True}
+
     def analyze_step(self, before: bytes, after: bytes) -> dict[str, Any]:
         """Analyze before/after frames to describe a step.
 
@@ -198,14 +250,14 @@ Describe:
 1. What was the UI state before?
 2. What action was likely performed?
 3. What changed after?
-4. What verification would confirm this step succeeded?
+4. Based on the AFTER screenshot, what visible change confirms this step succeeded?
 
 Respond with JSON only (no markdown, no code blocks):
 {
   "before": "description of before state",
   "action": "description of action performed",
   "after": "description of after state",
-  "suggested_verification": "verification description or null if not applicable"
+  "suggested_verification": "visible change in AFTER that proves the action worked, or null if no meaningful change"
 }'''
 
         try:
@@ -412,56 +464,66 @@ Respond with JSON only (no markdown, no code blocks):
 
         prompt = f"""Analyze this TAP interaction on a mobile app.
 
-{context_section}Screenshots:
-1. BEFORE - stable state before tap
-2. TOUCH - moment of tap (shows target element)
-3. AFTER - result after UI settled
+{context_section}CRITICAL: Images are provided in THIS EXACT ORDER:
+  IMAGE 1 = BEFORE (state before tap)
+  IMAGE 2 = TOUCH (moment of tap - the tap happened HERE, look for touch indicator)
+  IMAGE 3 = AFTER (final result after tap completed)
 
-Tap coordinates: ({x}, {y})
+The tap coordinates ({x}, {y}) show WHERE the user tapped on IMAGE 2 (TOUCH).
+Look at IMAGE 2 to identify WHAT element was tapped.
 
 Respond with JSON only (no markdown, no code blocks):
 {{
   "element_text": "button/field text or null",
   "element_type": "button|text_field|link|icon|checkbox|other",
   "action_description": "User taps on [element name/text]",
-  "before_description": "Brief UI state before tap.",
-  "after_description": "Brief UI state after tap.",
-  "suggested_verification": "Expected visible state or null"
+  "before_description": "Describe IMAGE 1 only.",
+  "after_description": "Describe IMAGE 3 only.",
+  "suggested_verification": "What's visible in IMAGE 3 that confirms success"
 }}
 
-FORMAT REQUIREMENTS (follow exactly):
+FORMAT REQUIREMENTS:
 
 element_text:
-- IMPORTANT: If UI HIERARCHY DATA is provided above, use the SUGGESTED element_text value
-- Priority: content-desc > text > resource-id (last part only)
-- Only use null if no UI hierarchy data AND element is unclear from screenshots
+- Look at IMAGE 2 (TOUCH) at coordinates ({x}, {y}) to find the tapped element
+- Identify the button, icon, or text that was tapped
 
 action_description:
-- Format: "User taps on [element]"
-- Use element_text value for [element]
-- Examples: "User taps on Submit", "User taps on menu icon", "User taps on Login"
+- Format: "User taps on [element from IMAGE 2]"
+- Examples: "User taps on X button", "User taps on Cancel", "User taps outside modal"
 
-before_description and after_description:
-- Start with capital letter, end with period
-- Be concise (5-15 words)
-- Describe the visible UI state objectively
-- Examples:
-  - "Home screen is displayed."
-  - "Login form with email and password fields."
-  - "List shows 5 items."
+before_description:
+- Describe ONLY what you see in IMAGE 1 (BEFORE)
+- Do NOT describe IMAGE 2 or IMAGE 3 here
+
+after_description:
+- Describe ONLY what you see in IMAGE 3 (AFTER)
+- Do NOT describe IMAGE 1 or IMAGE 2 here
+- This is the FINAL state after the tap completed
 
 suggested_verification:
-- Describe expected visible state after this action, or null if not meaningful
-- Examples: "Welcome message is visible.", "Item is added to cart.", null"""
+- Based ONLY on IMAGE 3 (AFTER), what visible change confirms the tap succeeded?
+- Compare IMAGE 3 to IMAGE 1: what changed?
+- If a dialog/modal was dismissed, say "Dialog is closed" or "Home screen is displayed"
+- Use null only if IMAGE 3 looks identical to IMAGE 1"""
 
         try:
             before_part = types.Part.from_bytes(data=before, mime_type="image/png")
             touch_part = types.Part.from_bytes(data=touch, mime_type="image/png")
             after_part = types.Part.from_bytes(data=after, mime_type="image/png")
 
+            # Label each image explicitly to prevent Gemini from confusing the order
             response = await self._client.aio.models.generate_content(
                 model=self._model,
-                contents=[before_part, touch_part, after_part, prompt],  # type: ignore[arg-type]
+                contents=[
+                    "=== IMAGE 1: BEFORE (state before tap) ===",
+                    before_part,
+                    "=== IMAGE 2: TOUCH (moment of tap - action happened here) ===",
+                    touch_part,
+                    "=== IMAGE 3: AFTER (final result) ===",
+                    after_part,
+                    prompt,
+                ],  # type: ignore[arg-type]
             )
 
             response_text = response.text or ""
@@ -524,6 +586,7 @@ suggested_verification:
                 before_description="Unknown (AI unavailable)",
                 after_description="Unknown (AI unavailable)",
                 suggested_verification=None,
+                scroll_to_target=None,
             )
 
         # Build enhanced prompt with ADB context
@@ -531,42 +594,48 @@ suggested_verification:
 
         prompt = f"""Analyze this SWIPE gesture on a mobile app.
 
-{context_section}Screenshots:
-1. BEFORE - stable state before swipe
-2. SWIPE_START - finger down position
-3. SWIPE_END - finger up position
-4. AFTER - result after UI settled
+{context_section}CRITICAL: Images are provided in THIS EXACT ORDER:
+  IMAGE 1 = BEFORE (state before swipe)
+  IMAGE 2 = SWIPE_START (finger down position)
+  IMAGE 3 = SWIPE_END (finger up position)
+  IMAGE 4 = AFTER (final result after swipe completed)
 
-Start: ({start_x}, {start_y}) -> End: ({end_x}, {end_y})
+Swipe: ({start_x}, {start_y}) -> ({end_x}, {end_y})
 
 Respond with JSON only (no markdown, no code blocks):
 {{
   "direction": "up|down|left|right",
   "content_changed": "what scrolled into/out of view",
   "action_description": "User swipes [direction] [context]",
-  "before_description": "Brief UI state before swipe.",
-  "after_description": "Brief UI state after swipe.",
-  "suggested_verification": "Description of expected state." or null
+  "before_description": "Describe IMAGE 1 only.",
+  "after_description": "Describe IMAGE 4 only.",
+  "suggested_verification": "What's visible in IMAGE 4 that confirms success",
+  "scroll_to_target": "element text" or null
 }}
 
-FORMAT REQUIREMENTS (follow exactly):
+FORMAT REQUIREMENTS:
 
 action_description:
 - Format: "User swipes [direction]" or "User swipes [direction] to [purpose]"
-- Examples: "User swipes up", "User swipes down to scroll list", "User swipes left to dismiss"
+- Examples: "User swipes up", "User swipes down to scroll", "User swipes left to dismiss"
 
-before_description and after_description:
-- Start with capital letter, end with period
-- Be concise (5-15 words)
-- Focus on visible content that changed
-- Examples:
-  - "List shows items 1-5."
-  - "List now shows items 6-10."
-  - "Card is fully visible."
+before_description:
+- Describe ONLY what you see in IMAGE 1 (BEFORE)
+- Do NOT describe IMAGE 2, 3, or 4 here
+
+after_description:
+- Describe ONLY what you see in IMAGE 4 (AFTER)
+- Do NOT describe IMAGE 1, 2, or 3 here
+- This is the FINAL state after the swipe completed
 
 suggested_verification:
-- Format: "[Element] is visible." or "[Content] appears." or null
-- Examples: "Item 'Settings' is visible.", "Next page content appears.", null"""
+- Based ONLY on IMAGE 4 (AFTER), what visible change confirms the swipe succeeded?
+- Compare IMAGE 4 to IMAGE 1: what changed?
+- Use null if IMAGE 4 looks identical to IMAGE 1
+
+scroll_to_target:
+- If a specific element appeared in IMAGE 4 that wasn't visible in IMAGE 1, return its text
+- Return null if swipe was for dismissing, pagination, or no distinct new element appeared"""
 
         try:
             before_part = types.Part.from_bytes(data=before, mime_type="image/png")
@@ -574,9 +643,20 @@ suggested_verification:
             end_part = types.Part.from_bytes(data=swipe_end, mime_type="image/png")
             after_part = types.Part.from_bytes(data=after, mime_type="image/png")
 
+            # Label each image explicitly to prevent Gemini from confusing the order
             response = await self._client.aio.models.generate_content(
                 model=self._model,
-                contents=[before_part, start_part, end_part, after_part, prompt],  # type: ignore[arg-type]
+                contents=[
+                    "=== IMAGE 1: BEFORE (state before swipe) ===",
+                    before_part,
+                    "=== IMAGE 2: SWIPE_START (finger down) ===",
+                    start_part,
+                    "=== IMAGE 3: SWIPE_END (finger up) ===",
+                    end_part,
+                    "=== IMAGE 4: AFTER (final result) ===",
+                    after_part,
+                    prompt,
+                ],  # type: ignore[arg-type]
             )
 
             response_text = response.text or ""
@@ -590,6 +670,7 @@ suggested_verification:
                 before_description=result.get("before_description", ""),
                 after_description=result.get("after_description", ""),
                 suggested_verification=result.get("suggested_verification"),
+                scroll_to_target=result.get("scroll_to_target"),
             )
 
         except Exception as e:
@@ -601,6 +682,7 @@ suggested_verification:
                 before_description=f"Analysis failed: {e}",
                 after_description=f"Analysis failed: {e}",
                 suggested_verification=None,
+                scroll_to_target=None,
             )
 
     async def analyze_long_press(
@@ -646,47 +728,50 @@ suggested_verification:
 
         prompt = f"""Analyze this LONG PRESS gesture on a mobile app.
 
-{context_section}Screenshots:
-1. BEFORE - stable state before press
-2. PRESS_START - finger down on element
-3. PRESS_HELD - during hold (may show visual feedback)
-4. AFTER - result (context menu, selection, etc.)
+{context_section}CRITICAL: Images are provided in THIS EXACT ORDER:
+  IMAGE 1 = BEFORE (state before long press)
+  IMAGE 2 = PRESS_START (finger down - the press happened HERE)
+  IMAGE 3 = PRESS_HELD (during hold, may show intermediate state)
+  IMAGE 4 = AFTER (final result after finger lifted)
 
-Press coordinates: ({x}, {y}), Duration: {duration_ms}ms
+The press coordinates ({x}, {y}) show WHERE the user pressed on IMAGE 2.
+Duration: {duration_ms}ms
 
 Respond with JSON only (no markdown, no code blocks):
 {{
   "element_text": "pressed element text or null",
   "element_type": "list_item|text|image|icon|other",
-  "result_type": "context_menu|selection|drag_start|other",
+  "result_type": "context_menu|selection|drag_start|dismiss|other",
   "action_description": "User long-presses on [element]",
-  "before_description": "Brief UI state before press.",
-  "after_description": "Brief UI state after press.",
-  "suggested_verification": "Description of expected state." or null
+  "before_description": "Describe IMAGE 1 only.",
+  "after_description": "Describe IMAGE 4 only.",
+  "suggested_verification": "What's visible in IMAGE 4 that confirms success"
 }}
 
-FORMAT REQUIREMENTS (follow exactly):
+FORMAT REQUIREMENTS:
 
 element_text:
-- IMPORTANT: If UI HIERARCHY DATA is provided above, use the SUGGESTED element_text value
-- Priority: content-desc > text > resource-id (last part only)
-- Only use null if no UI hierarchy data AND element is unclear from screenshots
+- Look at IMAGE 2 (PRESS_START) at coordinates ({x}, {y}) to find the pressed element
+- Identify the element under the touch indicator
 
 action_description:
-- Format: "User long-presses on [element]"
-- Examples: "User long-presses on message", "User long-presses on item"
+- Format: "User long-presses on [element from IMAGE 2]"
+- Examples: "User long-presses on list item", "User long-presses on image"
 
-before_description and after_description:
-- Start with capital letter, end with period
-- Be concise (5-15 words)
-- Examples:
-  - "Message list is displayed."
-  - "Context menu appears with options."
-  - "Item is highlighted."
+before_description:
+- Describe ONLY what you see in IMAGE 1 (BEFORE)
+- Do NOT describe IMAGE 2, 3, or 4 here
+
+after_description:
+- Describe ONLY what you see in IMAGE 4 (AFTER)
+- Do NOT describe IMAGE 1, 2, or 3 here
+- This is the FINAL state after the long press completed
 
 suggested_verification:
-- Format: "[Menu/Selection] is visible." or null
-- Examples: "Context menu is visible.", "Item is selected.", null"""
+- Based ONLY on IMAGE 4 (AFTER), what visible change confirms the action succeeded?
+- Compare IMAGE 4 to IMAGE 1: what changed?
+- If a dialog appeared then was dismissed, describe the final state in IMAGE 4
+- Use null only if IMAGE 4 looks identical to IMAGE 1"""
 
         try:
             before_part = types.Part.from_bytes(data=before, mime_type="image/png")
@@ -694,9 +779,20 @@ suggested_verification:
             held_part = types.Part.from_bytes(data=press_held, mime_type="image/png")
             after_part = types.Part.from_bytes(data=after, mime_type="image/png")
 
+            # Label each image explicitly to prevent Gemini from confusing the order
             response = await self._client.aio.models.generate_content(
                 model=self._model,
-                contents=[before_part, start_part, held_part, after_part, prompt],  # type: ignore[arg-type]
+                contents=[
+                    "=== IMAGE 1: BEFORE (state before long press) ===",
+                    before_part,
+                    "=== IMAGE 2: PRESS_START (finger down) ===",
+                    start_part,
+                    "=== IMAGE 3: PRESS_HELD (during hold) ===",
+                    held_part,
+                    "=== IMAGE 4: AFTER (final result) ===",
+                    after_part,
+                    prompt,
+                ],  # type: ignore[arg-type]
             )
 
             response_text = response.text or ""
@@ -756,54 +852,57 @@ suggested_verification:
 
         prompt = f"""Analyze this TYPING interaction on a mobile app.
 
-{context_section}Screenshots:
-1. BEFORE - screen state before/during typing (may show keyboard)
-2. AFTER - screen state after typing completed
-
-Focus on:
-1. What text field or input element was focused for typing?
-2. What does the screen look like after typing?
+{context_section}CRITICAL: Images are provided in THIS EXACT ORDER:
+  IMAGE 1 = BEFORE (state before/during typing, may show keyboard)
+  IMAGE 2 = AFTER (final state after typing completed)
 
 Respond with JSON only (no markdown, no code blocks):
 {{
-  "element_text": "field name like 'Search field', 'Email input', 'Password field', or null",
+  "element_text": "field name like 'Search field', 'Email input', or null",
   "element_type": "text_field|search_box|password_field|textarea|other",
   "action_description": "User types in [field name]",
-  "before_description": "Brief UI state before typing.",
-  "after_description": "Brief UI state after typing.",
-  "suggested_verification": "Field contains '[text]'." or null
+  "before_description": "Describe IMAGE 1 only.",
+  "after_description": "Describe IMAGE 2 only.",
+  "suggested_verification": "What's visible in IMAGE 2 that confirms success"
 }}
 
-FORMAT REQUIREMENTS (follow exactly):
+FORMAT REQUIREMENTS:
 
 element_text:
-- If UI HIERARCHY DATA is provided above, use it to identify the field
-- Priority: content-desc > text > resource-id (last part only)
+- Identify the text field from IMAGE 1 where typing occurred
 - Examples: "Search field", "Email input", "Password field"
 
 action_description:
 - Format: "User types in [field name]"
-- Examples: "User types in search field", "User types in email input"
 
-before_description and after_description:
-- Start with capital letter, end with period
-- Be concise (5-15 words)
-- Examples:
-  - "Search field is empty with keyboard visible."
-  - "Email field now contains 'user@example.com'."
-  - "Text field shows entered value."
+before_description:
+- Describe ONLY what you see in IMAGE 1 (BEFORE)
+- Do NOT describe IMAGE 2 here
+
+after_description:
+- Describe ONLY what you see in IMAGE 2 (AFTER)
+- Do NOT describe IMAGE 1 here
+- This is the FINAL state after typing completed
 
 suggested_verification:
-- Format: "Field contains '[text]'." or "[Field] shows '[value]'." or null
-- Examples: "Search field contains 'query'.", "Email shows 'test@test.com'.", null"""
+- Based ONLY on IMAGE 2 (AFTER), what visible change confirms typing succeeded?
+- Compare IMAGE 2 to IMAGE 1: what changed?
+- Use null if field content not visible or no meaningful change"""
 
         try:
             before_part = types.Part.from_bytes(data=before, mime_type="image/png")
             after_part = types.Part.from_bytes(data=after, mime_type="image/png")
 
+            # Label each image explicitly to prevent Gemini from confusing the order
             response = await self._client.aio.models.generate_content(
                 model=self._model,
-                contents=[before_part, after_part, prompt],  # type: ignore[arg-type]
+                contents=[
+                    "=== IMAGE 1: BEFORE (state before/during typing) ===",
+                    before_part,
+                    "=== IMAGE 2: AFTER (final result after typing) ===",
+                    after_part,
+                    prompt,
+                ],  # type: ignore[arg-type]
             )
 
             response_text = response.text or ""

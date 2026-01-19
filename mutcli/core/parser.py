@@ -179,6 +179,7 @@ class TestParser:
             - tap: "button"
               at: [50%, 85%]    # This is at step level
               duration: 1000
+              waitToSettle: 500ms  # Maestro-style
         """
         # Skip the action key itself
         for key, value in data.items():
@@ -197,6 +198,22 @@ class TestParser:
                 step.timeout = cls._parse_duration(value)
             elif key == "retry":
                 step.retry = int(value)
+            # Maestro-style options
+            elif key in ("waitToSettle", "wait_to_settle", "waitToSettleTimeout"):
+                step.wait_to_settle_timeout = cls._parse_duration(value)
+            elif key in ("retryIfNoChange", "retry_if_no_change"):
+                step.retry_if_no_change = cls._parse_bool(value)
+            elif key == "description":
+                step.description = value
+
+    @classmethod
+    def _parse_bool(cls, value: Any) -> bool:
+        """Parse boolean value."""
+        if isinstance(value, bool):
+            return value
+        if isinstance(value, str):
+            return value.lower() in ("true", "1", "yes", "on")
+        return bool(value)
 
     @classmethod
     def _parse_rich_action(cls, step: Step, data: dict[str, Any]) -> None:
@@ -242,6 +259,16 @@ class TestParser:
         # Scroll specific
         if "max_scrolls" in data:
             step.max_scrolls = int(data["max_scrolls"])
+
+        # Maestro-style options
+        for key in ("waitToSettle", "wait_to_settle", "waitToSettleTimeout"):
+            if key in data:
+                step.wait_to_settle_timeout = cls._parse_duration(data[key])
+                break
+        for key in ("retryIfNoChange", "retry_if_no_change"):
+            if key in data:
+                step.retry_if_no_change = cls._parse_bool(data[key])
+                break
 
     @classmethod
     def _parse_conditional(cls, cond_type: str, data: dict[str, Any]) -> Step:

@@ -115,15 +115,27 @@ def _parse_duration(value: Any, default: float) -> float:
 
 @dataclass
 class ResilienceConfig:
-    """Resilience settings for intelligent test execution."""
+    """Resilience settings for intelligent test execution.
 
-    # Layer 1: Smart waits
-    implicit_wait: float = 5.0  # Seconds to wait for elements
-    poll_interval: float = 0.5  # Seconds between retry attempts
-    stability_frames: int = 2  # Consecutive identical frames before action
+    Follows Maestro-style patterns:
+    - Wait for screen stability before actions (not fixed delays)
+    - Retry taps if screen didn't change
+    - Accessibility tree first, AI as fallback
+    """
 
-    # Layer 2: AI recovery
-    ai_recovery: bool = True  # Enable AI-powered failure recovery
+    # Maestro-style wait settings
+    wait_to_settle_timeout: float = 3.0  # Max seconds to wait for screen stability
+    retry_if_no_change: bool = True  # Retry tap if screen didn't change
+    retry_if_no_change_limit: int = 3  # Max retries when screen doesn't change
+
+    # Element finding
+    implicit_wait: float = 5.0  # Seconds to wait for elements to appear
+    poll_interval: float = 0.3  # Seconds between retry attempts
+    stability_frames: int = 2  # Consecutive identical frames = stable
+
+    # AI settings (disabled by default - use accessibility tree first)
+    ai_fallback: bool = False  # Use AI vision if accessibility tree fails
+    ai_recovery: bool = False  # Enable AI-powered failure recovery
     ai_retry_limit: int = 1  # Max AI-suggested retries
 
 
@@ -216,8 +228,14 @@ class ConfigLoader:
 
         # Resilience overrides
         resilience_overrides: dict[str, Any] = {}
+        if "MUT_WAIT_TO_SETTLE_TIMEOUT" in os.environ:
+            resilience_overrides["wait_to_settle_timeout"] = os.environ["MUT_WAIT_TO_SETTLE_TIMEOUT"]
+        if "MUT_RETRY_IF_NO_CHANGE" in os.environ:
+            resilience_overrides["retry_if_no_change"] = os.environ["MUT_RETRY_IF_NO_CHANGE"]
         if "MUT_IMPLICIT_WAIT" in os.environ:
             resilience_overrides["implicit_wait"] = os.environ["MUT_IMPLICIT_WAIT"]
+        if "MUT_AI_FALLBACK" in os.environ:
+            resilience_overrides["ai_fallback"] = os.environ["MUT_AI_FALLBACK"]
         if "MUT_AI_RECOVERY" in os.environ:
             resilience_overrides["ai_recovery"] = os.environ["MUT_AI_RECOVERY"]
         if resilience_overrides:
@@ -263,10 +281,18 @@ class ConfigLoader:
 
         # Build ResilienceConfig
         resilience = ResilienceConfig(
+            wait_to_settle_timeout=_parse_duration(
+                resilience_dict.get("wait_to_settle_timeout"), 3.0
+            ),
+            retry_if_no_change=_parse_bool(resilience_dict.get("retry_if_no_change"), True),
+            retry_if_no_change_limit=_safe_int(
+                resilience_dict.get("retry_if_no_change_limit"), 3
+            ),
             implicit_wait=_parse_duration(resilience_dict.get("implicit_wait"), 5.0),
-            poll_interval=_parse_duration(resilience_dict.get("poll_interval"), 0.5),
+            poll_interval=_parse_duration(resilience_dict.get("poll_interval"), 0.3),
             stability_frames=_safe_int(resilience_dict.get("stability_frames"), 2),
-            ai_recovery=_parse_bool(resilience_dict.get("ai_recovery"), True),
+            ai_fallback=_parse_bool(resilience_dict.get("ai_fallback"), False),
+            ai_recovery=_parse_bool(resilience_dict.get("ai_recovery"), False),
             ai_retry_limit=_safe_int(resilience_dict.get("ai_retry_limit"), 1),
         )
 

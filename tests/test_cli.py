@@ -460,12 +460,12 @@ class TestAnalyzeCommand:
             result = runner.invoke(app, ["analyze", str(recording_dir)])
 
         assert result.exit_code == 0
-        # Verify YAML was generated with coordinates
+        # Verify YAML was generated with coordinates (as percentages)
         yaml_path = recording_dir / "test.yaml"
         assert yaml_path.exists()
         yaml_content = yaml_path.read_text()
-        # Should have coordinate-based taps (fallback)
-        assert "540" in yaml_content or "800" in yaml_content
+        # Should have coordinate-based taps (converted to percentages)
+        assert "%" in yaml_content  # Coordinates should be in percentage format
 
     def test_analyze_handles_missing_touch_events_file(self, tmp_path: Path) -> None:
         """Analyze command should error when touch_events.json is missing."""

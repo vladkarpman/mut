@@ -31,6 +31,7 @@ class PreviewStep:
     frames: dict[str, str | None] = field(default_factory=dict)
     analysis: dict[str, str] = field(default_factory=dict)
     suggested_verification: str | None = None
+    scroll_to_target: str | None = None  # For swipes: element that appeared (suggests scroll_to)
     tap_count: int | None = None  # Number of keyboard taps for type action
     text: str | None = None  # User-entered text for type action
     end_coordinates: tuple[int, int] | None = None  # End position for swipe gestures
@@ -152,23 +153,52 @@ class PreviewServer:
                 relative_path = path.lstrip("/")
                 file_path = server.recording_dir / relative_path
 
-                if file_path.exists() and file_path.is_file():
-                    # Determine content type
-                    content_type, _ = mimetypes.guess_type(str(file_path))
-                    if content_type is None:
-                        content_type = "application/octet-stream"
+                if not (file_path.exists() and file_path.is_file()):
+                    self.send_error(404)
+                    return
 
-                    self.send_response(200)
+                file_size = file_path.stat().st_size
+                content_type, _ = mimetypes.guess_type(str(file_path))
+                if content_type is None:
+                    content_type = "application/octet-stream"
+
+                # Check for Range header (video seeking)
+                range_header = self.headers.get("Range")
+                if range_header and range_header.startswith("bytes="):
+                    # Parse range: "bytes=start-end" or "bytes=start-"
+                    range_spec = range_header[6:]
+                    parts = range_spec.split("-")
+                    start = int(parts[0]) if parts[0] else 0
+                    end = int(parts[1]) if parts[1] else file_size - 1
+                    end = min(end, file_size - 1)
+                    content_length = end - start + 1
+
+                    self.send_response(206)  # Partial Content
                     self.send_header("Content-Type", content_type)
-                    self.send_header("Content-Length", str(file_path.stat().st_size))
-                    # Allow range requests for video seeking
+                    self.send_header("Content-Length", str(content_length))
+                    self.send_header("Content-Range", f"bytes {start}-{end}/{file_size}")
                     self.send_header("Accept-Ranges", "bytes")
                     self.end_headers()
 
-                    with open(file_path, "rb") as f:
-                        self.wfile.write(f.read())
+                    try:
+                        with open(file_path, "rb") as f:
+                            f.seek(start)
+                            self.wfile.write(f.read(content_length))
+                    except (BrokenPipeError, ConnectionResetError):
+                        pass  # Client disconnected, ignore
                 else:
-                    self.send_error(404)
+                    # Full file request
+                    self.send_response(200)
+                    self.send_header("Content-Type", content_type)
+                    self.send_header("Content-Length", str(file_size))
+                    self.send_header("Accept-Ranges", "bytes")
+                    self.end_headers()
+
+                    try:
+                        with open(file_path, "rb") as f:
+                            self.wfile.write(f.read())
+                    except (BrokenPipeError, ConnectionResetError):
+                        pass  # Client disconnected, ignore
 
             def _handle_approve(self) -> None:
                 content_length = int(self.headers.get("Content-Length", 0))
@@ -267,6 +297,7 @@ class PreviewServer:
 
             step_data = {
                 "id": step_id,
+                "index": step.index,  # Original step index for verification mapping
                 "timestamp": step.timestamp,
                 "action": step.action,
                 "target": target,
@@ -275,6 +306,7 @@ class PreviewServer:
                 "frames": frames,
                 "analysis": analysis,
                 "suggestedVerification": step.suggested_verification,
+                "scrollToTarget": step.scroll_to_target,
                 "enabled": step.enabled,
                 "tapCount": step.tap_count,
                 "text": step.text,

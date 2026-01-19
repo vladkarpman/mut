@@ -2876,6 +2876,11 @@
             color: var(--action-swipe);
             border-color: rgba(239, 184, 200, 0.3);
         }
+        .gesture-badge.scroll_to {
+            background: var(--action-swipe-bg);
+            color: var(--action-swipe);
+            border-color: rgba(239, 184, 200, 0.3);
+        }
         .gesture-badge.verify, .gesture-badge.verifyscreen {
             background: var(--action-verify-bg);
             color: var(--action-verify);
@@ -3445,6 +3450,42 @@
             color: var(--warning-color);
         }
 
+        /* Inline scroll_to suggestion in swipe gesture config */
+        .scroll-to-suggestion {
+            margin-top: 12px;
+            padding: 10px 12px;
+            padding-top: 16px;
+            background: transparent;
+            border: 1px dashed var(--action-swipe);
+            border-radius: 8px;
+            position: relative;
+        }
+
+        .scroll-to-suggestion::before {
+            content: 'Consider';
+            position: absolute;
+            top: -8px;
+            left: 10px;
+            padding: 0 4px;
+            background: var(--md-surface-container);
+            font-size: 0.6875rem;
+            font-weight: 600;
+            text-transform: uppercase;
+            letter-spacing: 0.05em;
+            color: var(--action-swipe);
+        }
+
+        .scroll-to-suggestion .suggestion-inline-header {
+            display: none;
+        }
+
+        .scroll-to-suggestion code {
+            background: var(--action-swipe-bg);
+            padding: 2px 6px;
+            border-radius: 4px;
+            font-size: 0.8125rem;
+        }
+
         .suggestion-inline-header {
             display: none; /* Hidden - using ::before floating label instead */
         }
@@ -3949,31 +3990,30 @@
             75% { transform: scale(1); opacity: 1; }
         }
 
-        /* Swipe indicator - Modern gradient trail */
+        /* Swipe indicator - Matches tap indicator style */
         .swipe-indicator {
             position: absolute;
             pointer-events: none;
             z-index: 10;
         }
 
-        /* Trajectory line - smooth gradient with glow */
+        /* Trajectory line - matches primary color */
         .swipe-indicator .swipe-trajectory-line {
             position: absolute;
             left: var(--start-x);
             top: var(--start-y);
             width: var(--line-length);
-            height: 3px;
+            height: 4px;
             background: linear-gradient(
                 90deg,
-                rgba(208, 188, 255, 0.1) 0%,
-                rgba(208, 188, 255, 0.4) 20%,
-                rgba(208, 188, 255, 0.8) 80%,
+                rgba(208, 188, 255, 0.2) 0%,
+                rgba(208, 188, 255, 0.6) 30%,
                 var(--md-primary) 100%
             );
             transform-origin: 0 50%;
             transform: rotate(var(--line-angle)) translateY(-50%);
             border-radius: 2px;
-            filter: drop-shadow(0 0 6px rgba(208, 188, 255, 0.5));
+            filter: drop-shadow(0 0 6px rgba(208, 188, 255, 0.7));
             animation: swipeTrailPulse 1.8s ease-in-out infinite;
         }
 
@@ -3986,51 +4026,42 @@
             transform: translateY(-50%);
             width: 0;
             height: 0;
-            border-left: 10px solid var(--md-primary);
-            border-top: 6px solid transparent;
-            border-bottom: 6px solid transparent;
+            border-left: 12px solid var(--md-primary);
+            border-top: 7px solid transparent;
+            border-bottom: 7px solid transparent;
             filter: drop-shadow(0 0 4px rgba(208, 188, 255, 0.8));
         }
 
-        /* Animated dot with comet trail */
+        /* Animated dot - matches tap indicator size and style */
         .swipe-indicator .swipe-dot {
             position: absolute;
-            width: 20px;
-            height: 20px;
+            width: 36px;
+            height: 36px;
             border-radius: 50%;
-            background: radial-gradient(circle, #fff 30%, var(--md-primary) 100%);
+            background: var(--md-primary);
+            border: 3px solid #fff;
             transform: translate(-50%, -50%);
             left: var(--start-x);
             top: var(--start-y);
             animation: swipeMove 1.8s cubic-bezier(0.4, 0, 0.2, 1) infinite;
-            filter: drop-shadow(0 0 10px rgba(208, 188, 255, 0.9));
+            box-shadow:
+                0 0 0 2px rgba(0, 0, 0, 0.8),
+                0 4px 12px rgba(0, 0, 0, 0.5),
+                0 0 20px rgba(208, 188, 255, 0.6);
         }
 
-        /* Comet trail effect */
-        .swipe-indicator .swipe-dot::before {
-            content: '';
-            position: absolute;
-            top: 50%;
-            right: 100%;
-            width: 30px;
-            height: 4px;
-            background: linear-gradient(90deg, transparent, rgba(208, 188, 255, 0.8));
-            transform: translateY(-50%);
-            border-radius: 2px;
-            opacity: 0;
-            animation: swipeTrail 1.8s cubic-bezier(0.4, 0, 0.2, 1) infinite;
-        }
-
+        /* Inner white dot - matches tap indicator */
         .swipe-indicator .swipe-dot::after {
             content: '';
             position: absolute;
             top: 50%;
             left: 50%;
-            width: 8px;
-            height: 8px;
+            width: 14px;
+            height: 14px;
             background: #fff;
             border-radius: 50%;
             transform: translate(-50%, -50%);
+            box-shadow: 0 2px 8px rgba(0, 0, 0, 0.4);
         }
 
         @keyframes swipeTrailPulse {
@@ -5278,6 +5309,67 @@
         .video-picker-btn-capture:hover {
             background: #2563eb;
         }
+
+        /* Quick Navigation (Step Navigator) */
+        .quick-nav {
+            margin-top: var(--space-3);
+            padding: var(--space-3) var(--space-4);
+            background: var(--md-surface);
+            border-radius: var(--radius-md);
+            flex-shrink: 0;
+        }
+
+        .quick-nav-header {
+            display: flex;
+            align-items: center;
+            gap: var(--space-2);
+            margin-bottom: var(--space-2);
+            font-size: 0.65rem;
+            font-weight: 600;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+            color: var(--md-on-surface-variant);
+        }
+
+        .quick-nav-header .material-symbols-outlined {
+            font-size: 12px;
+        }
+
+        .quick-nav-steps {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 6px;
+            max-height: 62px; /* 2 rows of 24px buttons + gap + padding */
+            overflow-y: auto;
+            padding: 4px; /* Space for active ring */
+            margin: -4px; /* Compensate for padding */
+        }
+
+        .quick-nav-step {
+            width: 24px;
+            height: 24px;
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 0.7rem;
+            font-weight: 600;
+            font-family: 'IBM Plex Mono', monospace;
+            cursor: pointer;
+            transition: all var(--md-duration-short3) var(--md-easing-standard);
+            border: none;
+            background: var(--pass-bg);
+            color: var(--pass-color);
+            flex-shrink: 0;
+        }
+
+        .quick-nav-step:hover {
+            transform: scale(1.1);
+        }
+
+        .quick-nav-step.active {
+            box-shadow: 0 0 0 2px var(--md-primary);
+        }
     </style>
 </head>
 <body>
@@ -5316,6 +5408,15 @@
             <div class="video-container">
                 <div class="video-wrapper">
                     <video id="video" src="video.mp4" controls></video>
+                </div>
+                <div class="quick-nav" id="quickNav">
+                    <div class="quick-nav-header">
+                        <span class="material-symbols-outlined">format_list_numbered</span>
+                        Step Navigator
+                    </div>
+                    <div class="quick-nav-steps" id="quickNavSteps">
+                        <!-- Step buttons rendered by JS -->
+                    </div>
                 </div>
                 <button class="btn btn-add-step" onclick="openAddStepMode()">+ Add a Step</button>
             </div>
@@ -5652,12 +5753,66 @@
         }
 
         // Step Rendering
+        function renderQuickNav() {
+            const container = document.getElementById('quickNavSteps');
+            if (!container) return;
+
+            container.innerHTML = steps.map((step, index) => {
+                const isActive = step.id === activeStepId ? 'active' : '';
+                return `<button class="quick-nav-step ${isActive}" onclick="seekToStep('${step.id}')" data-id="${step.id}">${index + 1}</button>`;
+            }).join('');
+        }
+
+        function updateQuickNavActive() {
+            const buttons = document.querySelectorAll('.quick-nav-step');
+            buttons.forEach(btn => {
+                btn.classList.remove('active');
+                if (btn.dataset.id === activeStepId) {
+                    btn.classList.add('active');
+                }
+            });
+        }
+
         function renderSteps() {
             const panel = document.getElementById('stepsPanel');
             panel.innerHTML = steps.map((step, index) => renderStepCard(step, index)).join('');
             updateHeaderMeta();
+            renderQuickNav();
             // Position gesture indicators after DOM update
             requestAnimationFrame(() => positionGestureIndicators());
+        }
+
+        /**
+         * Re-render only a single step card to avoid full UI blink.
+         * Falls back to renderSteps() if card not found.
+         */
+        function rerenderStepCard(stepId) {
+            const stepIndex = steps.findIndex(s => s.id === stepId);
+            if (stepIndex === -1) return;
+
+            const step = steps[stepIndex];
+            const existingCard = document.querySelector(`.step-card[data-id="${stepId}"]`);
+            if (!existingCard) {
+                // Fallback to full render if card not found
+                renderSteps();
+                return;
+            }
+
+            // Create new card HTML and replace existing
+            const newCardHtml = renderStepCard(step, stepIndex);
+            const temp = document.createElement('div');
+            temp.innerHTML = newCardHtml;
+            const newCard = temp.firstElementChild;
+
+            existingCard.replaceWith(newCard);
+
+            // Position gesture indicators for this card
+            requestAnimationFrame(() => {
+                const img = newCard.querySelector('.gesture-indicator-wrapper')?.previousElementSibling;
+                if (img && img.tagName === 'IMG') {
+                    positionIndicator(img, stepId);
+                }
+            });
         }
 
         /**
@@ -5764,7 +5919,7 @@
                 indicator.style.left = posLeft + 'px';
                 indicator.style.top = posTop + 'px';
 
-                // Handle swipe indicators - position trajectory line
+                // Handle swipe indicators - position trajectory line and animated dot
                 if (indicator.classList.contains('swipe-indicator')) {
                     const endX = parseFloat(indicator.dataset.endX) || x;
                     const endY = parseFloat(indicator.dataset.endY) || y;
@@ -5772,20 +5927,19 @@
                     const endLeft = endX * scaleX;
                     const endTop = (endY + yOffsetPixels) * scaleY;
 
-                    // Calculate line length and angle for trajectory
+                    // Calculate delta from start to end (relative to parent which is at start position)
                     const dx = endLeft - posLeft;
                     const dy = endTop - posTop;
                     const lineLength = Math.sqrt(dx * dx + dy * dy);
                     const angle = Math.atan2(dy, dx) * (180 / Math.PI);
 
-                    // Set CSS custom properties for trajectory line
-                    const trajectoryLine = indicator.querySelector('.swipe-trajectory-line');
-                    if (trajectoryLine) {
-                        trajectoryLine.style.setProperty('--start-x', posLeft + 'px');
-                        trajectoryLine.style.setProperty('--start-y', posTop + 'px');
-                        trajectoryLine.style.setProperty('--line-length', lineLength + 'px');
-                        trajectoryLine.style.setProperty('--line-angle', angle + 'deg');
-                    }
+                    // Set CSS custom properties RELATIVE to parent (parent is already at start position)
+                    indicator.style.setProperty('--start-x', '0px');
+                    indicator.style.setProperty('--start-y', '0px');
+                    indicator.style.setProperty('--end-x', dx + 'px');
+                    indicator.style.setProperty('--end-y', dy + 'px');
+                    indicator.style.setProperty('--line-length', lineLength + 'px');
+                    indicator.style.setProperty('--line-angle', angle + 'deg');
                 }
             });
         }
@@ -5865,6 +6019,12 @@
                         icon: arrows[dir] || '<span class="material-symbols-outlined">swipe_vertical</span>',
                         label: `SWIPE ${dir.toUpperCase()}`,
                         tooltip: `Swipe ${dir}`
+                    };
+                case 'scroll_to':
+                    return {
+                        icon: '<span class="material-symbols-outlined">unfold_more</span>',
+                        label: 'SCROLL TO',
+                        tooltip: `Scroll to find "${step.target?.text || 'element'}"`
                     };
                 case 'long_press':
                     return {
@@ -6307,6 +6467,23 @@
                 const dir = step.direction || 'up';
                 const distance = step.distance || 400;
                 const distPct = Math.round((distance / SCREEN_HEIGHT) * 100);
+                const scrollToSuggestion = step.scrollToTarget && !step._scrollToConverted ? `
+                    <div class="scroll-to-suggestion">
+                        <div class="suggestion-inline-header">
+                            <span class="material-symbols-outlined">lightbulb</span>
+                            Consider
+                        </div>
+                        <div class="suggestion-inline-text"><code>scroll_to: "${escapeHtml(step.scrollToTarget)}"</code></div>
+                        <div class="suggestion-inline-actions">
+                            <button class="btn-suggestion-add" onclick="convertToScrollTo('${step.id}'); event.stopPropagation();" title="Convert to scroll_to">
+                                <span class="material-symbols-outlined">swap_horiz</span>
+                            </button>
+                            <button class="btn-suggestion-skip" onclick="skipScrollToSuggestion('${step.id}'); event.stopPropagation();" title="Keep as swipe">
+                                <span class="material-symbols-outlined">close</span>
+                            </button>
+                        </div>
+                    </div>
+                ` : '';
                 return `
                     <div class="gesture-config">
                         <div class="config-group">
@@ -6329,6 +6506,7 @@
                                    min="100" step="50">
                             <span class="config-label">px (${distPct}%)</span>
                         </div>
+                        ${scrollToSuggestion}
                     </div>
                 `;
             }
@@ -6372,6 +6550,30 @@
                         <div class="config-group">
                             <span class="config-label">Position:</span>
                             <span class="config-value">${xPct}%, ${yPct}%</span>
+                        </div>
+                    </div>
+                `;
+            }
+
+            // SCROLL_TO gestures (converted from swipe)
+            if (step.action === 'scroll_to') {
+                const dir = step.direction || 'down';
+                return `
+                    <div class="gesture-config">
+                        <div class="config-group" style="flex: 1;">
+                            <span class="config-label">Target:</span>
+                            <input type="text" value="${escapeHtml(step.target?.text || '')}"
+                                   oninput="debounce('scrolltarget-${step.id}', () => updateStepTarget('${step.id}', this.value)); event.stopPropagation();"
+                                   placeholder="Element to scroll to">
+                        </div>
+                        <div class="config-group">
+                            <span class="config-label">Direction:</span>
+                            <select onchange="updateSwipeDirection('${step.id}', this.value); event.stopPropagation();">
+                                <option value="down" ${dir === 'down' ? 'selected' : ''}>Down</option>
+                                <option value="up" ${dir === 'up' ? 'selected' : ''}>Up</option>
+                                <option value="left" ${dir === 'left' ? 'selected' : ''}>Left</option>
+                                <option value="right" ${dir === 'right' ? 'selected' : ''}>Right</option>
+                            </select>
                         </div>
                     </div>
                 `;
@@ -6488,6 +6690,7 @@
             const panel = document.getElementById('stepsPanel');
             panel.innerHTML = steps.map((step, index) => renderStepCard(step, index)).join('');
             updateHeaderMeta();
+            renderQuickNav();
             setTimeout(startFrameAnimations, 100);
         };
 
@@ -6578,6 +6781,7 @@
             document.querySelectorAll('.step-card').forEach(card => {
                 card.classList.toggle('active', card.dataset.id === stepId);
             });
+            updateQuickNavActive();
         }
 
         // Step Editing Functions
@@ -6847,7 +7051,7 @@
             // Add the suggested verification to the step's verifications
             step.verifications.push({ description: step.suggestedVerification });
             step.verificationAdded = true;
-            renderSteps();
+            rerenderStepCard(stepId);
         }
 
         function editSuggestion(stepId) {
@@ -6871,7 +7075,27 @@
             const step = steps.find(s => s.id === stepId);
             if (step) {
                 step.verificationAdded = true;
-                renderSteps();
+                rerenderStepCard(stepId);
+            }
+        }
+
+        // Scroll-to suggestion functions
+        function convertToScrollTo(stepId) {
+            const step = steps.find(s => s.id === stepId);
+            if (!step || !step.scrollToTarget) return;
+
+            // Convert swipe to scroll_to
+            step.action = 'scroll_to';
+            step.target = { text: step.scrollToTarget };
+            step._scrollToConverted = true;
+            rerenderStepCard(stepId);
+        }
+
+        function skipScrollToSuggestion(stepId) {
+            const step = steps.find(s => s.id === stepId);
+            if (step) {
+                step._scrollToConverted = true;  // Hide the suggestion
+                rerenderStepCard(stepId);
             }
         }
 
@@ -8262,6 +8486,12 @@
                     text: step.text || null,
                     submit: step.submit || false,
                     tap_count: step.tapCount || null,
+                    index: step.index || null,  // Original step index
+                    action_description: step.analysis?.action || null,  // "User taps on 5"
+                    // Include end coordinates for swipe distance calculation
+                    end_coordinates: step.target?.endX !== undefined && step.target?.endY !== undefined
+                        ? { x: step.target.endX, y: step.target.endY }
+                        : null,
                 }));
 
                 // Get verifications (if any)
@@ -8433,6 +8663,14 @@
                 } else {
                     yaml += `${indent}- swipe: ${dir}\n`;
                 }
+            } else if (step.action === 'scroll_to') {
+                const target = step.target?.text || '';
+                const dir = step.direction || 'down';
+                if (dir !== 'down') {
+                    yaml += `${indent}- scroll_to: {element: "${escapeYamlString(target)}", direction: ${dir}}\n`;
+                } else {
+                    yaml += `${indent}- scroll_to: "${escapeYamlString(target)}"\n`;
+                }
             } else if (step.action === 'type') {
                 const text = step.text || step.target?.text || '';
                 const submit = step.submit || false;
@@ -8541,7 +8779,7 @@
                 indicator.style.left = (x * scaleX) + 'px';
                 indicator.style.top = (adjustedY * scaleY) + 'px';
 
-                // Handle swipe indicators
+                // Handle swipe indicators - position trajectory line and animated dot
                 if (indicator.classList.contains('swipe-indicator')) {
                     const endX = parseFloat(indicator.dataset.endX) || x;
                     const endY = parseFloat(indicator.dataset.endY) || y;
@@ -8552,20 +8790,19 @@
                     const endLeft = endX * scaleX;
                     const endTop = adjustedEndY * scaleY;
 
-                    // Calculate line length and angle for trajectory
+                    // Calculate delta from start to end (relative to parent which is at start position)
                     const dx = endLeft - startLeft;
                     const dy = endTop - startTop;
                     const lineLength = Math.sqrt(dx * dx + dy * dy);
                     const angle = Math.atan2(dy, dx) * (180 / Math.PI);
 
-                    // Set CSS custom properties for trajectory line
-                    const trajectoryLine = indicator.querySelector('.swipe-trajectory-line');
-                    if (trajectoryLine) {
-                        trajectoryLine.style.setProperty('--start-x', startLeft + 'px');
-                        trajectoryLine.style.setProperty('--start-y', startTop + 'px');
-                        trajectoryLine.style.setProperty('--line-length', lineLength + 'px');
-                        trajectoryLine.style.setProperty('--line-angle', angle + 'deg');
-                    }
+                    // Set CSS custom properties RELATIVE to parent (parent is already at start position)
+                    indicator.style.setProperty('--start-x', '0px');
+                    indicator.style.setProperty('--start-y', '0px');
+                    indicator.style.setProperty('--end-x', dx + 'px');
+                    indicator.style.setProperty('--end-y', dy + 'px');
+                    indicator.style.setProperty('--line-length', lineLength + 'px');
+                    indicator.style.setProperty('--line-angle', angle + 'deg');
                 }
             });
         }
@@ -8583,20 +8820,19 @@
             const endXPx = (endXPct / 100) * wrapperWidth;
             const endYPx = (endYPct / 100) * wrapperHeight;
 
-            // Calculate full distance and angle
+            // Calculate delta from start to end (relative to parent which is at start position)
             const dx = endXPx - startXPx;
             const dy = endYPx - startYPx;
             const lineLength = Math.sqrt(dx * dx + dy * dy);
             const angle = Math.atan2(dy, dx) * (180 / Math.PI);
 
-            // Set CSS variables for trajectory line - full length
-            const trajectoryLine = swipeIndicator.querySelector('.swipe-trajectory-line');
-            if (trajectoryLine) {
-                trajectoryLine.style.setProperty('--start-x', startXPx + 'px');
-                trajectoryLine.style.setProperty('--start-y', startYPx + 'px');
-                trajectoryLine.style.setProperty('--line-length', lineLength + 'px');
-                trajectoryLine.style.setProperty('--line-angle', angle + 'deg');
-            }
+            // Set CSS variables RELATIVE to parent (parent is already at start position)
+            swipeIndicator.style.setProperty('--start-x', '0px');
+            swipeIndicator.style.setProperty('--start-y', '0px');
+            swipeIndicator.style.setProperty('--end-x', dx + 'px');
+            swipeIndicator.style.setProperty('--end-y', dy + 'px');
+            swipeIndicator.style.setProperty('--line-length', lineLength + 'px');
+            swipeIndicator.style.setProperty('--line-angle', angle + 'deg');
         }
 
         // Re-position indicators on window resize

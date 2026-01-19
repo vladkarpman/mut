@@ -7,9 +7,11 @@ Run YAML-based mobile UI tests anywhere - CI/CD, local development, or scripts.
 - **Run anywhere** - No Claude Code dependency, works in CI/CD
 - **Fast screenshots** - ~50ms via scrcpy frame buffer
 - **AI verification** - Gemini 2.5 Flash for visual assertions
-- **Video recording** - Capture test execution for debugging
+- **Video recording** - Capture test execution with native touch indicators
 - **Record tests** - Capture user interactions with approval UI
 - **Conditional actions** - Branch based on screen state
+- **Rich HTML reports** - Animated gesture indicators on screenshots
+- **Parallel AI analysis** - Post-execution verification of all steps
 - **Verbose logging** - Debug-level file logging for troubleshooting
 
 ## Installation
@@ -77,8 +79,9 @@ tests:
 | Action | Description | Example |
 |--------|-------------|---------|
 | `tap` | Tap element by text or coordinates | `tap: "Submit"` or `tap: [540, 1200]` |
+| `double_tap` | Double tap element | `double_tap: "Image"` |
 | `type` | Type text into focused field | `type: "hello@example.com"` |
-| `swipe` | Swipe gesture | `swipe: {direction: up, distance: 300}` |
+| `swipe` | Swipe gesture | `swipe: {direction: up, distance: 30}` |
 | `long_press` | Long press element | `long_press: "Item"` |
 | `back` | Press back button | `back` |
 | `hide_keyboard` | Dismiss keyboard | `hide_keyboard` |
@@ -123,6 +126,12 @@ tests:
     - tap: "Skip for now"
   else:
     - tap: "Continue"
+
+# Repeat steps multiple times
+- repeat: 3
+  steps:
+    - tap: "Add Item"
+    - wait: 0.5s
 ```
 
 ## Commands
@@ -141,8 +150,14 @@ mut run tests/login.yaml --device emulator-5554
 # Custom output directory
 mut run tests/login.yaml --output reports/
 
+# Record video during test (with native touch indicators)
+mut run tests/login.yaml --video
+
 # Generate JUnit XML report
 mut run tests/login.yaml --junit results.xml
+
+# Verbose output (show each step)
+mut run tests/login.yaml --verbose
 ```
 
 ### `mut record <name>`
@@ -261,8 +276,32 @@ tests/my-test/
 ├── test.yaml              # Test definition
 └── runs/
     └── 2026-01-17_14-30-25/
-        └── debug.log      # Run-specific logs
+        ├── debug.log      # Run logs (if MUT_VERBOSE=true)
+        ├── results.json   # Full test results
+        ├── report.html    # Interactive HTML report
+        └── recording/     # Video recording (if --video)
+            └── video.mp4
 ```
+
+## HTML Reports
+
+After each test run, an interactive HTML report is generated with:
+
+- **Step-by-step breakdown** - Before/after screenshots for each action
+- **Animated gesture indicators** - Visual overlay showing tap, swipe, and long press gestures
+- **AI analysis** - Each step shows AI verification results and suggestions for failures
+- **Pass/fail status** - Clear visual indicators for test results
+
+### Gesture Visualization
+
+| Gesture | Indicator |
+|---------|-----------|
+| tap | Bouncing dot with ripple animation |
+| double_tap | Staggered double circles |
+| long_press | Pulsing dot with progress arc |
+| swipe | Gradient trail with animated dot |
+
+Open `report.html` in any browser to view the test results interactively.
 
 ## CI/CD Integration
 

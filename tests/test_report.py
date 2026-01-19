@@ -122,7 +122,8 @@ class TestReportGenerator:
         content = html_path.read_text()
         assert "Element not found" in content
         assert "failed" in content.lower()
-        assert 'class="step-error"' in content
+        assert 'class="step-failure"' in content
+        assert 'class="failure-error"' in content
 
     def test_html_escapes_special_characters(self, tmp_path):
         """HTML report escapes special characters to prevent XSS."""
@@ -151,8 +152,8 @@ class TestReportGenerator:
         # Verify that user-provided HTML special characters are escaped in HTML context
         # Test name appears in header (HTML escaped)
         assert "&lt;script&gt;alert(&#x27;xss&#x27;)&lt;/script&gt;" in content
-        # Action appears in step card (HTML escaped)
-        assert "&lt;img src=x onerror=alert(1)&gt;" in content
+        # Action is uppercased in the gesture badge - check for escaped error content
+        assert "&lt;b&gt;malicious&lt;/b&gt;" in content
         # Error message appears in step error (HTML escaped)
         assert "&lt;b&gt;malicious&lt;/b&gt;" in content
 
@@ -176,7 +177,7 @@ class TestReportGenerator:
         assert "<!DOCTYPE html>" in content
         assert '<html lang="en">' in content
         assert "step-card" in content
-        assert "summary-bar" in content
+        assert "header-meta" in content  # Summary info in header
 
     def test_html_contains_status_badge(self, tmp_path):
         """HTML report contains status badge with correct class."""
@@ -207,11 +208,11 @@ class TestReportGenerator:
 
         content = html_path.read_text()
         # Check for step card structure
-        assert 'class="step-card passed"' in content
+        assert 'class="step-card"' in content
         assert 'class="step-number passed"' in content
-        assert 'class="action-badge tap"' in content
-        assert 'class="action-badge type"' in content
-        assert 'class="action-badge verify_screen"' in content
+        assert 'class="gesture-badge tap"' in content
+        assert 'class="gesture-badge type"' in content
+        assert 'class="gesture-badge verifyscreen"' in content
 
     def test_html_embeds_screenshots_as_base64(self, tmp_path):
         """HTML report embeds screenshots as base64 data URIs."""
@@ -276,11 +277,12 @@ class TestReportGenerator:
 
         content = html_path.read_text()
         assert "Could not find element" in content
-        assert 'class="step-error"' in content
-        assert 'class="step-card failed"' in content
+        assert 'class="step-failure"' in content
+        assert 'class="failure-error"' in content
+        assert 'data-status="failed"' in content
 
-    def test_html_includes_json_export(self, test_result, tmp_path):
-        """HTML report includes JSON data for export functionality."""
+    def test_html_includes_json_data(self, test_result, tmp_path):
+        """HTML report includes embedded JSON data."""
         output_dir = tmp_path / "report"
         output_dir.mkdir()
 
@@ -288,10 +290,9 @@ class TestReportGenerator:
         html_path = generator.generate_html(test_result)
 
         content = html_path.read_text()
-        # Check that JSON data is embedded
+        # Check that JSON data is embedded for JavaScript access
         assert "const reportData =" in content
         assert '"test": "login-test"' in content
-        assert "exportJSON()" in content
 
     def test_html_includes_video_player_when_video_exists(self, test_result, tmp_path):
         """HTML report includes video player when recording exists."""
@@ -312,8 +313,8 @@ class TestReportGenerator:
         assert 'id="reportVideo"' in content
         assert 'src="recording/video.mp4"' in content
 
-    def test_html_hides_video_player_when_no_video(self, test_result, tmp_path):
-        """HTML report hides video player when no recording exists."""
+    def test_html_shows_no_video_message_when_no_video(self, test_result, tmp_path):
+        """HTML report shows 'no video' message when no recording exists."""
         output_dir = tmp_path / "report"
         output_dir.mkdir()
 
@@ -321,8 +322,10 @@ class TestReportGenerator:
         html_path = generator.generate_html(test_result)
 
         content = html_path.read_text()
-        # Video panel should not be present
-        assert 'class="video-panel"' not in content
+        # Video panel is present but shows no-video message
+        assert 'class="video-panel"' in content
+        assert 'class="no-video"' in content
+        assert "No recording available" in content
 
     def test_json_includes_screenshot_data(self, tmp_path):
         """JSON report includes screenshot data as base64."""

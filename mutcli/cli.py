@@ -79,13 +79,17 @@ def run(
     device: str | None = typer.Option(None, "--device", "-d", help="Device ID"),
     output: Path | None = typer.Option(None, "--output", "-o", help="Output directory"),
     junit: Path | None = typer.Option(None, "--junit", help="JUnit XML output path"),
-    video: bool = typer.Option(False, "--video", "-v", help="Record video during test"),
-    ai_analysis: bool = typer.Option(
-        False, "--ai", "-a", help="AI analysis of all steps"
+    video: bool = typer.Option(
+        True, "--video/--no-video", "-v", help="Record video during test"
     ),
+    ai_analysis: bool = typer.Option(
+        True, "--ai/--no-ai", "-a", help="AI analysis of all steps (enabled by default)"
+    ),
+    verbose: bool = typer.Option(False, "--verbose", help="Show detailed step-by-step output"),
 ) -> None:
     """Execute a YAML test file."""
     from mutcli.core.config import ConfigLoader, setup_logging
+    from mutcli.core.console_reporter import ConsoleReporter
     from mutcli.core.device_controller import DeviceController
     from mutcli.core.executor import TestExecutor
     from mutcli.core.parser import ParseError, TestParser
@@ -119,15 +123,16 @@ def run(
     if device:
         config.device = device
 
-    # Determine device
+    # Determine device and get device info
+    devices_list = DeviceController.list_devices()
     if not config.device:
-        # Try to find a device
-        devices_list = DeviceController.list_devices()
         if not devices_list:
             console.print("[red]Error:[/red] No devices found. Run 'mut devices' to check.")
             raise typer.Exit(2)
         config.device = devices_list[0]["id"]
-        console.print(f"[dim]Using device: {config.device}[/dim]")
+
+    device_info = next((d for d in devices_list if d["id"] == config.device), None)
+    device_display = f"{device_info['name']} ({config.device})" if device_info else config.device
 
     # Parse test file
     try:
@@ -136,7 +141,32 @@ def run(
         console.print(f"[red]Parse error:[/red] {e}")
         raise typer.Exit(2)
 
-    console.print(f"[blue]Running test:[/blue] {test_file}")
+    # Calculate step counts
+    setup_count = len(test.setup)
+    main_count = len(test.steps)
+    teardown_count = len(test.teardown)
+    total_steps = setup_count + main_count + teardown_count
+
+    # Show test summary panel
+    test_name = test_dir.name
+    app_name = test.config.app or "unknown"
+    step_summary = f"{total_steps} steps"
+    if setup_count or teardown_count:
+        parts = []
+        if setup_count:
+            parts.append(f"setup: {setup_count}")
+        parts.append(f"main: {main_count}")
+        if teardown_count:
+            parts.append(f"teardown: {teardown_count}")
+        step_summary = f"{total_steps} ({', '.join(parts)})"
+
+    panel_content = f"[dim]Test:[/dim]   {test_name}\n"
+    panel_content += f"[dim]App:[/dim]    {app_name}\n"
+    panel_content += f"[dim]Steps:[/dim]  {step_summary}"
+    console.print(Panel(panel_content, border_style="blue", padding=(0, 1)))
+    console.print()
+
+    console.print(f"[dim]Device: {device_display}[/dim]")
 
     # Generate report
     timestamp = datetime.now().strftime("%Y-%m-%d_%H-%M")
@@ -153,28 +183,37 @@ def run(
     if video:
         from mutcli.core.scrcpy_service import ScrcpyService
 
-        console.print("[dim]Connecting to device for video recording...[/dim]")
+        console.print("[dim]Connecting for video recording...[/dim]")
         scrcpy = ScrcpyService(config.device)
         if not scrcpy.connect():
             console.print("[yellow]Warning:[/yellow] Could not connect scrcpy, video disabled")
             scrcpy = None
 
-    # Execute test
+    # Execute test with live output
+    console.print()
+
+    # Create live reporter for step-by-step output
+    reporter = ConsoleReporter(test_name, total_steps, console=console)
+
     try:
         executor = TestExecutor(
             device_id=config.device,
             config=config,
             scrcpy=scrcpy,
             output_dir=report_dir,
+            reporter=reporter,
         )
+
+        reporter.start()
         result = executor.execute_test(test, record_video=video and scrcpy is not None)
+        reporter.finish(result.status, result.duration)
 
         # AI analysis of all steps (if requested)
         if ai_analysis and result.steps:
             from mutcli.core.ai_analyzer import AIAnalyzer
             from mutcli.core.step_verifier import StepVerifier
 
-            console.print("[dim]Running AI analysis on steps...[/dim]")
+            console.print()
             analyzer = AIAnalyzer()
             verifier = StepVerifier(analyzer)
 
@@ -188,18 +227,37 @@ def run(
                     "error": s.error,
                     "screenshot_before": s.screenshot_before,
                     "screenshot_after": s.screenshot_after,
+                    "details": s.details,
                 }
                 for s in result.steps
             ]
-            analyses = verifier.analyze_all_steps(step_dicts)
+
+            # Run parallel analysis with progress bar
+            with Progress(
+                TextColumn("[blue]AI analysis...[/blue]"),
+                BarColumn(),
+                TextColumn("{task.completed}/{task.total}"),
+                console=console,
+            ) as progress:
+                task = progress.add_task("", total=len(step_dicts))
+
+                def on_progress(completed: int, total: int) -> None:
+                    progress.update(task, completed=completed)
+
+                analyses = asyncio.run(
+                    verifier.analyze_all_steps_parallel(
+                        step_dicts,
+                        on_progress=on_progress,
+                        app_package=test.config.app,
+                        test_name=test_name,
+                    )
+                )
 
             # Populate AI fields in StepResult
             for step, analysis in zip(result.steps, analyses):
                 step.ai_verified = analysis.verified
                 step.ai_outcome = analysis.outcome_description
                 step.ai_suggestion = analysis.suggestion
-
-            console.print(f"[dim]AI analyzed {len(analyses)} steps[/dim]")
 
     finally:
         # Disconnect scrcpy if it was connected
@@ -215,15 +273,9 @@ def run(
     generator.generate_json(result)
     html_path = generator.generate_html(result)
 
-    # Show result
-    if result.status == "passed":
-        console.print(f"[green]PASSED[/green] ({result.duration:.1f}s)")
-    else:
-        console.print(f"[red]FAILED[/red] ({result.duration:.1f}s)")
-        if result.error:
-            console.print(f"[red]Error:[/red] {result.error}")
-
-    console.print(f"\n[dim]Report: {html_path}[/dim]")
+    # Show report path (result status already shown by reporter)
+    console.print()
+    console.print(f"[dim]Report: {html_path}[/dim]")
 
     # Generate JUnit if requested
     if junit:
@@ -235,6 +287,41 @@ def run(
         raise typer.Exit(0)
     else:
         raise typer.Exit(1)
+
+
+def _print_step_results(steps: list, total: int) -> None:
+    """Print all step results in verbose mode.
+
+    Args:
+        steps: List of StepResult objects
+        total: Total number of steps
+    """
+    for step in steps:
+        status_icon = "[green]✓[/green]" if step.status == "passed" else "[red]✗[/red]"
+        step_info = f"[{step.step_number}/{total}] {status_icon} {step.action}"
+        if step.target:
+            step_info += f" '{step.target}'"
+        step_info += f" [dim]({step.duration:.2f}s)[/dim]"
+        console.print(step_info)
+        if step.status == "failed" and step.error:
+            console.print(f"    [red]Error:[/red] {step.error}")
+
+
+def _print_failed_step(step, total: int) -> None:
+    """Print details of a failed step.
+
+    Args:
+        step: The failed StepResult
+        total: Total number of steps
+    """
+    console.print()
+    console.print(f"[red]✗ Failed at step {step.step_number}/{total}[/red]")
+    action_info = f"  Action: {step.action}"
+    if step.target:
+        action_info += f" '{step.target}'"
+    console.print(action_info)
+    if step.error:
+        console.print(f"  Error: {step.error}")
 
 
 @app.command()
@@ -578,15 +665,9 @@ def _process_recording(
         except Exception as e:
             console.print(f"  [dim]Could not load window states: {e}[/dim]")
 
-    # Load UI hierarchy dumps for element enrichment
-    ui_dumps_path = test_dir / "ui_dumps.json"
-    if ui_dumps_path.exists():
-        try:
-            with open(ui_dumps_path) as f:
-                adb_data["ui_dumps"] = json.load(f)
-            console.print(f"  Loaded {len(adb_data['ui_dumps'])} UI hierarchy dumps")
-        except Exception as e:
-            console.print(f"  [dim]Could not load UI dumps: {e}[/dim]")
+    # UI hierarchy dumps disabled - they caused timing issues where element data
+    # from wrong screen state was provided to AI, leading to incorrect analysis.
+    # AI vision analysis of screenshots is more reliable.
 
     # keyboard_states already loaded earlier for typing detection
     if keyboard_states:
@@ -709,6 +790,7 @@ def _build_preview_steps(
         before_desc = analyzed.before_description if analyzed else ""
         after_desc = analyzed.after_description if analyzed else ""
         suggested_verification = analyzed.suggested_verification if analyzed else None
+        scroll_to_target = analyzed.scroll_to_target if analyzed else None
 
         # Get coordinates based on action type
         if step.coordinates:
@@ -751,6 +833,7 @@ def _build_preview_steps(
             timestamp=step.timestamp,
             frames=frames,
             suggested_verification=suggested_verification,
+            scroll_to_target=scroll_to_target,
             end_coordinates=end_coords,
         ))
 
@@ -828,6 +911,7 @@ def _build_preview_steps_from_analysis(
             timestamp=step_data.get("timestamp", 0.0),
             frames=frames,
             suggested_verification=step_data.get("suggested_verification"),
+            scroll_to_target=step_data.get("scroll_to_target"),
             end_coordinates=end_coords,
         ))
 
@@ -913,6 +997,7 @@ def _build_analysis_data(
             "before_description": analyzed.before_description if analyzed else "",
             "after_description": analyzed.after_description if analyzed else "",
             "suggested_verification": analyzed.suggested_verification if analyzed else None,
+            "scroll_to_target": analyzed.scroll_to_target if analyzed else None,
             "enabled": True,
         }
 
@@ -1049,7 +1134,20 @@ def _start_preview_and_generate_yaml(
                 generator.add_type(text, submit=submit)
         elif action == "swipe":
             direction = step_data.get("direction", "up")
-            generator.add_swipe(direction)
+            # Calculate distance from start/end coordinates
+            distance_str = None
+            end_coords = step_data.get("end_coordinates", {})
+            if isinstance(end_coords, dict) and coords_tuple:
+                start_x, start_y = coords_tuple
+                end_x = end_coords.get("x", start_x)
+                end_y = end_coords.get("y", start_y)
+                if direction in ("up", "down") and screen_height:
+                    distance_pct = abs(end_y - start_y) / screen_height * 100
+                    distance_str = f"{round(distance_pct)}%"
+                elif direction in ("left", "right") and screen_width:
+                    distance_pct = abs(end_x - start_x) / screen_width * 100
+                    distance_str = f"{round(distance_pct)}%"
+            generator.add_swipe(direction, distance=distance_str, description=description)
         elif action == "long_press":
             # Long press is not directly supported in YAML format
             # For now, generate a tap with the element/coordinates
@@ -1182,10 +1280,13 @@ def preview(
     preview_lookup = {ps.index: ps for ps in preview_steps}
 
     # Filter to enabled steps, excluding app_launched
+    # Use actual step index from data, not enumeration position
     enabled_indices = []
-    for i, step in enumerate(result.steps):
+    for step in result.steps:
         if step.get("enabled", True) and step.get("action") != "app_launched":
-            enabled_indices.append(i + 1)  # 1-based index
+            step_index = step.get("index")
+            if step_index is not None:
+                enabled_indices.append(step_index)
 
     # Build verification map from approval result (only enabled ones)
     verification_map: dict[int, str] = {}
@@ -1221,7 +1322,18 @@ def preview(
                 generator.add_verify_screen(verification)
         elif action == "swipe":
             direction = preview_step.direction or "up"
-            generator.add_swipe(direction=direction)
+            # Calculate distance from start/end coordinates
+            distance_str = None
+            if coords and preview_step.end_coordinates:
+                start_x, start_y = coords
+                end_x, end_y = preview_step.end_coordinates
+                if direction in ("up", "down") and screen_height:
+                    distance_pct = abs(end_y - start_y) / screen_height * 100
+                    distance_str = f"{round(distance_pct)}%"
+                elif direction in ("left", "right") and screen_width:
+                    distance_pct = abs(end_x - start_x) / screen_width * 100
+                    distance_str = f"{round(distance_pct)}%"
+            generator.add_swipe(direction=direction, distance=distance_str, description=description)
             if verification:
                 generator.add_verify_screen(verification)
         elif action == "long_press":
@@ -1231,6 +1343,8 @@ def preview(
                 description=description,
                 verification=verification,
             )
+
+    generator.add_terminate_app()
 
     yaml_path = test_dir / "test.yaml"
     generator.save(yaml_path)
