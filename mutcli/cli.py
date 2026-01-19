@@ -331,11 +331,22 @@ def record(
         ..., "--app", "-a", help="App package name (required for UI element capture)"
     ),
     device: str | None = typer.Option(None, "--device", "-d", help="Device ID"),
+    legacy: bool = typer.Option(
+        False, "--legacy", help="Use legacy getevent-based recording (touch physical device)"
+    ),
+    scale: float = typer.Option(
+        0.5, "--scale", "-s", help="Window scale for interactive mode (0.5 = half size)"
+    ),
 ) -> None:
-    """Start recording user interactions."""
+    """Start recording user interactions.
+
+    By default, opens a GUI window showing the device screen.
+    Click/drag on the window to record touches with perfect accuracy.
+
+    Use --legacy to record by touching the physical device (less accurate).
+    """
     from mutcli.core.config import ConfigLoader, setup_logging
     from mutcli.core.device_controller import DeviceController
-    from mutcli.core.recorder import Recorder
 
     # Load config for verbose setting
     try:
@@ -358,6 +369,88 @@ def record(
     # Suppress noisy myscrcpy library logs
     logging.getLogger("myscrcpy").setLevel(logging.WARNING)
 
+    if legacy:
+        # Legacy mode: use getevent-based recording (touch physical device)
+        _record_legacy(name, device_id, device_display, app, config)
+    else:
+        # Interactive mode: GUI window with injection-based recording
+        _record_interactive(name, device_id, device_display, app, config, scale)
+
+
+def _record_interactive(
+    name: str,
+    device_id: str,
+    device_display: str,
+    app: str,
+    config: Any,
+    scale: float,
+) -> None:
+    """Interactive recording via GUI window."""
+    from mutcli.core.config import setup_logging
+    from mutcli.core.interactive_recorder import InteractiveRecorder
+
+    # Create recorder
+    recorder = InteractiveRecorder(
+        name=name,
+        device_id=device_id,
+        window_scale=scale,
+    )
+
+    # Setup verbose logging
+    if config and config.verbose:
+        log_file = setup_logging(verbose=True, log_dir=recorder.output_dir)
+        if log_file:
+            console.print(f"[dim]Verbose logging -> {log_file}[/dim]")
+
+    # Display info panel
+    content = f"[dim]Device:[/dim]  {device_display}\n"
+    content += f"[dim]App:[/dim]     {app}\n"
+    content += f"[dim]Output:[/dim]  {recorder.output_dir}\n"
+    content += f"[dim]Mode:[/dim]    Interactive (injection-based)"
+    panel = Panel(
+        content,
+        title=f"[bold]Recording: {name}[/bold]",
+        border_style="blue",
+    )
+    console.print(panel)
+
+    console.print()
+    console.print("Opening recording window...")
+    console.print("Click/drag on the window to record touches.")
+    console.print("Close the window (ESC or Q) to stop recording.")
+    console.print()
+
+    # Run interactive recording (blocks until window closed)
+    result = recorder.record()
+
+    if not result.get("success"):
+        console.print(f"[red]Error:[/red] {result.get('error', 'Failed to record')}")
+        raise typer.Exit(2)
+
+    # Show results
+    console.print()
+    console.print("[green]Recording saved![/green]")
+    console.print(f"  Events: {result.get('event_count', 0)}")
+    duration = result.get("duration_seconds")
+    if duration is not None:
+        console.print(f"  Duration: {duration:.1f}s")
+    console.print()
+
+    # Automatically proceed to preview UI for approval
+    _process_recording(recorder.output_dir / "recording", recorder.output_dir, name, app)
+
+
+def _record_legacy(
+    name: str,
+    device_id: str,
+    device_display: str,
+    app: str,
+    config: Any,
+) -> None:
+    """Legacy recording via getevent (touch physical device)."""
+    from mutcli.core.config import setup_logging
+    from mutcli.core.recorder import Recorder
+
     # Create and start recorder
     recorder = Recorder(name=name, device_id=device_id, app_package=app)
 
@@ -365,7 +458,7 @@ def record(
     if config and config.verbose:
         log_file = setup_logging(verbose=True, log_dir=recorder.output_dir)
         if log_file:
-            console.print(f"[dim]Verbose logging → {log_file}[/dim]")
+            console.print(f"[dim]Verbose logging -> {log_file}[/dim]")
     result = recorder.start()
 
     if not result.get("success"):
@@ -375,7 +468,8 @@ def record(
     # Display info panel
     content = f"[dim]Device:[/dim]  {device_display}\n"
     content += f"[dim]App:[/dim]     {app}\n"
-    content += f"[dim]Output:[/dim]  {result['output_dir']}"
+    content += f"[dim]Output:[/dim]  {result['output_dir']}\n"
+    content += f"[dim]Mode:[/dim]    Legacy (getevent-based)"
     panel = Panel(
         content,
         title=f"[bold]Recording: {name}[/bold]",
@@ -385,11 +479,9 @@ def record(
 
     # Status and prompt
     console.print()
-    console.print("🎬 [green]Recording...[/green] interact with your device")
+    console.print("Recording... interact with your physical device")
     console.print()
-    console.print("┌─────────────────────────┐")
-    console.print("│  Press Ctrl+C to stop   │")
-    console.print("└─────────────────────────┘")
+    console.print("Press Ctrl+C to stop")
 
     # Wait for Ctrl+C
     try:

@@ -10,7 +10,8 @@ from typing import Any
 
 import numpy as np
 from adbutils import adb
-from myscrcpy.core import Session, VideoArgs
+from myscrcpy.core import ControlArgs, Session, VideoArgs
+from myscrcpy.core.control import Action
 from PIL import Image
 
 logger = logging.getLogger("mut.scrcpy")
@@ -21,17 +22,20 @@ class ScrcpyService:
 
     Uses MYScrcpy for scrcpy 3.x support. Maintains a circular frame buffer
     for instant screenshots (~50ms) and handles video recording via PyAV.
+    Optionally enables control mode for touch injection.
     """
 
     FRAME_BUFFER_SIZE = 10
 
-    def __init__(self, device_id: str):
+    def __init__(self, device_id: str, enable_control: bool = False):
         """Initialize service for a specific device.
 
         Args:
             device_id: ADB device identifier
+            enable_control: Enable control mode for touch injection
         """
         self._device_id = device_id
+        self._enable_control = enable_control
         self._session: Session | None = None
         self._frame_buffer: deque[Any] = deque(maxlen=self.FRAME_BUFFER_SIZE)
         self._lock = threading.Lock()
@@ -88,11 +92,12 @@ class ScrcpyService:
 
             logger.info(f"Connecting to {self._device_id}...")
 
-            # Create session with video only
+            # Create session with video, optionally with control
+            control_args = ControlArgs() if self._enable_control else None
             self._session = Session(
                 device,
                 video_args=VideoArgs(fps=60),
-                control_args=None,  # No control needed
+                control_args=control_args,
             )
 
             # Wait for video stream to initialize
@@ -391,3 +396,126 @@ class ScrcpyService:
             "oldest_frame_age_ms": int((time.time() - oldest_ts) * 1000) if oldest_ts else None,
             "newest_frame_age_ms": int((time.time() - newest_ts) * 1000) if newest_ts else None,
         }
+
+    def get_screen_size(self) -> tuple[int, int]:
+        """Get device screen dimensions.
+
+        Returns:
+            Tuple of (width, height) in pixels
+        """
+        with self._lock:
+            return self._width, self._height
+
+    def get_latest_frame(self) -> np.ndarray | None:
+        """Get latest frame as numpy array (RGB).
+
+        Returns:
+            Frame as numpy array or None if no frames available
+        """
+        with self._lock:
+            if not self._frame_buffer:
+                return None
+            return self._frame_buffer[-1]["frame"].copy()
+
+    @property
+    def is_control_ready(self) -> bool:
+        """Check if control mode is ready for touch injection."""
+        return (
+            self._enable_control
+            and self._session is not None
+            and self._session.ca is not None
+        )
+
+    def inject_touch(
+        self,
+        action: int,
+        x: int,
+        y: int,
+        touch_id: int = 0,
+    ) -> bool:
+        """Inject touch event to device.
+
+        Args:
+            action: Action.DOWN (0), Action.RELEASE (1), or Action.MOVE (2)
+            x: Screen X coordinate in pixels
+            y: Screen Y coordinate in pixels
+            touch_id: Touch pointer ID for multi-touch (default 0)
+
+        Returns:
+            True if injection succeeded, False otherwise
+        """
+        if not self.is_control_ready:
+            logger.warning("Control not ready, cannot inject touch")
+            return False
+
+        try:
+            with self._lock:
+                width = self._width
+                height = self._height
+
+            if width == 0 or height == 0:
+                logger.warning("Screen dimensions not available")
+                return False
+
+            self._session.ca.f_touch(
+                action=action,
+                x=x,
+                y=y,
+                width=width,
+                height=height,
+                touch_id=touch_id,
+            )
+            return True
+
+        except Exception as e:
+            logger.error(f"Touch injection failed: {e}")
+            return False
+
+    def tap(self, x: int, y: int, duration_ms: int = 50) -> bool:
+        """Inject a tap gesture at coordinates.
+
+        Args:
+            x: Screen X coordinate
+            y: Screen Y coordinate
+            duration_ms: Duration between down and up (default 50ms)
+
+        Returns:
+            True if tap succeeded
+        """
+        if not self.inject_touch(Action.DOWN.value, x, y):
+            return False
+        time.sleep(duration_ms / 1000)
+        return self.inject_touch(Action.RELEASE.value, x, y)
+
+    def swipe(
+        self,
+        start_x: int,
+        start_y: int,
+        end_x: int,
+        end_y: int,
+        duration_ms: int = 300,
+        steps: int = 20,
+    ) -> bool:
+        """Inject a swipe gesture.
+
+        Args:
+            start_x, start_y: Starting coordinates
+            end_x, end_y: Ending coordinates
+            duration_ms: Total swipe duration
+            steps: Number of intermediate move events
+
+        Returns:
+            True if swipe succeeded
+        """
+        if not self.inject_touch(Action.DOWN.value, start_x, start_y):
+            return False
+
+        step_delay = duration_ms / steps / 1000
+        for i in range(1, steps + 1):
+            progress = i / steps
+            x = int(start_x + (end_x - start_x) * progress)
+            y = int(start_y + (end_y - start_y) * progress)
+            self.inject_touch(Action.MOVE.value, x, y)
+            time.sleep(step_delay)
+
+        return self.inject_touch(Action.RELEASE.value, end_x, end_y)
