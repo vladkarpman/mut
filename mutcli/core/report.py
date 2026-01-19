@@ -10,6 +10,12 @@ from typing import Any
 from mutcli.core.executor import TestResult
 
 
+class NoVideoError(Exception):
+    """Raised when HTML report is requested but no video is available."""
+
+    pass
+
+
 class ReportGenerator:
     """Generate JSON and HTML test reports."""
 
@@ -132,7 +138,21 @@ class ReportGenerator:
 
         Returns:
             Path to generated report.html
+
+        Raises:
+            NoVideoError: If no video recording is available
         """
+        # Check for video recording
+        run_video_path = self._output_dir / "recording" / "video.mp4"
+        has_run_video = run_video_path.exists()
+        has_source_video = self._source_video_path and self._source_video_path.exists()
+
+        if not has_run_video and not has_source_video:
+            raise NoVideoError(
+                "HTML report requires video recording. "
+                "Run test with --video flag or use JSON report instead."
+            )
+
         data = self._result_to_dict(result)
 
         # Generate steps HTML

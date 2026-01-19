@@ -395,3 +395,53 @@ class TestReportGenerator:
         assert 'src="screenshots/001_tap_before.png"' in content
         assert 'src="screenshots/001_tap_after.png"' in content
         assert "data:image/png;base64" not in content
+
+
+def test_generate_html_requires_video(tmp_path):
+    """generate_html raises error when no video is available."""
+    from mutcli.core.executor import StepResult, TestResult
+    from mutcli.core.report import ReportGenerator, NoVideoError
+
+    output_dir = tmp_path / "report"
+    output_dir.mkdir()
+    # No video file created
+
+    result = TestResult(
+        name="no-video-test",
+        status="passed",
+        duration=1.0,
+        steps=[
+            StepResult(step_number=1, action="tap", status="passed", duration=0.5),
+        ],
+    )
+
+    generator = ReportGenerator(output_dir)
+
+    with pytest.raises(NoVideoError) as exc_info:
+        generator.generate_html(result)
+
+    assert "video recording" in str(exc_info.value).lower()
+
+
+def test_generate_json_works_without_video(tmp_path):
+    """generate_json works even without video."""
+    from mutcli.core.executor import StepResult, TestResult
+    from mutcli.core.report import ReportGenerator
+
+    output_dir = tmp_path / "report"
+    output_dir.mkdir()
+    # No video file
+
+    result = TestResult(
+        name="json-no-video-test",
+        status="passed",
+        duration=1.0,
+        steps=[
+            StepResult(step_number=1, action="tap", status="passed", duration=0.5),
+        ],
+    )
+
+    generator = ReportGenerator(output_dir)
+    json_path = generator.generate_json(result)
+
+    assert json_path.exists()
