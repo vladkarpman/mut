@@ -985,6 +985,7 @@
             flex: 1;
             display: flex;
             flex-direction: column;
+            padding-bottom: 70px;  /* Space for sticky Add Step button */
         }
 
         .video-wrapper {
@@ -1066,8 +1067,8 @@
 
         /* MD3 Add Step Button - FAB Extended Style */
         .btn-add-step {
-            width: 100%;
-            margin-top: var(--space-4);
+            width: calc(100% - 24px);
+            margin: 12px;
             padding: 14px 20px;
             background: var(--md-surface-container-high);
             color: var(--md-primary);
@@ -1081,9 +1082,12 @@
             align-items: center;
             justify-content: center;
             gap: 8px;
-            position: relative;
+            position: absolute;
+            bottom: 0;
+            left: 0;
             overflow: hidden;
             box-shadow: 0 1px 3px rgba(0, 0, 0, 0.15);
+            z-index: 10;
         }
 
         .btn-add-step::before {
@@ -5312,8 +5316,8 @@
 
         /* Quick Navigation (Step Navigator) */
         .quick-nav {
-            margin-top: var(--space-3);
-            padding: var(--space-3) var(--space-4);
+            margin-top: var(--space-1);
+            padding: var(--space-2) var(--space-3);
             background: var(--md-surface);
             border-radius: var(--radius-md);
             flex-shrink: 0;
@@ -5750,6 +5754,12 @@
                 document.getElementById('video').currentTime = step.timestamp;
             }
             setActiveStep(stepId);
+
+            // Scroll to the step card in the steps panel
+            const stepCard = document.querySelector(`.step-card[data-id="${stepId}"]`);
+            if (stepCard) {
+                stepCard.scrollIntoView({ behavior: 'smooth', block: 'center' });
+            }
         }
 
         // Step Rendering
@@ -8487,6 +8497,8 @@
                     end_coordinates: step.target?.endX !== undefined && step.target?.endY !== undefined
                         ? { x: step.target.endX, y: step.target.endY }
                         : null,
+                    // Include duration for swipe velocity
+                    duration_ms: step.durationMs || null,
                 }));
 
                 // Extract verifications from steps
@@ -8521,12 +8533,6 @@
                 // Show success state
                 btn.innerHTML = '<span class="material-symbols-outlined">check_circle</span> Saved!';
                 btn.style.background = '#4caf50';
-
-                // Show success dialog
-                setTimeout(() => {
-                    const dialog = document.getElementById('success-dialog');
-                    dialog.show();
-                }, 100);
 
             } catch (error) {
                 console.error('Failed to save:', error);
@@ -10008,18 +10014,5 @@
         }
     </style>
 
-    <!-- Success Dialog -->
-    <md-dialog id="success-dialog">
-        <div slot="headline">
-            <span class="material-symbols-outlined" style="color: #4caf50; font-size: 28px; vertical-align: middle; margin-right: 8px;">check_circle</span>
-            Test saved successfully
-        </div>
-        <form slot="content" id="success-dialog-form" method="dialog">
-            <p style="color: var(--md-on-surface-variant); margin: 0;">You can close this tab.</p>
-        </form>
-        <div slot="actions">
-            <md-filled-tonal-button form="success-dialog-form" value="ok">OK</md-filled-tonal-button>
-        </div>
-    </md-dialog>
 </body>
 </html>

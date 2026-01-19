@@ -520,9 +520,23 @@ def _process_recording(
             config = None
 
     # 1. Check for existing analysis.json (recovery feature)
+    # Only use cached analysis if it's newer than the recording
     existing_analysis = load_analysis(test_dir)
-    if existing_analysis:
-        console.print("[dim]Found existing analysis.json, skipping AI analysis...[/dim]")
+    analysis_path = test_dir / "analysis.json"
+    touch_events_path_check = test_dir / "touch_events.json"
+
+    use_cached_analysis = False
+    if existing_analysis and analysis_path.exists() and touch_events_path_check.exists():
+        # Compare timestamps: use cache only if analysis is newer than recording
+        analysis_mtime = analysis_path.stat().st_mtime
+        recording_mtime = touch_events_path_check.stat().st_mtime
+        if analysis_mtime > recording_mtime:
+            use_cached_analysis = True
+        else:
+            console.print("[dim]Recording is newer than analysis, re-analyzing...[/dim]")
+
+    if use_cached_analysis:
+        console.print("[dim]Using cached analysis.json...[/dim]")
         # Use existing analysis data directly
         screen_width = existing_analysis.screen_width
         screen_height = existing_analysis.screen_height
@@ -1010,8 +1024,11 @@ def _build_analysis_data(
         if step.action == "type":
             step_dict["tap_count"] = step.tap_count
             step_dict["text"] = step.text
-        elif step.action == "swipe" and step.end:
-            step_dict["end_coordinates"] = {"x": step.end["x"], "y": step.end["y"]}
+        elif step.action == "swipe":
+            if step.end:
+                step_dict["end_coordinates"] = {"x": step.end["x"], "y": step.end["y"]}
+            if step.duration_ms:
+                step_dict["duration_ms"] = step.duration_ms
         elif step.action == "long_press" and step.duration_ms:
             step_dict["duration_ms"] = step.duration_ms
 
