@@ -4,7 +4,7 @@ build-backend = "hatchling.build"
 
 [project]
 name = "mutcli"
-version = "0.3.2"
+version = "0.3.3"
 description = "Mobile UI Testing CLI - Run YAML-based mobile tests anywhere"
 readme = "README.md"
 license = "MIT"
