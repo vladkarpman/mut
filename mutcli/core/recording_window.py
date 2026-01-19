@@ -21,7 +21,8 @@ class RecordingWindow:
     """Tkinter window for recording touch interactions.
 
     Displays the live device screen and converts mouse events to touch
-    events via TouchInjector.
+    events via TouchInjector. Maintains device aspect ratio for accurate
+    coordinate mapping.
 
     Usage:
         window = RecordingWindow(scrcpy, injector, on_close=callback)
@@ -58,10 +59,18 @@ class RecordingWindow:
         self._screen_width = 0
         self._screen_height = 0
 
+        # Canvas dimensions (actual displayed size, maintains aspect ratio)
+        self._canvas_width = 0
+        self._canvas_height = 0
+
         # Create window
         self._root = tk.Tk()
         self._root.title(title)
         self._root.protocol("WM_DELETE_WINDOW", self._handle_close)
+        self._root.configure(bg="#1a1a1a")
+
+        # Prevent window resizing to maintain aspect ratio
+        self._root.resizable(False, False)
 
         # Status bar
         self._status_var = tk.StringVar(value="Connecting...")
@@ -73,10 +82,11 @@ class RecordingWindow:
             fg="#ffffff",
             padx=10,
             pady=5,
+            font=("Helvetica", 11),
         )
         self._status_bar.pack(side=tk.BOTTOM, fill=tk.X)
 
-        # Canvas for screen display
+        # Canvas for screen display (fixed size, set after first frame)
         self._canvas = tk.Canvas(
             self._root,
             bg="#1a1a1a",
@@ -96,9 +106,12 @@ class RecordingWindow:
         # Image reference (must keep reference to prevent garbage collection)
         self._photo_image: ImageTk.PhotoImage | None = None
         self._canvas_image_id: int | None = None
+        self._window_sized = False
 
     def _canvas_to_screen(self, cx: int, cy: int) -> tuple[int, int]:
         """Convert canvas coordinates to device screen coordinates.
+
+        Since canvas maintains exact aspect ratio, mapping is straightforward.
 
         Args:
             cx: Canvas X coordinate
@@ -110,15 +123,12 @@ class RecordingWindow:
         if self._screen_width == 0 or self._screen_height == 0:
             return cx, cy
 
-        canvas_width = self._canvas.winfo_width()
-        canvas_height = self._canvas.winfo_height()
-
-        if canvas_width == 0 or canvas_height == 0:
+        if self._canvas_width == 0 or self._canvas_height == 0:
             return cx, cy
 
-        # Calculate scaling factors
-        scale_x = self._screen_width / canvas_width
-        scale_y = self._screen_height / canvas_height
+        # Direct scaling since canvas maintains exact aspect ratio
+        scale_x = self._screen_width / self._canvas_width
+        scale_y = self._screen_height / self._canvas_height
 
         screen_x = int(cx * scale_x)
         screen_y = int(cy * scale_y)
@@ -144,7 +154,10 @@ class RecordingWindow:
         """Handle mouse button release."""
         x, y = self._canvas_to_screen(event.x, event.y)
         self._injector.on_mouse_up(x, y)
-        self._update_status(f"Events: {self._injector.event_count} | Press ESC or Q to stop")
+        self._update_status(
+            f"Recording ({self._screen_width}x{self._screen_height}) | "
+            f"Events: {self._injector.event_count} | ESC to stop"
+        )
 
     def _update_status(self, text: str) -> None:
         """Update status bar text."""
@@ -160,29 +173,40 @@ class RecordingWindow:
 
             if frame is not None:
                 # Update screen dimensions from frame
-                if self._screen_height == 0:
+                if not self._window_sized:
                     self._screen_height, self._screen_width = frame.shape[:2]
 
-                    # Set initial window size
-                    win_width = int(self._screen_width * self._scale)
-                    win_height = int(self._screen_height * self._scale)
-                    self._root.geometry(f"{win_width}x{win_height + 30}")  # +30 for status bar
+                    # Calculate canvas size maintaining exact aspect ratio
+                    self._canvas_width = int(self._screen_width * self._scale)
+                    self._canvas_height = int(self._screen_height * self._scale)
+
+                    # Set fixed canvas size
+                    self._canvas.configure(
+                        width=self._canvas_width,
+                        height=self._canvas_height,
+                    )
+
+                    # Update window to fit canvas + status bar
+                    self._root.update_idletasks()
 
                     self._update_status(
-                        f"Recording... ({self._screen_width}x{self._screen_height}) | "
-                        f"Press ESC or Q to stop"
+                        f"Recording ({self._screen_width}x{self._screen_height}) | "
+                        f"Events: 0 | ESC to stop"
                     )
-                    logger.info(f"Screen size: {self._screen_width}x{self._screen_height}")
+                    logger.info(
+                        f"Screen: {self._screen_width}x{self._screen_height}, "
+                        f"Canvas: {self._canvas_width}x{self._canvas_height}"
+                    )
+                    self._window_sized = True
 
                 # Convert numpy array to PhotoImage
                 img = Image.fromarray(frame)
 
-                # Resize to canvas size
-                canvas_width = self._canvas.winfo_width()
-                canvas_height = self._canvas.winfo_height()
-
-                if canvas_width > 1 and canvas_height > 1:
-                    img = img.resize((canvas_width, canvas_height), Image.Resampling.LANCZOS)
+                # Resize to exact canvas size (maintains aspect ratio)
+                img = img.resize(
+                    (self._canvas_width, self._canvas_height),
+                    Image.Resampling.LANCZOS,
+                )
 
                 self._photo_image = ImageTk.PhotoImage(img)
 
