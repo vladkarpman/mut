@@ -40,6 +40,11 @@ class StepResult:
     # long_press: screenshot_action = press_start, screenshot_action_end = press_held
     screenshot_action: bytes | None = None
     screenshot_action_end: bytes | None = None
+    # Screenshot file paths (for report - populated after video extraction)
+    screenshot_before_path: Path | None = None
+    screenshot_after_path: Path | None = None
+    screenshot_action_path: Path | None = None
+    screenshot_action_end_path: Path | None = None
     details: dict[str, Any] = field(default_factory=dict)
     # AI analysis results (populated by StepVerifier after execution)
     ai_verified: bool | None = None  # AI confirms step succeeded visually

@@ -953,6 +953,24 @@ class TestSwipeTrajectory:
 class TestStepResult:
     """Test StepResult dataclass."""
 
+    def test_step_result_has_screenshot_path_fields(self):
+        """StepResult has path fields for report screenshots."""
+        from pathlib import Path
+        result = StepResult(
+            step_number=1,
+            action="tap",
+            status="passed",
+        )
+        # Path fields should exist and default to None
+        assert result.screenshot_before_path is None
+        assert result.screenshot_after_path is None
+        assert result.screenshot_action_path is None
+        assert result.screenshot_action_end_path is None
+
+        # Should accept Path values
+        result.screenshot_before_path = Path("screenshots/001_tap_before.png")
+        assert result.screenshot_before_path == Path("screenshots/001_tap_before.png")
+
     def test_step_result_creation(self):
         """StepResult can be created with required fields."""
         result = StepResult(
