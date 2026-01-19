@@ -1510,3 +1510,54 @@ class TestVideoFrameExtraction:
 
         # After offset should account for UI render time (typically 100-300ms)
         assert 0.10 <= executor.FRAME_OFFSET_AFTER <= 0.35
+
+
+def test_extract_frames_saves_to_files(tmp_path):
+    """Frame extraction saves PNGs to screenshots folder."""
+    from mutcli.core.executor import StepResult, TestExecutor
+    from mutcli.core.config import MutConfig
+
+    # Create minimal video file
+    video_path = tmp_path / "recording" / "video.mp4"
+    video_path.parent.mkdir(parents=True)
+    video_path.write_bytes(b"fake video")
+
+    with patch("mutcli.core.frame_extractor.FrameExtractor") as MockExtractor:
+        # Mock FrameExtractor to return fake PNG bytes
+        mock_extractor = MagicMock()
+        mock_extractor.extract_frame.return_value = b'\x89PNG...'
+        MockExtractor.return_value = mock_extractor
+
+        # Create executor with output_dir
+        executor = TestExecutor.__new__(TestExecutor)
+        executor._output_dir = tmp_path
+        executor._recording_video_path = video_path
+        executor._config = MutConfig()
+
+        # Create step result with timestamps
+        results = [
+            StepResult(
+                step_number=1,
+                action="tap",
+                status="passed",
+                _ts_before=0.5,
+                _ts_after=1.0,
+                _ts_action=0.7,
+            )
+        ]
+
+        # Run extraction
+        executor._extract_frames_from_video(results)
+
+    # Verify files were saved
+    screenshots_dir = tmp_path / "screenshots"
+    assert screenshots_dir.exists()
+    assert (screenshots_dir / "001_tap_before.png").exists()
+    assert (screenshots_dir / "001_tap_action.png").exists()
+    assert (screenshots_dir / "001_tap_after.png").exists()
+
+    # Verify path fields were populated
+    assert results[0].screenshot_before_path == screenshots_dir / "001_tap_before.png"
+    assert results[0].screenshot_action_path == screenshots_dir / "001_tap_action.png"
+    assert results[0].screenshot_after_path == screenshots_dir / "001_tap_after.png"
+    assert results[0].screenshot_action_end_path is None  # No timestamp for this

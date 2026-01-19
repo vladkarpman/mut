@@ -12,6 +12,7 @@ from mutcli.core.ai_analyzer import AIAnalyzer
 from mutcli.core.ai_recovery import AIRecovery
 from mutcli.core.config import ConfigLoader, MutConfig
 from mutcli.core.device_controller import DeviceController
+from mutcli.core.screenshot_saver import ScreenshotSaver
 from mutcli.models.test import Step, TestFile
 
 if TYPE_CHECKING:
@@ -526,16 +527,10 @@ class TestExecutor:
     FRAME_OFFSET_AFTER = 0.20  # 200ms offset for "after" frames (UI render time)
 
     def _extract_frames_from_video(self, results: list[StepResult]) -> None:
-        """Extract precise frames from video using stored timestamps.
+        """Extract precise frames from video and save as files.
 
         Uses FrameExtractor to extract frames at the timestamps stored during
-        execution. Applies timing offsets to account for ADB latency and UI
-        update time. Uses parallel extraction for performance.
-
-        Timing offsets:
-        - before: no offset (captured before action starts)
-        - action/action_end: +50ms (ADB command latency)
-        - after: +200ms (UI needs time to render result)
+        execution. Saves frames as PNG files to screenshots/ folder.
 
         Args:
             results: List of StepResult objects with _ts_* timestamps populated
@@ -543,6 +538,10 @@ class TestExecutor:
         if not self._recording_video_path or not self._recording_video_path.exists():
             logger.warning("No video file available for frame extraction")
             return
+
+        # Create screenshot saver
+        screenshots_dir = self._output_dir / "screenshots"
+        saver = ScreenshotSaver(screenshots_dir)
 
         # Build extraction list with timing offsets
         # Format: (step, ts_field, adjusted_timestamp)
@@ -556,7 +555,6 @@ class TestExecutor:
                         ts = ts + self.FRAME_OFFSET_AFTER
                     elif ts_field in ("_ts_action", "_ts_action_end"):
                         ts = ts + self.FRAME_OFFSET_ACTION
-                    # _ts_before: no offset needed
                     extractions.append((step, ts_field, ts))
 
         if not extractions:
@@ -588,9 +586,9 @@ class TestExecutor:
                 frame_bytes = extractor.extract_frame(timestamp)
                 return step, ts_field, frame_bytes
 
-            with ThreadPoolExecutor(max_workers=max_workers) as executor:
+            with ThreadPoolExecutor(max_workers=max_workers) as pool:
                 futures = {
-                    executor.submit(extract_single, item): item for item in extractions
+                    pool.submit(extract_single, item): item for item in extractions
                 }
 
                 for future in as_completed(futures):
@@ -598,9 +596,25 @@ class TestExecutor:
                     try:
                         step, ts_field, frame_bytes = future.result()
                         if frame_bytes:
-                            # Map timestamp field to screenshot field
+                            # Map timestamp field to frame type
+                            frame_type = ts_field.replace("_ts_", "")
+
+                            # Save to file
+                            path = saver.save(
+                                frame_bytes,
+                                step_number=step.step_number,
+                                action=step.action,
+                                frame_type=frame_type,
+                            )
+
+                            # Populate path field
+                            path_field = f"screenshot_{frame_type}_path"
+                            setattr(step, path_field, path)
+
+                            # Also populate bytes field for backward compatibility
                             screenshot_field = ts_field.replace("_ts_", "screenshot_")
                             setattr(step, screenshot_field, frame_bytes)
+
                             extracted_count += 1
                         else:
                             logger.warning(
