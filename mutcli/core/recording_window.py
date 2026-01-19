@@ -180,21 +180,27 @@ class RecordingWindow:
                 if not self._window_sized:
                     self._screen_height, self._screen_width = frame.shape[:2]
 
+                    # Get available screen height (leave room for dock/menubar)
+                    available_height = self._root.winfo_screenheight() - 100
+
                     # Calculate canvas size maintaining exact aspect ratio
                     self._canvas_width = int(self._screen_width * self._scale)
                     self._canvas_height = int(self._screen_height * self._scale)
 
-                    # Resize canvas and window to match device aspect ratio
+                    # If too tall, scale down to fit screen
+                    if self._canvas_height > available_height:
+                        scale_factor = available_height / self._canvas_height
+                        self._canvas_height = available_height
+                        self._canvas_width = int(self._canvas_width * scale_factor)
+
+                    # Resize canvas and window
                     self._canvas.configure(
                         width=self._canvas_width,
                         height=self._canvas_height,
                     )
 
-                    # Calculate total window height (canvas + status bar)
-                    window_height = self._canvas_height + 18
-
                     # Apply geometry and lock size
-                    self._root.geometry(f"{self._canvas_width}x{window_height}")
+                    self._root.geometry(f"{self._canvas_width}x{self._canvas_height + 18}")
                     self._root.update()
                     self._root.resizable(False, False)
 
