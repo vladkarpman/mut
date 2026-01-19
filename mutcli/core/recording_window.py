@@ -103,9 +103,15 @@ class RecordingWindow:
         self._canvas.bind("<B1-Motion>", self._on_mouse_move)
         self._canvas.bind("<ButtonRelease-1>", self._on_mouse_up)
 
-        # Bind keyboard shortcuts
-        self._root.bind("<Escape>", lambda e: self._handle_close())
-        self._root.bind("<q>", lambda e: self._handle_close())
+        # Bind keyboard shortcuts to both root and canvas
+        for widget in [self._root, self._canvas]:
+            widget.bind("<Escape>", lambda e: self._handle_close())
+            widget.bind("<q>", lambda e: self._handle_close())
+            widget.bind("<Q>", lambda e: self._handle_close())
+
+        # Make canvas focusable and grab focus
+        self._canvas.configure(takefocus=True)
+        self._canvas.focus_set()
 
         # Image reference (must keep reference to prevent garbage collection)
         self._photo_image: ImageTk.PhotoImage | None = None
@@ -242,13 +248,20 @@ class RecordingWindow:
 
     def _handle_close(self) -> None:
         """Handle window close."""
-        logger.info("Recording window closed")
+        if not self._running:
+            return  # Already closing
+
+        logger.info("Recording window closing...")
         self._running = False
 
         if self._on_close:
             self._on_close()
 
-        self._root.quit()
+        try:
+            self._root.quit()
+            self._root.destroy()
+        except Exception:
+            pass
 
     def run(self) -> None:
         """Run the window main loop (blocks until closed)."""
