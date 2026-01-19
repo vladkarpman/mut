@@ -67,17 +67,26 @@ class RecordingWindow:
         self._root = tk.Tk()
         self._root.title(title)
         self._root.protocol("WM_DELETE_WINDOW", self._handle_close)
-        self._root.configure(bg="#1a1a1a")
+        self._root.configure(bg="#000000")
 
         # Prevent window resizing to maintain aspect ratio
         self._root.resizable(False, False)
 
-        # Status bar
+        # Canvas for screen display (fixed size, set after first frame)
+        self._canvas = tk.Canvas(
+            self._root,
+            bg="#000000",
+            highlightthickness=0,
+            borderwidth=0,
+        )
+        self._canvas.pack(side=tk.TOP, fill=tk.NONE, expand=False, padx=0, pady=0)
+
+        # Status bar at bottom
         self._status_var = tk.StringVar(value="Connecting...")
         self._status_bar = tk.Label(
             self._root,
             textvariable=self._status_var,
-            anchor="w",
+            anchor="center",
             bg="#2d2d2d",
             fg="#ffffff",
             padx=10,
@@ -85,14 +94,6 @@ class RecordingWindow:
             font=("Helvetica", 11),
         )
         self._status_bar.pack(side=tk.BOTTOM, fill=tk.X)
-
-        # Canvas for screen display (fixed size, set after first frame)
-        self._canvas = tk.Canvas(
-            self._root,
-            bg="#1a1a1a",
-            highlightthickness=0,
-        )
-        self._canvas.pack(fill=tk.BOTH, expand=True)
 
         # Bind mouse events
         self._canvas.bind("<ButtonPress-1>", self._on_mouse_down)
@@ -186,7 +187,8 @@ class RecordingWindow:
                         height=self._canvas_height,
                     )
 
-                    # Update window to fit canvas + status bar
+                    # Force window to exact size (canvas + status bar ~25px)
+                    self._root.geometry(f"{self._canvas_width}x{self._canvas_height + 25}")
                     self._root.update_idletasks()
 
                     self._update_status(
