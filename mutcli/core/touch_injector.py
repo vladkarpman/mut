@@ -1,5 +1,9 @@
 """Touch injection and logging for recording sessions.
 
+DEPRECATED: This module is obsolete and no longer used.
+Part of the interactive recording system that has been removed.
+This file is kept for reference but may be removed in a future version.
+
 Converts mouse events to touch events, injects them via scrcpy,
 and logs them for perfect coordinate accuracy.
 """

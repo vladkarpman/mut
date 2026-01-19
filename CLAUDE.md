@@ -43,7 +43,7 @@ mutcli/
 │   └── test.py                # Test/Step data models
 ├── core/
 │   ├── config.py              # ConfigLoader, setup_logging
-│   ├── device_controller.py   # Scrcpy injection: tap, swipe, long_press; ADB: type, elements
+│   ├── device_controller.py   # Touch gestures via ADB or scrcpy injection; ADB: type, elements
 │   ├── scrcpy_service.py      # MYScrcpy: screenshots, video recording, touch injection
 │   ├── ai_analyzer.py         # Gemini 2.5 Flash: verify_screen, find_element
 │   ├── executor.py            # TestExecutor: runs YAML tests, captures action screenshots
@@ -59,7 +59,8 @@ mutcli/
 │   ├── yaml_generator.py      # Generate YAML from analyzed steps
 │   ├── preview_server.py      # HTTP server for approval UI
 │   ├── analysis_io.py         # Save/load analysis JSON
-│   └── report.py              # ReportGenerator: JSON + HTML with gesture visualization
+│   ├── report.py              # ReportGenerator: JSON + HTML with gesture visualization
+│   └── report_server.py       # Local HTTP server for viewing reports
 └── templates/
     ├── approval.html          # Browser-based approval UI
     └── report.html            # Test report template with gesture indicators
@@ -67,7 +68,11 @@ mutcli/
 
 ### Key Patterns
 
-**Scrcpy-based touch injection**: `DeviceController` uses scrcpy for gestures (tap, swipe, long_press) via control injection - more reliable than adb shell commands. Text input still uses adb. `ScrcpyService` provides fast screenshots (~50ms via frame buffer), video recording, and touch injection. Scrcpy connection with control is required for test execution.
+**Touch gestures**: `DeviceController` supports two modes for gestures (tap, swipe, long_press):
+- **ADB mode** (default): Uses `adb shell input` commands. Simple and reliable.
+- **Scrcpy mode**: Uses scrcpy control injection. Set `use_adb=False` when creating controller.
+
+Text input always uses ADB. `ScrcpyService` provides fast screenshots (~50ms via frame buffer), video recording, and optional touch injection.
 
 **Hybrid AI verification**:
 - `verify_screen` - Real-time AI call during test execution. Returns error if screen doesn't match.
@@ -84,9 +89,9 @@ mutcli/
 
 **Touch visualization**: During video recording, `show_touches` is enabled to display native touch indicators on screen. Original setting is restored after recording.
 
-**Recording pipeline**:
-1. `InteractiveRecorder` orchestrates recording session
-2. `TouchInjector` captures touch events from window input
+**Recording pipeline** (getevent-based, touch physical device):
+1. `Recorder` orchestrates recording session
+2. `TouchMonitor` captures touch events via ADB getevent
 3. `ScrcpyService` records video with timestamps
 4. `UIHierarchyMonitor` captures UI dumps during recording (when `--app` provided)
 5. `FrameExtractor` extracts before/after frames for each touch
@@ -179,12 +184,13 @@ tests/my-test/
 ```
 tests/my-test/
 ├── test.yaml
-└── runs/
+└── reports/
     └── 2026-01-17_14-30-25/
         ├── debug.log           # Run-specific logs (if MUT_VERBOSE=true)
-        ├── results.json        # Full test results with step data
+        ├── report.json         # Full test results with step data
         ├── report.html         # Interactive HTML report with gesture visualization
         ├── results.xml         # JUnit XML report (if --junit specified)
+        ├── screenshots/        # Step screenshots (before, after, action)
         └── recording/          # Video recording (if --video specified)
             └── video.mp4
 ```
@@ -194,6 +200,6 @@ tests/my-test/
 See `docs/DESIGN.md` for rationale on:
 - Why Gemini 2.5 Flash over Claude/GPT (cost: $0.30/1M tokens)
 - Why MYScrcpy over mobile-mcp (no MCP overhead, single connection)
-- Why scrcpy injection over adb input (more reliable timing, no shell overhead)
+- ADB vs scrcpy injection trade-offs (ADB is simpler, scrcpy offers tighter timing)
 - AI-first element finding with semantic matching
 - Hybrid verification strategy details

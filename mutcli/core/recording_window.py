@@ -1,5 +1,9 @@
 """Recording window for injection-based touch capture.
 
+DEPRECATED: This module is obsolete and no longer used.
+Part of the interactive recording system that has been removed.
+This file is kept for reference but may be removed in a future version.
+
 Displays live screen mirror and captures mouse events for touch injection.
 """
 

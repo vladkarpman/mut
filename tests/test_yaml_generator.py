@@ -129,6 +129,49 @@ class TestAddSwipe:
 
         assert len(gen._steps) == 4
 
+    def test_swipe_with_from_coords(self):
+        """swipe with from_coords should include from field as percentages."""
+        gen = YAMLGenerator("test", "com.example.app", screen_width=1080, screen_height=2340)
+
+        gen.add_swipe("left", from_coords=(540, 1170))
+
+        assert gen._steps[0] == {
+            "swipe": {"direction": "left", "from": ["50.0%", "50.0%"]}
+        }
+
+    def test_swipe_with_all_options(self):
+        """swipe with all options should include all fields."""
+        gen = YAMLGenerator("test", "com.example.app", screen_width=1080, screen_height=2340)
+
+        gen.add_swipe(
+            "right",
+            distance="75%",
+            duration_ms=500,
+            description="Swipe right to dismiss",
+            from_coords=(108, 2106),
+        )
+
+        assert gen._steps[0] == {
+            "swipe": {
+                "direction": "right",
+                "distance": "75%",
+                "duration": "500ms",
+                "from": ["10.0%", "90.0%"],
+            },
+            "description": "Swipe right to dismiss",
+        }
+
+    def test_swipe_from_coords_without_screen_dimensions(self):
+        """swipe with from_coords but no screen dimensions should use pixels."""
+        gen = YAMLGenerator("test", "com.example.app")
+
+        gen.add_swipe("up", from_coords=(540, 1170))
+
+        # Without screen dimensions, coordinates are kept as pixels
+        assert gen._steps[0] == {
+            "swipe": {"direction": "up", "from": [540, 1170]}
+        }
+
 
 class TestAddWait:
     """Test add_wait method."""

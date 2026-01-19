@@ -33,25 +33,27 @@ class AsyncOperation:
 
 
 class DeviceController:
-    """Device interaction via scrcpy injection.
+    """Device interaction via ADB or scrcpy injection.
 
-    Uses scrcpy control for accurate touch injection.
-    Must call `set_scrcpy_service()` before using gesture methods.
+    By default uses ADB shell commands for gestures (legacy mode).
+    Optionally can use scrcpy control for injection if configured.
     """
 
-    def __init__(self, device_id: str):
+    def __init__(self, device_id: str, use_adb: bool = True):
         """Initialize controller for a specific device.
 
         Args:
             device_id: ADB device identifier
+            use_adb: If True (default), use ADB for gestures. If False, require scrcpy.
         """
         self._device_id = device_id
         self._scrcpy: ScrcpyService | None = None
+        self._use_adb = use_adb
 
     def set_scrcpy_service(self, scrcpy: "ScrcpyService | None") -> None:
         """Set scrcpy service for touch injection.
 
-        When set, tap/swipe/long_press use scrcpy injection instead of adb.
+        When set and use_adb=False, tap/swipe/long_press use scrcpy injection.
 
         Args:
             scrcpy: ScrcpyService instance with control enabled, or None to use adb
@@ -61,7 +63,16 @@ class DeviceController:
     @property
     def uses_scrcpy(self) -> bool:
         """Check if using scrcpy injection mode."""
-        return self._scrcpy is not None and self._scrcpy.is_control_ready
+        return (
+            not self._use_adb
+            and self._scrcpy is not None
+            and self._scrcpy.is_control_ready
+        )
+
+    @property
+    def uses_adb(self) -> bool:
+        """Check if using ADB (legacy) mode."""
+        return self._use_adb or not self.uses_scrcpy
 
     @staticmethod
     def list_devices() -> list[dict[str, str]]:
@@ -107,9 +118,10 @@ class DeviceController:
             x: X coordinate
             y: Y coordinate
         """
-        if not self.uses_scrcpy:
-            raise RuntimeError("Scrcpy not configured. Call set_scrcpy_service() first.")
-        self._scrcpy.tap(x, y)
+        if self.uses_adb:
+            self._adb(["shell", "input", "tap", str(x), str(y)])
+        else:
+            self._scrcpy.tap(x, y)
 
     def long_press(self, x: int, y: int, duration_ms: int = 500) -> None:
         """Long press at coordinates.
@@ -123,9 +135,11 @@ class DeviceController:
             raise ValueError(f"Coordinates must be non-negative: ({x}, {y})")
         if duration_ms <= 0:
             raise ValueError(f"Duration must be positive: {duration_ms}")
-        if not self.uses_scrcpy:
-            raise RuntimeError("Scrcpy not configured. Call set_scrcpy_service() first.")
-        self._scrcpy.long_press(x, y, duration_ms)
+        if self.uses_adb:
+            # ADB long press = swipe from point to same point with duration
+            self._adb(["shell", "input", "swipe", str(x), str(y), str(x), str(y), str(duration_ms)])
+        else:
+            self._scrcpy.long_press(x, y, duration_ms)
 
     def long_press_async(self, x: int, y: int, duration_ms: int = 500) -> "AsyncOperation":
         """Start long press without blocking.
@@ -185,9 +199,10 @@ class DeviceController:
             y2: End Y coordinate
             duration_ms: Swipe duration in milliseconds
         """
-        if not self.uses_scrcpy:
-            raise RuntimeError("Scrcpy not configured. Call set_scrcpy_service() first.")
-        self._scrcpy.swipe(x1, y1, x2, y2, duration_ms)
+        if self.uses_adb:
+            self._adb(["shell", "input", "swipe", str(x1), str(y1), str(x2), str(y2), str(duration_ms)])
+        else:
+            self._scrcpy.swipe(x1, y1, x2, y2, duration_ms)
 
     def swipe_async(
         self,

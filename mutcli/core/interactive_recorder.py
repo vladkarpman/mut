@@ -1,5 +1,9 @@
 """Interactive recording via injection-based touch capture.
 
+DEPRECATED: This module is obsolete and no longer used.
+The getevent-based recording (Recorder class) is now the only recording method.
+This file is kept for reference but may be removed in a future version.
+
 Provides a GUI window for recording touch interactions with perfect
 coordinate accuracy by injecting touches via scrcpy control.
 """

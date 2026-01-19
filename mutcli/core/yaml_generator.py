@@ -142,6 +142,7 @@ class YAMLGenerator:
         distance: str | None = None,
         duration_ms: int | None = None,
         description: str | None = None,
+        from_coords: tuple[int, int] | None = None,
     ) -> None:
         """Add swipe action.
 
@@ -150,12 +151,15 @@ class YAMLGenerator:
             distance: Swipe distance (e.g., "50%", optional)
             duration_ms: Swipe duration in milliseconds (optional)
             description: Human-readable description of the action (optional)
+            from_coords: Start coordinates in pixels (optional, converted to %)
         """
         swipe_data: dict[str, Any] = {"direction": direction}
         if distance:
             swipe_data["distance"] = distance
         if duration_ms:
             swipe_data["duration"] = f"{duration_ms}ms"
+        if from_coords:
+            swipe_data["from"] = self._to_percent_coords(from_coords[0], from_coords[1])
         step: dict[str, Any] = {"swipe": swipe_data}
         if description:
             step["description"] = description

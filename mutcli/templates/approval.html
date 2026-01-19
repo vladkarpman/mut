@@ -8489,12 +8489,19 @@
                         : null,
                 }));
 
-                // Get verifications (if any)
-                const verificationsData = (window.verifications || []).map(v => ({
-                    description: v.description,
-                    after_step: v.after_step,
-                    enabled: v.enabled !== false,
-                }));
+                // Extract verifications from steps
+                const verificationsData = [];
+                steps.forEach((step, index) => {
+                    if (step.verifications && step.verifications.length > 0) {
+                        for (const v of step.verifications) {
+                            verificationsData.push({
+                                description: v.description,
+                                after_step: step.index ?? index,
+                                enabled: true,
+                            });
+                        }
+                    }
+                });
 
                 const response = await fetch('/approve', {
                     method: 'POST',

@@ -163,6 +163,30 @@ steps:
         assert step.direction == "up"
         assert step.distance == 50.0
 
+    def test_parses_swipe_with_from_coords(self, tmp_path):
+        """Parses swipe action with from coordinates."""
+        test_file = tmp_path / "test.yaml"
+        test_file.write_text("""
+config:
+  app: com.example.app
+
+steps:
+  - swipe:
+      direction: left
+      distance: 74%
+      from: ["88.1%", "92.6%"]
+      duration: 953ms
+""")
+
+        result = TestParser.parse(test_file)
+
+        step = result.steps[0]
+        assert step.action == "swipe"
+        assert step.direction == "left"
+        assert step.distance == 74.0
+        assert step.from_coords == (88.1, 92.6)
+        assert step.duration == 953
+
     def test_parses_wait_action(self, tmp_path):
         """Parses wait action with duration."""
         test_file = tmp_path / "test.yaml"

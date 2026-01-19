@@ -285,17 +285,15 @@ class Recorder:
             except Exception as e:
                 logger.warning(f"Error stopping touch monitor: {e}")
 
-        # Stop video recording with proper cleanup (Issue 2)
+        # Stop video recording (skip disconnect to avoid myscrcpy segfault)
         stop_result = {}
         if self._scrcpy:
             try:
                 stop_result = self._scrcpy.stop_recording()
             except Exception as e:
                 logger.warning(f"Error stopping video recording: {e}")
-            try:
-                self._scrcpy.disconnect()
-            except Exception as e:
-                logger.warning(f"Error disconnecting scrcpy: {e}")
+            # Note: Not calling disconnect() - causes segfault in myscrcpy on Ctrl+C
+            # Process exit will clean up the connection
 
         # Save touch events with exception handling (Issue 4)
         touch_events_path = self._output_dir / "touch_events.json"

@@ -46,6 +46,7 @@ class ScrcpyService:
 
         # Recording state
         self._recording = False
+        self._writer_open = False  # Track if writer is open for writing (thread-safe)
         self._video_writer: Any = None
         self._video_stream: Any = None
         self._recording_output_path: str | None = None
@@ -302,6 +303,7 @@ class ScrcpyService:
             self._video_stream = stream
 
             with self._lock:
+                self._writer_open = True
                 self._recording = True
             self._recording_output_path = output_path
             self._recording_start_time = time.time()
@@ -332,8 +334,13 @@ class ScrcpyService:
         output_path = self._recording_output_path
 
         try:
+            # Signal frame thread to stop writing BEFORE we close the writer
             with self._lock:
+                self._writer_open = False
                 self._recording = False
+
+            # Small delay to ensure frame thread sees the flag change
+            time.sleep(0.05)
 
             # Flush remaining packets before closing
             if self._video_stream:
@@ -383,11 +390,21 @@ class ScrcpyService:
     def _write_frame(self, frame: np.ndarray, timestamp: float) -> None:
         """Write frame to video file with proper timestamp.
 
+        Thread-safe: checks _writer_open flag under lock to prevent race
+        condition where main thread closes writer while frame thread writes.
+
         Args:
             frame: RGB frame as numpy array
             timestamp: Wall-clock timestamp when frame was captured
         """
-        if not self._video_writer or not self._video_stream:
+        # Check if writer is open under lock (prevents race with stop_recording)
+        with self._lock:
+            if not self._writer_open:
+                return
+            writer = self._video_writer
+            stream = self._video_stream
+
+        if not writer or not stream:
             return
 
         try:
@@ -396,12 +413,13 @@ class ScrcpyService:
             # Store wall-clock timestamp for this frame (relative to recording start)
             if self._recording_start_time:
                 elapsed = timestamp - self._recording_start_time
-                self._frame_timestamps.append(elapsed)
+                with self._lock:
+                    self._frame_timestamps.append(elapsed)
 
             # Convert RGB to video frame and encode
             video_frame = av.VideoFrame.from_ndarray(frame, format="rgb24")
-            for packet in self._video_stream.encode(video_frame):
-                self._video_writer.mux(packet)
+            for packet in stream.encode(video_frame):
+                writer.mux(packet)
 
         except Exception as e:
             logger.debug(f"Error writing frame: {e}")

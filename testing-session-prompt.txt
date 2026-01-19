@@ -1,0 +1,84 @@
+I need to test the recently implemented features in the `mut` CLI tool. Here's what was built:
+
+## Features to Test
+
+### 1. Enhanced Actions (in executor)
+- `scroll_to` - Scrolls until element is visible (supports `direction`, `max_scrolls`)
+- `long_press` - Long press with configurable `duration` (milliseconds)
+
+### 2. Conditionals (in executor)
+- `if_present` - Execute `then` branch if element exists
+- `if_absent` - Execute `then` branch if element doesn't exist
+- `if_screen` - Execute `then` branch if AI verifies screen matches description
+- All support `else` branch and nesting
+
+### 3. Interactive HTML Reports
+- Dark theme matching approval flow design
+- Before/After screenshots for each step
+- Video player with step markers (when video exists)
+- Filter by status (All/Passed/Failed/Skipped)
+- JSON export button
+- Keyboard navigation
+
+## Test Commands
+
+```bash
+# Activate environment
+source .venv/bin/activate
+
+# Run all unit tests first
+pytest -v
+
+# Then manual testing with a real device
+mut devices  # Verify device connected
+
+# Create and run test with new features
+mut run tests/demo/test.yaml
+
+# Open the generated HTML report
+open tests/demo/reports/*/report.html
+```
+
+## What I Want You To Do
+
+1. Run the unit tests and confirm they pass
+2. Help me create test YAML files that exercise the new features
+3. Run the tests on my connected Android device
+4. Verify the HTML reports generate correctly and look right
+5. Report any bugs or issues found
+
+## Example Test File (tests/demo/test.yaml)
+
+```yaml
+config:
+  app: com.google.android.calculator
+
+steps:
+  - launch_app
+  - wait: 2s
+
+  # Test long_press
+  - long_press: "5"
+    duration: 1000
+
+  # Test conditionals
+  - if_present: "AC"
+    then:
+      - tap: "AC"
+
+  - tap: "1"
+  - tap: "+"
+  - tap: "2"
+  - tap: "="
+
+  - verify_screen: "Calculator showing result 3"
+
+  - terminate_app
+```
+
+## Key Files
+
+- Executor: `mutcli/core/executor.py` (scroll_to, long_press, conditionals)
+- Report template: `mutcli/templates/report.html`
+- Report generator: `mutcli/core/report.py`
+- Tests: `tests/test_executor.py`, `tests/test_report.py`

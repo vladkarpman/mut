@@ -323,6 +323,103 @@ class TestPathDistanceCalculation:
         assert distance == 400.0  # Full perimeter, not 0
 
 
+class TestCoordinateConversion:
+    """Test raw touch coordinate to screen pixel conversion."""
+
+    def test_converts_min_to_zero(self):
+        """Touch at min value should map to screen coordinate 0."""
+        monitor = TouchMonitor("test-device")
+        monitor._touch_min_x = 0
+        monitor._touch_min_y = 0
+        monitor._touch_max_x = 4095
+        monitor._touch_max_y = 4095
+        monitor._screen_width = 1080
+        monitor._screen_height = 2340
+
+        screen_x, screen_y = monitor._raw_to_screen(0, 0)
+        assert screen_x == 0
+        assert screen_y == 0
+
+    def test_converts_max_to_screen_max(self):
+        """Touch at max value should map to screen max (size - 1)."""
+        monitor = TouchMonitor("test-device")
+        monitor._touch_min_x = 0
+        monitor._touch_min_y = 0
+        monitor._touch_max_x = 4095
+        monitor._touch_max_y = 4095
+        monitor._screen_width = 1080
+        monitor._screen_height = 2340
+
+        screen_x, screen_y = monitor._raw_to_screen(4095, 4095)
+        assert screen_x == 1079  # width - 1
+        assert screen_y == 2339  # height - 1
+
+    def test_converts_center_correctly(self):
+        """Touch at center should map to screen center."""
+        monitor = TouchMonitor("test-device")
+        monitor._touch_min_x = 0
+        monitor._touch_min_y = 0
+        monitor._touch_max_x = 4095
+        monitor._touch_max_y = 4095
+        monitor._screen_width = 1080
+        monitor._screen_height = 2340
+
+        # Midpoint of touch range
+        screen_x, screen_y = monitor._raw_to_screen(2047, 2047)
+        # Should be close to center
+        assert 535 <= screen_x <= 545  # ~540
+        assert 1165 <= screen_y <= 1175  # ~1170
+
+    def test_handles_non_zero_min(self):
+        """Should handle devices with non-zero min values."""
+        monitor = TouchMonitor("test-device")
+        monitor._touch_min_x = 100
+        monitor._touch_min_y = 200
+        monitor._touch_max_x = 4195
+        monitor._touch_max_y = 4295
+        monitor._screen_width = 1080
+        monitor._screen_height = 2340
+
+        # At min should be 0
+        screen_x, screen_y = monitor._raw_to_screen(100, 200)
+        assert screen_x == 0
+        assert screen_y == 0
+
+        # At max should be screen max
+        screen_x, screen_y = monitor._raw_to_screen(4195, 4295)
+        assert screen_x == 1079
+        assert screen_y == 2339
+
+    def test_clamps_out_of_range_values(self):
+        """Should clamp values outside touch range to screen bounds."""
+        monitor = TouchMonitor("test-device")
+        monitor._touch_min_x = 0
+        monitor._touch_min_y = 0
+        monitor._touch_max_x = 4095
+        monitor._touch_max_y = 4095
+        monitor._screen_width = 1080
+        monitor._screen_height = 2340
+
+        # Value beyond max should clamp to screen max
+        screen_x, screen_y = monitor._raw_to_screen(5000, 5000)
+        assert screen_x == 1079
+        assert screen_y == 2339
+
+        # Negative value should clamp to 0
+        screen_x, screen_y = monitor._raw_to_screen(-100, -100)
+        assert screen_x == 0
+        assert screen_y == 0
+
+    def test_returns_raw_when_not_initialized(self):
+        """Should return raw values when device info not available."""
+        monitor = TouchMonitor("test-device")
+        # Don't set any calibration values
+
+        screen_x, screen_y = monitor._raw_to_screen(500, 600)
+        assert screen_x == 500
+        assert screen_y == 600
+
+
 class TestTouchMonitorEventParsing:
     """Test getevent line parsing."""
 

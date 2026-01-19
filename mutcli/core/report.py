@@ -187,13 +187,17 @@ class ReportGenerator:
         html_content = html_content.replace(
             "{{summary_skipped}}", str(data["summary"]["skipped"])
         )
-        json_data = self._escape_json_for_html(json.dumps(data))
-        html_content = html_content.replace("{{json_data}}", json_data)
         html_content = html_content.replace("{{video_html}}", self._generate_video_html(data))
 
         # Convert escaped braces back to single braces for CSS/JS
         # Template uses {{ and }} to avoid conflicts with placeholder syntax
+        # IMPORTANT: Do this BEFORE inserting JSON data, because JSON contains
+        # nested objects with }} that would be corrupted by the replacement
         html_content = html_content.replace("{{", "{").replace("}}", "}")
+
+        # Insert JSON data AFTER brace unescaping to preserve JSON structure
+        json_data = self._escape_json_for_html(json.dumps(data))
+        html_content = html_content.replace("{json_data}", json_data)
 
         path = self._output_dir / "report.html"
         path.write_text(html_content)
@@ -416,11 +420,14 @@ class ReportGenerator:
 
         # Generate gesture indicator for action frame
         gesture_html = self._generate_gesture_indicator_html(step)
+        step_id = step.get("number")
 
         # 3-column layout if action frame available
         if action_frame:
             before_html = self._generate_frame_html("before", "Before", before)
-            action_html = self._generate_frame_html("action", "Action", action_frame, gesture_html)
+            action_html = self._generate_frame_html(
+                "action", "Action", action_frame, gesture_html, step_id
+            )
             after_html = self._generate_frame_html("after", "After", after)
 
             return f"""<div class="step-frames">
@@ -430,7 +437,9 @@ class ReportGenerator:
 </div>"""
 
         # 2-column fallback for steps without action frames
-        before_html = self._generate_frame_html("before", "Before", before, gesture_html)
+        before_html = self._generate_frame_html(
+            "before", "Before", before, gesture_html, step_id
+        )
         after_html = self._generate_frame_html("after", "After", after)
 
         return f"""<div class="step-frames two-column">
@@ -450,25 +459,26 @@ class ReportGenerator:
             return ""
 
         action = step.get("action", "")
+        step_id = step.get("number", 0)
         x = coords.get("x", 0)
         y = coords.get("y", 0)
 
         if action == "tap":
-            return f"""<div class="gesture-indicator-container">
-    <div class="tap-indicator" data-x="{x:.1f}" data-y="{y:.1f}"></div>
+            return f"""<div class="gesture-indicator-wrapper" data-step-id="{step_id}">
+    <div class="gesture-indicator tap-indicator" data-x="{x:.1f}" data-y="{y:.1f}"></div>
 </div>"""
 
         if action == "double_tap":
-            return f"""<div class="gesture-indicator-container">
-    <div class="double-tap-indicator" data-x="{x:.1f}" data-y="{y:.1f}">
+            return f"""<div class="gesture-indicator-wrapper" data-step-id="{step_id}">
+    <div class="gesture-indicator double-tap-indicator" data-x="{x:.1f}" data-y="{y:.1f}">
         <div class="tap-circle tap-1"></div>
         <div class="tap-circle tap-2"></div>
     </div>
 </div>"""
 
         if action == "long_press":
-            return f"""<div class="gesture-indicator-container">
-    <div class="long-press-indicator" data-x="{x:.1f}" data-y="{y:.1f}"></div>
+            return f"""<div class="gesture-indicator-wrapper" data-step-id="{step_id}">
+    <div class="gesture-indicator long-press-indicator" data-x="{x:.1f}" data-y="{y:.1f}"></div>
 </div>"""
 
         if action == "swipe":
@@ -481,8 +491,8 @@ class ReportGenerator:
             # Encode trajectory as JSON for JavaScript
             traj_json = html.escape(json.dumps(trajectory)) if trajectory else "[]"
 
-            return f"""<div class="gesture-indicator-container">
-<div class="swipe-indicator"
+            return f"""<div class="gesture-indicator-wrapper" data-step-id="{step_id}">
+<div class="gesture-indicator swipe-indicator"
     data-x="{x:.1f}" data-y="{y:.1f}"
     data-end-x="{end_x:.1f}" data-end-y="{end_y:.1f}"
     data-trajectory="{traj_json}"
@@ -496,7 +506,7 @@ class ReportGenerator:
 
     def _generate_frame_html(
         self, frame_type: str, label: str, image_data: str | None,
-        overlay_html: str = ""
+        overlay_html: str = "", step_id: int | None = None
     ) -> str:
         """Generate HTML for a single frame column."""
         if image_data:

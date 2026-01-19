@@ -32,25 +32,6 @@ app = typer.Typer(
 console = Console()
 
 
-def _create_run_folder(test_dir: Path) -> Path:
-    """Create timestamped run folder for test execution.
-
-    Args:
-        test_dir: Test directory (e.g., tests/my_test/)
-
-    Returns:
-        Path to created run folder (e.g., tests/my_test/runs/2026-01-17_14-30-25/)
-    """
-    runs_dir = test_dir / "runs"
-    runs_dir.mkdir(exist_ok=True)
-
-    timestamp = datetime.now().strftime("%Y-%m-%d_%H-%M-%S")
-    run_folder = runs_dir / timestamp
-    run_folder.mkdir(exist_ok=True)
-
-    return run_folder
-
-
 def version_callback(value: bool) -> None:
     """Print version and exit."""
     if value:
@@ -110,12 +91,18 @@ def run(
     # Determine test directory from test file path
     test_dir = test_file.parent
 
-    # Create run folder for this execution
-    run_folder = _create_run_folder(test_dir)
+    # Determine output directory (needed early for logging)
+    timestamp = datetime.now().strftime("%Y-%m-%d_%H-%M-%S")
+    if output:
+        report_dir = output
+    else:
+        # Default: tests/{name}/reports/{timestamp}/
+        report_dir = test_file.parent / "reports" / timestamp
+    report_dir.mkdir(parents=True, exist_ok=True)
 
     # Setup verbose logging if enabled
     if config.verbose:
-        log_file = setup_logging(verbose=True, log_dir=run_folder)
+        log_file = setup_logging(verbose=True, log_dir=report_dir)
         if log_file:
             console.print(f"[dim]Verbose logging → {log_file}[/dim]")
 
@@ -167,16 +154,6 @@ def run(
     console.print()
 
     console.print(f"[dim]Device: {device_display}[/dim]")
-
-    # Generate report
-    timestamp = datetime.now().strftime("%Y-%m-%d_%H-%M")
-
-    # Determine output directory
-    if output:
-        report_dir = output
-    else:
-        # Default: tests/{name}/reports/{timestamp}/
-        report_dir = test_file.parent / "reports" / timestamp
 
     # Setup ScrcpyService for screenshots/video (control not required - using ADB for gestures)
     from mutcli.core.scrcpy_service import ScrcpyService
@@ -267,7 +244,7 @@ def run(
     # Check for source video from recording session
     source_video = test_file.parent / "video.mp4"
     generator = ReportGenerator(
-        run_folder,
+        report_dir,
         source_video_path=source_video if source_video.exists() else None,
     )
     generator.generate_json(result)
@@ -280,7 +257,7 @@ def run(
     except NoVideoError:
         console.print()
         console.print("[dim]HTML report skipped (no video recording)[/dim]")
-        console.print(f"[dim]JSON results: {run_folder / 'results.json'}[/dim]")
+        console.print(f"[dim]JSON results: {report_dir / 'results.json'}[/dim]")
 
     # Generate JUnit if requested
     if junit:
@@ -336,18 +313,11 @@ def record(
         ..., "--app", "-a", help="App package name (required for UI element capture)"
     ),
     device: str | None = typer.Option(None, "--device", "-d", help="Device ID"),
-    interactive: bool = typer.Option(
-        False, "--interactive", "-i", help="Use interactive GUI mode (click window instead of device)"
-    ),
-    scale: float = typer.Option(
-        0.5, "--scale", "-s", help="Window scale for interactive mode (0.5 = half size)"
-    ),
 ) -> None:
     """Start recording user interactions.
 
-    By default, touch the physical device to record (ADB getevent capture).
-
-    Use --interactive to open a GUI window and click on it instead.
+    Touch the physical device to record interactions via ADB getevent capture.
+    Press Ctrl+C to stop recording and open the approval UI.
     """
     from mutcli.core.config import ConfigLoader, setup_logging
     from mutcli.core.device_controller import DeviceController
@@ -373,86 +343,17 @@ def record(
     # Suppress noisy myscrcpy library logs
     logging.getLogger("myscrcpy").setLevel(logging.WARNING)
 
-    if interactive:
-        # Interactive mode: GUI window with injection-based recording
-        _record_interactive(name, device_id, device_display, app, config, scale)
-    else:
-        # Default: ADB getevent-based recording (touch physical device)
-        _record_legacy(name, device_id, device_display, app, config)
+    _record_getevent(name, device_id, device_display, app, config)
 
 
-def _record_interactive(
-    name: str,
-    device_id: str,
-    device_display: str,
-    app: str,
-    config: Any,
-    scale: float,
-) -> None:
-    """Interactive recording via GUI window."""
-    from mutcli.core.config import setup_logging
-    from mutcli.core.interactive_recorder import InteractiveRecorder
-
-    # Create recorder
-    recorder = InteractiveRecorder(
-        name=name,
-        device_id=device_id,
-        window_scale=scale,
-        app_package=app,
-    )
-
-    # Setup verbose logging
-    if config and config.verbose:
-        log_file = setup_logging(verbose=True, log_dir=recorder.output_dir)
-        if log_file:
-            console.print(f"[dim]Verbose logging -> {log_file}[/dim]")
-
-    # Display info panel
-    content = f"[dim]Device:[/dim]  {device_display}\n"
-    content += f"[dim]App:[/dim]     {app}\n"
-    content += f"[dim]Output:[/dim]  {recorder.output_dir}\n"
-    content += f"[dim]Mode:[/dim]    Interactive (injection-based)"
-    panel = Panel(
-        content,
-        title=f"[bold]Recording: {name}[/bold]",
-        border_style="blue",
-    )
-    console.print(panel)
-
-    console.print()
-    console.print("Opening recording window...")
-    console.print("Click/drag on the window to record touches.")
-    console.print("Close the window (ESC or Q) to stop recording.")
-    console.print()
-
-    # Run interactive recording (blocks until window closed)
-    result = recorder.record()
-
-    if not result.get("success"):
-        console.print(f"[red]Error:[/red] {result.get('error', 'Failed to record')}")
-        raise typer.Exit(2)
-
-    # Show results
-    console.print()
-    console.print("[green]Recording saved![/green]")
-    console.print(f"  Events: {result.get('event_count', 0)}")
-    duration = result.get("duration_seconds")
-    if duration is not None:
-        console.print(f"  Duration: {duration:.1f}s")
-    console.print()
-
-    # Automatically proceed to preview UI for approval
-    _process_recording(recorder.output_dir / "recording", recorder.output_dir, name, app)
-
-
-def _record_legacy(
+def _record_getevent(
     name: str,
     device_id: str,
     device_display: str,
     app: str,
     config: Any,
 ) -> None:
-    """Legacy recording via getevent (touch physical device)."""
+    """Record touch interactions via ADB getevent."""
     from mutcli.core.config import setup_logging
     from mutcli.core.recorder import Recorder
 
@@ -473,8 +374,7 @@ def _record_legacy(
     # Display info panel
     content = f"[dim]Device:[/dim]  {device_display}\n"
     content += f"[dim]App:[/dim]     {app}\n"
-    content += f"[dim]Output:[/dim]  {result['output_dir']}\n"
-    content += f"[dim]Mode:[/dim]    Legacy (getevent-based)"
+    content += f"[dim]Output:[/dim]  {result['output_dir']}"
     panel = Panel(
         content,
         title=f"[bold]Recording: {name}[/bold]",
@@ -513,7 +413,7 @@ def _record_legacy(
     console.print()
 
     # Automatically proceed to preview UI for approval
-    _process_recording(recorder.output_dir / "recording", recorder.output_dir, name, app)
+    _process_recording(recorder.output_dir, recorder.output_dir, name, app)
 
 
 @app.command()
@@ -1162,7 +1062,6 @@ def _start_preview_and_generate_yaml(
     console.print()
     console.print("[blue]Opening approval UI in browser...[/blue]")
     console.print("[dim]Review and edit steps, then click 'Generate YAML'[/dim]")
-    console.print("[dim]Waiting for approval... (Ctrl+C to cancel)[/dim]")
 
     server = PreviewServer(
         steps=preview_steps,
@@ -1175,7 +1074,11 @@ def _start_preview_and_generate_yaml(
         video_duration=video_duration,
     )
 
-    result = server.start_and_wait()
+    def on_server_start(url: str) -> None:
+        console.print(f"[dim]Server: {url}[/dim]")
+        console.print("[dim]Waiting for approval... (Ctrl+C to cancel)[/dim]")
+
+    result = server.start_and_wait(on_start=on_server_start)
 
     if result is None or not result.approved:
         console.print("[yellow]Cancelled[/yellow] - no YAML generated")
@@ -1254,7 +1157,11 @@ def _start_preview_and_generate_yaml(
                     distance_pct = abs(end_x - start_x) / screen_width * 100
                     distance_str = f"{round(distance_pct)}%"
             generator.add_swipe(
-                direction, distance=distance_str, duration_ms=duration_ms, description=description
+                direction,
+                distance=distance_str,
+                duration_ms=duration_ms,
+                description=description,
+                from_coords=coords_tuple,
             )
         elif action == "long_press":
             # Long press is not directly supported in YAML format
@@ -1351,7 +1258,6 @@ def preview(
     console.print(f"  Screen: {screen_width}x{screen_height}")
     console.print()
     console.print("[dim]Review and edit steps, then click 'Generate YAML'[/dim]")
-    console.print("[dim]Waiting for approval... (Ctrl+C to cancel)[/dim]")
 
     from mutcli.core.yaml_generator import YAMLGenerator
 
@@ -1366,7 +1272,11 @@ def preview(
         video_duration=video_duration,
     )
 
-    result = server.start_and_wait()
+    def on_server_start(url: str) -> None:
+        console.print(f"[dim]Server: {url}[/dim]")
+        console.print("[dim]Waiting for approval... (Ctrl+C to cancel)[/dim]")
+
+    result = server.start_and_wait(on_start=on_server_start)
 
     if result is None or not result.approved:
         console.print("[yellow]Cancelled[/yellow] - no YAML generated")
@@ -1446,6 +1356,7 @@ def preview(
                 distance=distance_str,
                 duration_ms=preview_step.duration_ms,
                 description=description,
+                from_coords=coords,
             )
             if verification:
                 generator.add_verify_screen(verification)
@@ -1603,6 +1514,65 @@ def _generate_junit(result: TestResult, path: Path) -> None:
     with open(path, "wb") as f:
         f.write(b'<?xml version="1.0" encoding="UTF-8"?>\n')
         f.write(tostring(testsuite))
+
+
+@app.command()
+def report(
+    test_name_or_path: str = typer.Argument(..., help="Test name or path to report"),
+    port: int = typer.Option(8766, "--port", "-p", help="Port for local server"),
+) -> None:
+    """Open HTML report in browser.
+
+    Regenerates report from template + data and serves it.
+    Always uses the latest template (bug fixes apply to old reports).
+
+    Examples:
+        mut report photoboost              # Latest report for tests/photoboost/
+        mut report ./tests/photoboost      # Same, explicit path
+        mut report photoboost/reports/2026-01-19_14-39  # Specific report
+    """
+    from mutcli.core.report_server import ReportServer
+
+    # Resolve test directory
+    test_path = Path(test_name_or_path)
+    if not test_path.exists():
+        test_path = Path("tests") / test_name_or_path
+
+    if not test_path.exists():
+        console.print(f"[red]Error:[/red] Path not found: {test_name_or_path}")
+        raise typer.Exit(1)
+
+    # Find report directory
+    if (test_path / "report.json").exists():
+        # Direct report directory
+        report_dir = test_path
+    elif (test_path / "reports").exists():
+        # Find latest report
+        reports_dir = test_path / "reports"
+        report_dirs = sorted([d for d in reports_dir.iterdir() if d.is_dir()], reverse=True)
+        if not report_dirs:
+            console.print(f"[red]Error:[/red] No reports found in {reports_dir}")
+            raise typer.Exit(1)
+        report_dir = report_dirs[0]
+    else:
+        console.print(f"[red]Error:[/red] No reports found for {test_name_or_path}")
+        raise typer.Exit(1)
+
+    report_json = report_dir / "report.json"
+    if not report_json.exists():
+        console.print(f"[red]Error:[/red] report.json not found in {report_dir}")
+        raise typer.Exit(1)
+
+    console.print(f"[dim]Report: {report_dir}[/dim]")
+    console.print(f"[dim]URL: http://localhost:{port}/[/dim]")
+    console.print("[dim]Press Ctrl+C to stop[/dim]")
+    console.print()
+
+    server = ReportServer(report_dir, port=port)
+    try:
+        server.start_and_wait()
+    except KeyboardInterrupt:
+        console.print("\n[dim]Server stopped[/dim]")
 
 
 if __name__ == "__main__":

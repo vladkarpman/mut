@@ -9,7 +9,7 @@ import webbrowser
 from dataclasses import dataclass, field
 from http.server import BaseHTTPRequestHandler, HTTPServer
 from pathlib import Path
-from typing import Any
+from typing import Any, Callable
 from urllib.parse import urlparse
 
 
@@ -75,13 +75,24 @@ class PreviewServer:
         self._server: HTTPServer | None = None
         self._shutdown_event = threading.Event()
 
-    def start_and_wait(self) -> ApprovalResult | None:
-        """Start server, open browser, wait for approval, return result."""
+    def start_and_wait(
+        self, on_start: Callable[[str], None] | None = None
+    ) -> ApprovalResult | None:
+        """Start server, open browser, wait for approval, return result.
+
+        Args:
+            on_start: Optional callback called with the server URL after starting.
+        """
         handler = self._create_handler()
         self._server = self._create_server_with_available_port(handler)
 
-        # Open browser
+        # Build URL with the actual port the server is running on
         url = f"http://localhost:{self.port}/preview"
+
+        # Notify caller of the URL (useful if port changed due to conflict)
+        if on_start:
+            on_start(url)
+
         webbrowser.open(url)
 
         # Serve until approval or cancel
@@ -125,11 +136,13 @@ class PreviewServer:
 
             def do_GET(self) -> None:
                 parsed = urlparse(self.path)
+                path = parsed.path
 
-                if parsed.path == "/preview":
+                # Handle root and /preview (with or without trailing slash)
+                if path == "/" or path == "/preview" or path == "/preview/":
                     self._serve_preview()
-                elif parsed.path.startswith("/screenshots/") or parsed.path == "/video.mp4":
-                    self._serve_file(parsed.path)
+                elif path.startswith("/screenshots/") or path == "/video.mp4":
+                    self._serve_file(path)
                 else:
                     self.send_error(404)
 

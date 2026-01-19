@@ -718,15 +718,15 @@
            Enhanced Gesture Indicators - Material Touch Feedback
            ═══════════════════════════════════════════════════════════ */
 
-        /* Gesture indicator container */
-        .gesture-indicator-container {{
+        /* Gesture indicator wrapper - positioned by JS to match rendered image bounds */
+        .gesture-indicator-wrapper {{
             position: absolute;
-            /* Will be positioned by JavaScript to match actual image bounds */
+            pointer-events: none;
+            /* Initial size covers container, adjusted by positionIndicator on image load */
             top: 0;
             left: 0;
             width: 100%;
             height: 100%;
-            pointer-events: none;
         }}
 
         /* Tap indicator - High contrast with dark outline */
@@ -905,16 +905,21 @@
         /* Swipe indicator - Modern gradient trail */
         .swipe-indicator {{
             position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
             pointer-events: none;
             z-index: 10;
         }}
 
-        /* Trajectory line - matches primary color */
+        /* Trajectory line - positioned via JavaScript (pixel values) */
         .swipe-indicator .swipe-trajectory-line {{
             position: absolute;
-            left: var(--start-x);
-            top: var(--start-y);
-            width: var(--line-length);
+            /* Use pixel positions set by JS, fallback to percentage */
+            left: var(--start-x-px, var(--start-x));
+            top: var(--start-y-px, var(--start-y));
+            width: var(--line-length, 0);
             height: 4px;
             background: linear-gradient(
                 90deg,
@@ -923,7 +928,7 @@
                 var(--md-primary) 100%
             );
             transform-origin: 0 50%;
-            transform: rotate(var(--line-angle)) translateY(-50%);
+            transform: rotate(var(--line-angle, 0deg)) translateY(-50%);
             border-radius: 2px;
             filter: drop-shadow(0 0 6px rgba(208, 188, 255, 0.7));
             animation: swipeTrailPulse 1.8s ease-in-out infinite;
@@ -953,8 +958,9 @@
             background: var(--md-primary);
             border: 3px solid #fff;
             transform: translate(-50%, -50%);
-            left: var(--start-x);
-            top: var(--start-y);
+            /* Use percentage for initial position, JS sets pixel values for animation */
+            left: var(--start-x-px, var(--start-x));
+            top: var(--start-y-px, var(--start-y));
             animation: swipeMove 1.8s cubic-bezier(0.4, 0, 0.2, 1) infinite;
             box-shadow:
                 0 0 0 2px rgba(0, 0, 0, 0.8),
@@ -983,21 +989,21 @@
 
         @keyframes swipeMove {{
             0% {{
-                left: var(--start-x);
-                top: var(--start-y);
+                left: var(--start-x-px, var(--start-x));
+                top: var(--start-y-px, var(--start-y));
                 transform: translate(-50%, -50%) scale(1);
             }}
             5% {{
                 transform: translate(-50%, -50%) scale(0.8);
             }}
             45% {{
-                left: var(--end-x);
-                top: var(--end-y);
+                left: var(--end-x-px, var(--end-x));
+                top: var(--end-y-px, var(--end-y));
                 transform: translate(-50%, -50%) scale(1.1);
             }}
             50% {{
-                left: var(--end-x);
-                top: var(--end-y);
+                left: var(--end-x-px, var(--end-x));
+                top: var(--end-y-px, var(--end-y));
                 transform: translate(-50%, -50%) scale(1);
                 opacity: 1;
             }}
@@ -1005,13 +1011,13 @@
                 opacity: 0;
             }}
             56% {{
-                left: var(--start-x);
-                top: var(--start-y);
+                left: var(--start-x-px, var(--start-x));
+                top: var(--start-y-px, var(--start-y));
                 opacity: 0;
             }}
             70%, 100% {{
-                left: var(--start-x);
-                top: var(--start-y);
+                left: var(--start-x-px, var(--start-x));
+                top: var(--start-y-px, var(--start-y));
                 opacity: 1;
                 transform: translate(-50%, -50%) scale(1);
             }}
@@ -1131,6 +1137,7 @@
         /**
          * Calculate the actual rendered image bounds for an img with object-fit: contain.
          * Returns {{ x, y, width, height }} of the actual image content within the element.
+         * This accounts for letterboxing when image aspect ratio differs from container.
          */
         function getRenderedImageBounds(img) {{
             const imgRect = img.getBoundingClientRect();
@@ -1149,13 +1156,13 @@
             let renderedWidth, renderedHeight, offsetX, offsetY;
 
             if (imageAspect > elementAspect) {{
-                // Image is wider than element - letterbox top/bottom
+                // Image is wider than container - constrained by width
                 renderedWidth = imgRect.width;
                 renderedHeight = imgRect.width / imageAspect;
                 offsetX = 0;
                 offsetY = (imgRect.height - renderedHeight) / 2;
             }} else {{
-                // Image is taller than element - letterbox left/right
+                // Image is taller than container - constrained by height
                 renderedHeight = imgRect.height;
                 renderedWidth = imgRect.height * imageAspect;
                 offsetX = (imgRect.width - renderedWidth) / 2;
@@ -1172,114 +1179,99 @@
 
         /**
          * Position gesture indicators relative to actual rendered image bounds.
-         * This accounts for object-fit: contain scaling and flexbox centering.
+         * Called on image load via onload handler.
+         *
+         * @param {{HTMLImageElement}} img - The image element that loaded
+         * @param {{number}} stepId - The step number for finding the wrapper
          */
-        function positionGestureIndicators() {{
-            document.querySelectorAll('.frame-image-container').forEach(container => {{
-                const img = container.querySelector('img');
-                const indicatorContainer = container.querySelector('.gesture-indicator-container');
-                if (!img || !indicatorContainer) return;
+        function positionIndicator(img, stepId) {{
+            const wrapper = img.parentElement.querySelector(`.gesture-indicator-wrapper[data-step-id="${{stepId}}"]`);
+            if (!wrapper) return;
 
-                // Check if image is actually decoded (has natural dimensions)
-                // Note: img.complete is true for base64 images even before decode
-                if (!img.naturalWidth || !img.naturalHeight) {{
-                    // Image not decoded yet, wait for load event
-                    img.onload = () => requestAnimationFrame(() =>
-                        requestAnimationFrame(() => positionIndicator(container, img, indicatorContainer))
-                    );
-                    return;
-                }}
-
-                // Double requestAnimationFrame ensures layout is fully settled
-                requestAnimationFrame(() =>
-                    requestAnimationFrame(() => positionIndicator(container, img, indicatorContainer))
-                );
-            }});
-        }}
-
-        function positionIndicator(container, img, indicatorContainer, retryCount = 0) {{
             // Get the actual rendered image bounds (accounting for object-fit: contain)
             const bounds = getRenderedImageBounds(img);
 
-            // Guard: if bounds are invalid (element not laid out yet), retry later
-            // This can happen when positioning runs before layout is complete
-            if (bounds.width <= 0 || bounds.height <= 0) {{
-                if (retryCount < 10) {{
-                    requestAnimationFrame(() =>
-                        requestAnimationFrame(() =>
-                            positionIndicator(container, img, indicatorContainer, retryCount + 1)
-                        )
-                    );
-                }}
-                return;
-            }}
-
             // Get position of img element relative to container (accounts for flex centering)
             const imgRect = img.getBoundingClientRect();
-            const containerRect = container.getBoundingClientRect();
+            const containerRect = img.parentElement.getBoundingClientRect();
             const imgOffsetX = imgRect.left - containerRect.left;
             const imgOffsetY = imgRect.top - containerRect.top;
 
-            // Position indicator container to match actual rendered image content
-            indicatorContainer.style.left = (imgOffsetX + bounds.x) + 'px';
-            indicatorContainer.style.top = (imgOffsetY + bounds.y) + 'px';
-            indicatorContainer.style.width = bounds.width + 'px';
-            indicatorContainer.style.height = bounds.height + 'px';
+            // Position wrapper to match actual rendered content within the element
+            const wrapperLeft = imgOffsetX + bounds.x;
+            const wrapperTop = imgOffsetY + bounds.y;
+            wrapper.style.left = wrapperLeft + 'px';
+            wrapper.style.top = wrapperTop + 'px';
+            wrapper.style.width = bounds.width + 'px';
+            wrapper.style.height = bounds.height + 'px';
 
-            // Position tap, long-press, and double-tap indicators
-            indicatorContainer.querySelectorAll('.tap-indicator, .long-press-indicator, .double-tap-indicator').forEach(indicator => {{
-                const x = parseFloat(indicator.dataset.x) || 0;
-                const y = parseFloat(indicator.dataset.y) || 0;
+            // Position gesture indicators within the wrapper
+            const indicators = wrapper.querySelectorAll('.gesture-indicator');
 
-                // Convert percentages to pixels within rendered bounds
-                const posX = (x / 100) * bounds.width;
-                const posY = (y / 100) * bounds.height;
-
-                // Position indicator (CSS transform handles centering)
-                indicator.style.left = posX + 'px';
-                indicator.style.top = posY + 'px';
-            }});
-
-            // Handle swipe indicators with trajectory
-            indicatorContainer.querySelectorAll('.swipe-indicator').forEach(indicator => {{
-                const startX = parseFloat(indicator.dataset.x) || 0;
-                const startY = parseFloat(indicator.dataset.y) || 0;
-                const endX = parseFloat(indicator.dataset.endX) || startX;
-                const endY = parseFloat(indicator.dataset.endY) || startY;
+            indicators.forEach(indicator => {{
+                // Coordinates are percentages (0-100) of the image
+                const xPct = parseFloat(indicator.dataset.x) || 0;
+                const yPct = parseFloat(indicator.dataset.y) || 0;
 
                 // Convert percentages to pixels within rendered bounds
-                const sx = (startX / 100) * bounds.width;
-                const sy = (startY / 100) * bounds.height;
-                const ex = (endX / 100) * bounds.width;
-                const ey = (endY / 100) * bounds.height;
+                const x = (xPct / 100) * bounds.width;
+                const y = (yPct / 100) * bounds.height;
 
-                // Position indicator at start point
-                indicator.style.left = sx + 'px';
-                indicator.style.top = sy + 'px';
+                // Position relative to wrapper origin
+                indicator.style.left = x + 'px';
+                indicator.style.top = y + 'px';
 
-                // Calculate line angle and length
-                const dx = ex - sx;
-                const dy = ey - sy;
-                const length = Math.sqrt(dx * dx + dy * dy);
-                const angle = Math.atan2(dy, dx) * (180 / Math.PI);
+                // Handle swipe indicators - position trajectory line and animated dot
+                if (indicator.classList.contains('swipe-indicator')) {{
+                    // Use NaN check instead of || to handle 0 values correctly
+                    const rawEndX = parseFloat(indicator.dataset.endX);
+                    const rawEndY = parseFloat(indicator.dataset.endY);
+                    const endXPct = isNaN(rawEndX) ? xPct : rawEndX;
+                    const endYPct = isNaN(rawEndY) ? yPct : rawEndY;
 
-                // Set CSS custom properties for trajectory line
-                indicator.style.setProperty('--line-length', length + 'px');
-                indicator.style.setProperty('--line-angle', angle + 'deg');
+                    const endX = (endXPct / 100) * bounds.width;
+                    const endY = (endYPct / 100) * bounds.height;
 
-                // Set CSS custom properties for animation (start and end positions)
-                indicator.style.setProperty('--start-x', sx + 'px');
-                indicator.style.setProperty('--start-y', sy + 'px');
-                indicator.style.setProperty('--end-x', ex + 'px');
-                indicator.style.setProperty('--end-y', ey + 'px');
+                    // Calculate delta from start to end
+                    const dx = endX - x;
+                    const dy = endY - y;
+                    const lineLength = Math.sqrt(dx * dx + dy * dy);
+                    const angle = Math.atan2(dy, dx) * (180 / Math.PI);
+
+                    // Set CSS custom properties for trajectory and animation
+                    indicator.style.setProperty('--start-x', '0px');
+                    indicator.style.setProperty('--start-y', '0px');
+                    indicator.style.setProperty('--end-x', dx + 'px');
+                    indicator.style.setProperty('--end-y', dy + 'px');
+                    indicator.style.setProperty('--line-length', lineLength + 'px');
+                    indicator.style.setProperty('--line-angle', angle + 'deg');
+                }}
             }});
         }}
 
-        // Position indicators on load and resize
-        positionGestureIndicators();
-        window.addEventListener('resize', positionGestureIndicators);
-        // Fallback: reposition after all resources loaded (catches async image decoding)
-        window.addEventListener('load', positionGestureIndicators);
+        // Reposition indicators on window resize
+        window.addEventListener('resize', function() {{
+            document.querySelectorAll('.gesture-indicator-wrapper').forEach(wrapper => {{
+                const stepId = wrapper.dataset.stepId;
+                const img = wrapper.parentElement.querySelector('img');
+                if (img && stepId) {{
+                    positionIndicator(img, parseInt(stepId));
+                }}
+            }});
+        }});
+
+        // Reposition after all resources loaded (catches any missed image loads)
+        window.addEventListener('load', function() {{
+            setTimeout(() => {{
+                document.querySelectorAll('.gesture-indicator-wrapper').forEach(wrapper => {{
+                    const stepId = wrapper.dataset.stepId;
+                    const img = wrapper.parentElement.querySelector('img');
+                    if (img && stepId) {{
+                        positionIndicator(img, parseInt(stepId));
+                    }}
+                }});
+            }}, 100);
+        }});
     </script>
 </body>
 </html>

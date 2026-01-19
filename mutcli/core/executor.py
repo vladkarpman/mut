@@ -1018,13 +1018,14 @@ class TestExecutor:
 
         self._step_coords = coords  # Store for report gesture indicator
 
-        # Use tap with retry behavior
-        self._tap_with_retry(coords[0], coords[1], step)
-
-        # Capture action screenshot and timestamp
+        # Capture action screenshot and timestamp BEFORE tap
+        # This ensures the extracted frame shows the target element being tapped
         screenshot, timestamp = self._capture_screenshot_or_timestamp()
         self._step_action_screenshot = screenshot
         self._step_action_timestamp = timestamp
+
+        # Use tap with retry behavior
+        self._tap_with_retry(coords[0], coords[1], step)
         return None
 
     def _action_double_tap(self, step: Step) -> str | None:
@@ -1036,11 +1037,14 @@ class TestExecutor:
             return "Could not resolve coordinates for double_tap"
 
         self._step_coords = coords  # Store for report gesture indicator
-        self._device.double_tap(coords[0], coords[1])
-        # Capture action screenshot and timestamp after double tap
+
+        # Capture action screenshot and timestamp BEFORE double tap
+        # This ensures the extracted frame shows the target element being tapped
         screenshot, timestamp = self._capture_screenshot_or_timestamp()
         self._step_action_screenshot = screenshot
         self._step_action_timestamp = timestamp
+
+        self._device.double_tap(coords[0], coords[1])
         return None
 
     def _action_type(self, step: Step) -> str | None:

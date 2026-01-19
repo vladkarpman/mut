@@ -119,6 +119,8 @@ class TouchMonitor:
 
         # Coordinate scaling (touch panel -> screen pixels)
         # Will be detected from device in _get_device_info()
+        self._touch_min_x: int = 0
+        self._touch_min_y: int = 0
         self._touch_max_x: int | None = None
         self._touch_max_y: int | None = None
         self._screen_width: int | None = None
@@ -161,13 +163,20 @@ class TouchMonitor:
 
         for line in result.stdout.split("\n"):
             if "ABS_MT_POSITION_X" in line:
-                match = re.search(r"max (\d+)", line)
-                if match:
-                    self._touch_max_x = int(match.group(1))
+                # Extract min and max: "min 0, max 4095"
+                min_match = re.search(r"min (\d+)", line)
+                max_match = re.search(r"max (\d+)", line)
+                if min_match:
+                    self._touch_min_x = int(min_match.group(1))
+                if max_match:
+                    self._touch_max_x = int(max_match.group(1))
             elif "ABS_MT_POSITION_Y" in line:
-                match = re.search(r"max (\d+)", line)
-                if match:
-                    self._touch_max_y = int(match.group(1))
+                min_match = re.search(r"min (\d+)", line)
+                max_match = re.search(r"max (\d+)", line)
+                if min_match:
+                    self._touch_min_y = int(min_match.group(1))
+                if max_match:
+                    self._touch_max_y = int(max_match.group(1))
 
         if self._touch_max_x is None or self._touch_max_y is None:
             logger.error("Failed to get touch bounds from device")
@@ -175,12 +184,22 @@ class TouchMonitor:
 
         logger.info(
             f"Device info: screen={self._screen_width}x{self._screen_height}, "
-            f"touch_max={self._touch_max_x}x{self._touch_max_y}"
+            f"touch_range=({self._touch_min_x}-{self._touch_max_x})x"
+            f"({self._touch_min_y}-{self._touch_max_y})"
         )
         return True
 
     def _raw_to_screen(self, raw_x: int, raw_y: int) -> tuple[int, int]:
-        """Convert raw touch coordinates to screen pixels."""
+        """Convert raw touch coordinates to screen pixels.
+
+        Uses proper linear interpolation from touch range to screen range:
+        - raw value at min → screen coord 0
+        - raw value at max → screen coord (size - 1)
+
+        Uses round() instead of int() to minimize systematic bias.
+        """
+        min_x = self._touch_min_x
+        min_y = self._touch_min_y
         max_x = self._touch_max_x
         max_y = self._touch_max_y
         width = self._screen_width
@@ -189,8 +208,21 @@ class TouchMonitor:
         if max_x is None or max_y is None or width is None or height is None:
             return raw_x, raw_y
 
-        screen_x = int((raw_x / max_x) * width)
-        screen_y = int((raw_y / max_y) * height)
+        # Avoid division by zero
+        range_x = max_x - min_x
+        range_y = max_y - min_y
+        if range_x <= 0 or range_y <= 0:
+            return raw_x, raw_y
+
+        # Linear interpolation: map [min, max] → [0, size-1]
+        # Then clamp to valid screen bounds
+        screen_x = round((raw_x - min_x) / range_x * (width - 1))
+        screen_y = round((raw_y - min_y) / range_y * (height - 1))
+
+        # Clamp to screen bounds (handles slight overshoots)
+        screen_x = max(0, min(width - 1, screen_x))
+        screen_y = max(0, min(height - 1, screen_y))
+
         return screen_x, screen_y
 
     def start(self, reference_time: float | None = None) -> bool:
